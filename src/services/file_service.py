@@ -95,40 +95,87 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
 
 
 def get_data_summary(df: pd.DataFrame) -> dict:
-    """Generate a summary dict suitable for sending to the AI suggest endpoint.
+    """Generate a comprehensive summary for the AI.
 
-    Returns column names, types, row count, and descriptive statistics.
+    Includes everything pandas can tell us: shape, dtypes, head, tail,
+    describe, nunique, null counts, memory usage, and top values.
+    The AI should NEVER have to guess — this is definitive.
     """
+    import io
+
+    # Basic shape
     summary = {
-        "row_count": len(df),
-        "column_count": len(df.columns),
-        "columns": [],
+        "shape": {"rows": len(df), "columns": len(df.columns)},
+        "column_names": list(df.columns),
+        "dtypes": {col: str(df[col].dtype) for col in df.columns},
+        "memory_usage_mb": round(df.memory_usage(deep=True).sum() / (1024 * 1024), 2),
     }
 
+    # Head and tail (as dicts for JSON serialization)
+    try:
+        summary["head_5_rows"] = df.head(5).to_dict(orient="records")
+    except Exception:
+        summary["head_5_rows"] = str(df.head(5))
+
+    try:
+        summary["tail_3_rows"] = df.tail(3).to_dict(orient="records")
+    except Exception:
+        summary["tail_3_rows"] = str(df.tail(3))
+
+    # Describe (numeric stats)
+    try:
+        desc = df.describe(include="all")
+        # Convert to dict, handling NaN
+        summary["describe"] = {}
+        for col in desc.columns:
+            summary["describe"][col] = {
+                stat: (round(float(val), 4) if pd.notna(val) and isinstance(val, (int, float)) else str(val))
+                for stat, val in desc[col].items()
+                if pd.notna(val)
+            }
+    except Exception:
+        summary["describe"] = "unavailable"
+
+    # Null counts and percentages
+    null_counts = df.isnull().sum()
+    summary["null_info"] = {
+        col: {
+            "count": int(null_counts[col]),
+            "percent": round(null_counts[col] / len(df) * 100, 1),
+        }
+        for col in df.columns
+        if null_counts[col] > 0
+    }
+
+    # Unique value counts
+    summary["unique_counts"] = {col: int(df[col].nunique()) for col in df.columns}
+
+    # Per-column detail
+    columns_detail = []
     for col in df.columns:
         col_info = {
             "name": col,
             "dtype": str(df[col].dtype),
-            "null_count": int(df[col].isnull().sum()),
-            "unique_count": int(df[col].nunique()),
+            "nulls": int(df[col].isnull().sum()),
+            "unique": int(df[col].nunique()),
         }
-
-        # Add numeric stats for numeric columns
         if pd.api.types.is_numeric_dtype(df[col]):
-            desc = df[col].describe()
+            d = df[col].describe()
             col_info["stats"] = {
-                "mean": round(float(desc.get("mean", 0)), 2),
-                "std": round(float(desc.get("std", 0)), 2),
-                "min": float(desc.get("min", 0)),
-                "max": float(desc.get("max", 0)),
+                "mean": round(float(d.get("mean", 0)), 2),
+                "std": round(float(d.get("std", 0)), 2),
+                "min": float(d.get("min", 0)),
+                "25%": float(d.get("25%", 0)),
+                "50%": float(d.get("50%", 0)),
+                "75%": float(d.get("75%", 0)),
+                "max": float(d.get("max", 0)),
             }
         else:
-            # Top values for categorical columns
             top = df[col].value_counts().head(5)
             col_info["top_values"] = {str(k): int(v) for k, v in top.items()}
+        columns_detail.append(col_info)
 
-        summary["columns"].append(col_info)
-
+    summary["columns"] = columns_detail
     return summary
 
 

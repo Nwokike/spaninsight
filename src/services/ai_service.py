@@ -271,7 +271,20 @@ async def suggest(
 
 
 async def generate_code(prompt: str, schema_json: dict) -> str:
-    """Send an analysis prompt to the code route. Returns Python code string."""
+    """Send an analysis prompt to the code route. Returns Python code string.
+
+    Uses a SLIM schema (columns + types only) to avoid token bloat
+    on the heavy reasoning models (nvidia). The full schema is too large.
+    """
+    # Build slim schema: just what the model needs to write code
+    slim = {
+        "shape": schema_json.get("shape", {}),
+        "columns": [
+            {"name": c["name"], "dtype": c["dtype"]}
+            for c in schema_json.get("columns", [])
+        ],
+    }
+
     system_prompt = (
         "You are a Python data analyst. Generate pandas and matplotlib code "
         "to analyze the DataFrame `df` based on the user's request.\n\n"
@@ -283,7 +296,7 @@ async def generate_code(prompt: str, schema_json: dict) -> str:
         "- Do NOT use plt.show()\n"
         "- Do NOT use any file I/O, network, or system operations\n"
         "- Return ONLY the Python code, no markdown fences, no explanation\n\n"
-        f"Dataset schema:\n{json.dumps(schema_json, default=str)}"
+        f"Dataset schema:\n{json.dumps(slim, default=str)}"
     )
 
     messages = [
@@ -294,7 +307,10 @@ async def generate_code(prompt: str, schema_json: dict) -> str:
     try:
         data = await _call_gateway(TASK_CODE, messages)
         content = _extract_content(data)
-        return _strip_code_fences(content)
+        code = _strip_code_fences(content)
+        if not code.strip():
+            logger.error("Code generation returned empty content. Raw: %s", str(data)[:200])
+        return code
     except Exception as e:
         logger.error("Code generation failed: %s", e)
         return ""
@@ -376,20 +392,37 @@ async def _call_gateway_raw(payload: dict, timeout: float = 15.0) -> dict:
 
 
 def _extract_content(data: dict) -> str:
-    """Extract the assistant's message content from an OpenAI-format response."""
+    """Extract the assistant's message content from an OpenAI-format response.
+
+    Handles thinking models (nvidia nemotron etc.) that may include
+    <think>...</think> blocks in the content field.
+    """
     try:
         choices = data.get("choices", [])
         if choices:
             message = choices[0].get("message", {})
-            return message.get("content", "")
+            content = message.get("content", "") or ""
+            # Strip thinking tags from nvidia reasoning models
+            content = _strip_thinking(content)
+            return content.strip()
     except (IndexError, KeyError, TypeError):
         pass
     return ""
 
 
+def _strip_thinking(text: str) -> str:
+    """Remove <think>...</think> blocks from reasoning model output."""
+    import re
+    # Remove <think>...</think> blocks (greedy, handles multiline)
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    return cleaned.strip()
+
+
 def _strip_code_fences(text: str) -> str:
     """Remove markdown code fences from AI output."""
     cleaned = text.strip()
+    # Strip thinking tags first
+    cleaned = _strip_thinking(cleaned)
     if cleaned.startswith("```python"):
         cleaned = cleaned[len("```python"):]
     elif cleaned.startswith("```json"):
