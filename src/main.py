@@ -212,7 +212,6 @@ async def main(page: ft.Page):
 
             view = build_report_view(
                 page=page,
-                on_back=lambda: nav_to("/analysis"),
             )
             page.views.append(view)
 

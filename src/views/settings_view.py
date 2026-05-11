@@ -96,6 +96,18 @@ def build_settings_view(
         dialog.open = True
         page.update()
 
+    async def _share_invite(e):
+        """Share the user's invite code (first 8 chars of UUID)."""
+        invite_code = state.user_uuid[:8] if state.user_uuid else ""
+        if invite_code:
+            await page.set_clipboard_async(invite_code)
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Invite code copied: {invite_code}"),
+                duration=3000,
+            )
+            page.snack_bar.open = True
+            page.update()
+
     masked_uuid = uuid_service.get_masked_uuid(state.user_uuid)
 
     # Theme dropdown value
@@ -143,10 +155,11 @@ def build_settings_view(
                 icon=ft.Icons.PEOPLE_ROUNDED,
                 title="Invite Friends",
                 subtitle="Get +10 daily credits per referral",
-                trailing=ft.Icon(
-                    ft.Icons.ARROW_FORWARD_IOS_ROUNDED,
-                    size=tokens.ICON_SM,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                trailing=ft.IconButton(
+                    icon=ft.Icons.SHARE_ROUNDED,
+                    icon_size=tokens.ICON_MD,
+                    tooltip="Share invite code",
+                    on_click=lambda e: page.run_task(_share_invite, e),
                 ),
             ),
 
