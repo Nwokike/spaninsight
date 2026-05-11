@@ -46,7 +46,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
                     size=tokens.FONT_XS,
                     weight=ft.FontWeight.W_700,
                     color=theme.PRIMARY_LIGHT,
-                    letter_spacing=2,
                 ),
                 padding=ft.Padding(
                     left=tokens.SPACE_LG,

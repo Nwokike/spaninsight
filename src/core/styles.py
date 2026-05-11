@@ -87,7 +87,6 @@ def section_header(title: str) -> ft.Container:
             size=tokens.FONT_XS,
             weight=ft.FontWeight.BOLD,
             color=ft.Colors.PRIMARY,
-            letter_spacing=1.2,
         ),
         padding=ft.Padding(
             left=tokens.SPACE_XS,

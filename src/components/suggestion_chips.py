@@ -1,4 +1,8 @@
-"""Suggestion chips — AI analysis action buttons."""
+"""Suggestion chips — compact AI analysis action pills.
+
+Renders as tiny, tappable pills in a wrapping row. NOT large cards.
+The AI generates these dynamically after analyzing the dataset schema.
+"""
 
 from __future__ import annotations
 
@@ -12,79 +16,61 @@ def build_suggestion_chips(
     on_select: callable,
     is_loading: bool = False,
 ) -> ft.Column:
-    """Build a column of suggestion action buttons.
+    """Build a wrap of tiny suggestion pills.
 
     Args:
         suggestions: List of dicts with "label", "icon", "prompt" keys.
         on_select: Callback(prompt: str) when a chip is tapped.
-        is_loading: Show shimmer/disabled state during AI call.
+        is_loading: Show disabled state during AI call.
     """
     if not suggestions:
-        return ft.Container()
+        return ft.Column()
 
-    chips = []
-    for i, s in enumerate(suggestions):
+    pills = []
+    for s in suggestions:
         label = s.get("label", "Analyze")
         icon_text = s.get("icon", "📊")
         prompt = s.get("prompt", "")
 
-        chip = ft.Container(
+        pill = ft.Container(
             content=ft.Row(
                 controls=[
-                    ft.Text(icon_text, size=tokens.FONT_LG),
+                    ft.Text(icon_text, size=12),
                     ft.Text(
                         label,
-                        size=tokens.FONT_SM,
+                        size=11,
                         weight=ft.FontWeight.W_500,
-                        expand=True,
-                        max_lines=2,
+                        max_lines=1,
                         overflow=ft.TextOverflow.ELLIPSIS,
                     ),
-                    ft.Icon(
-                        ft.Icons.ARROW_FORWARD_ROUNDED,
-                        size=tokens.ICON_SM,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
                 ],
-                spacing=tokens.SPACE_MD,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=4,
+                tight=True,
             ),
-            padding=ft.Padding(
-                left=tokens.SPACE_LG,
-                right=tokens.SPACE_LG,
-                top=tokens.SPACE_MD,
-                bottom=tokens.SPACE_MD,
-            ),
-            border_radius=tokens.RADIUS_LG,
-            bgcolor=ft.Colors.with_opacity(0.05, theme.PRIMARY),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.12, theme.PRIMARY)),
+            padding=ft.Padding(left=10, right=10, top=6, bottom=6),
+            border_radius=20,
+            bgcolor=ft.Colors.with_opacity(0.06, theme.PRIMARY),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.PRIMARY)),
             on_click=lambda e, p=prompt: on_select(p) if not is_loading else None,
             ink=True,
             disabled=is_loading,
-            animate=ft.Animation(tokens.ANIM_FAST_MS, ft.AnimationCurve.EASE_OUT),
         )
-        chips.append(chip)
-
-    header = ft.Container(
-        content=ft.Row(
-            controls=[
-                ft.Icon(
-                    ft.Icons.AUTO_AWESOME_ROUNDED,
-                    size=tokens.ICON_MD,
-                    color=theme.PRIMARY_LIGHT,
-                ),
-                ft.Text(
-                    "AI Suggestions",
-                    size=tokens.FONT_MD,
-                    weight=ft.FontWeight.W_600,
-                ),
-            ],
-            spacing=tokens.SPACE_SM,
-        ),
-        padding=ft.Padding(left=tokens.SPACE_XS, top=0, right=0, bottom=tokens.SPACE_XS),
-    )
+        pills.append(pill)
 
     return ft.Column(
-        controls=[header, *chips],
-        spacing=tokens.SPACE_SM,
+        controls=[
+            ft.Text(
+                "✨ Suggestions",
+                size=tokens.FONT_XS,
+                weight=ft.FontWeight.W_600,
+                color=ft.Colors.ON_SURFACE_VARIANT,
+            ),
+            ft.Row(
+                controls=pills,
+                wrap=True,
+                spacing=6,
+                run_spacing=6,
+            ),
+        ],
+        spacing=6,
     )

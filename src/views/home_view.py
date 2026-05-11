@@ -6,7 +6,9 @@ import flet as ft
 
 from core import theme, tokens
 from core.state import state
+from core.constants import STORAGE_THEME
 from components.credit_badge import build_credit_badge
+from flet_secure_storage import SecureStorage
 
 
 def build_home_view(
@@ -188,23 +190,34 @@ def build_home_view(
     )
 
     appbar = ft.AppBar(
-        title=ft.Row(
-            controls=[
-                ft.Image(src="icon.png", width=28, height=28, fit=ft.BoxFit.CONTAIN),
-                ft.Text("Spaninsight", weight=ft.FontWeight.W_700, size=tokens.FONT_XL),
-            ],
-            spacing=tokens.SPACE_SM,
-            tight=True,
-        ),
+        title=ft.Text("Home", weight=ft.FontWeight.W_600, size=tokens.FONT_XL),
         center_title=False,
         bgcolor=ft.Colors.TRANSPARENT,
         actions=[
+            ft.IconButton(
+                icon=ft.Icons.LIGHT_MODE_ROUNDED if page.theme_mode == ft.ThemeMode.DARK else ft.Icons.DARK_MODE_ROUNDED,
+                tooltip="Toggle Theme",
+                on_click=lambda e: page.run_task(_toggle_theme, e, page),
+            ),
             ft.Container(
                 content=build_credit_badge(state.credits_remaining),
                 margin=ft.Margin(0, 0, tokens.SPACE_LG, 0),
             ),
         ],
     )
+
+    async def _toggle_theme(e, p: ft.Page):
+        p.theme_mode = ft.ThemeMode.LIGHT if p.theme_mode == ft.ThemeMode.DARK else ft.ThemeMode.DARK
+        state.theme_mode = p.theme_mode
+        
+        # Persist
+        storage = SecureStorage()
+        await storage.set(STORAGE_THEME, "light" if p.theme_mode == ft.ThemeMode.LIGHT else "dark")
+        
+        # Update icon directly to avoid full page reload
+        e.control.icon = ft.Icons.LIGHT_MODE_ROUNDED if p.theme_mode == ft.ThemeMode.DARK else ft.Icons.DARK_MODE_ROUNDED
+        p.update()
+
 
     return ft.View(route="/home", appbar=appbar, controls=[content], padding=0)
 

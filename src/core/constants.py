@@ -71,6 +71,7 @@ SANDBOX_TIMEOUT_SEC = 10
 
 # ── Storage Keys (for page.client_storage) ──────────────────────────
 STORAGE_UUID = "spaninsight_uuid"
+STORAGE_THEME = "spaninsight.theme"
 STORAGE_CREDITS = "spaninsight_credits"
 STORAGE_BONUS_CREDITS = "spaninsight_bonus_credits"
 STORAGE_LAST_RESET = "spaninsight_last_reset"

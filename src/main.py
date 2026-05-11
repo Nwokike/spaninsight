@@ -84,6 +84,19 @@ async def main(page: ft.Page):
     state.user_uuid = await uuid_service.get_or_create_uuid()
     logger.info("User UUID: %s", uuid_service.get_masked_uuid(state.user_uuid))
 
+    # Load Theme
+    from flet_secure_storage import SecureStorage
+    from core.constants import STORAGE_THEME
+    storage = SecureStorage()
+    saved_theme = await storage.get(STORAGE_THEME)
+    if saved_theme == "dark":
+        page.theme_mode = ft.ThemeMode.DARK
+    elif saved_theme == "light":
+        page.theme_mode = ft.ThemeMode.LIGHT
+    else:
+        page.theme_mode = ft.ThemeMode.SYSTEM
+    state.theme_mode = page.theme_mode
+
     # Initialize credits (daily reset)
     state.credits_remaining = await credit_service.initialize()
 

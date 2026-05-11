@@ -8,7 +8,9 @@ import flet as ft
 
 from core import theme, tokens
 from core.state import state
+from core.constants import STORAGE_THEME
 from core.styles import section_header, setting_tile
+from flet_secure_storage import SecureStorage
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ def build_settings_view(
             page.snack_bar.open = True
             page.update()
 
-    def on_theme_changed(e):
+    async def on_theme_changed(e):
         mode = e.control.value
         if mode == "dark":
             page.theme_mode = ft.ThemeMode.DARK
@@ -51,6 +53,11 @@ def build_settings_view(
         else:
             page.theme_mode = ft.ThemeMode.SYSTEM
         state.theme_mode = page.theme_mode
+        
+        # Persist
+        storage = SecureStorage()
+        await storage.set(STORAGE_THEME, mode)
+        
         page.update()
 
     async def on_clear_data(e):
@@ -167,7 +174,7 @@ def build_settings_view(
                                 ft.DropdownOption(key="dark", text="Dark"),
                                 ft.DropdownOption(key="system", text="System"),
                             ],
-                            on_change=on_theme_changed,
+                            on_select=lambda e: page.run_task(on_theme_changed, e),
                             border_radius=tokens.RADIUS_MD,
                             text_size=tokens.FONT_SM,
                         ),

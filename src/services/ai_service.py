@@ -162,37 +162,109 @@ async def transcribe_audio(audio_bytes: bytes, mime_type: str) -> str:
 
 # ── Standard AI Endpoints ───────────────────────────────────────────
 
-async def suggest(schema_json: dict) -> list[dict]:
-    """Send data schema to the suggest route. Returns list of suggestion dicts.
 
-    Each suggestion: {"label": str, "icon": str, "prompt": str}
-    """
+async def describe_dataset(schema_json: dict) -> str:
+    """Block 0 describe: AI reads the schema and describes the dataset."""
     system_prompt = (
-        "You are a data analysis assistant. Given a dataset schema, "
-        "suggest exactly 3 insightful analyses the user could perform. "
-        "Return ONLY a JSON array of 3 objects, each with:\n"
-        '- "label": short title (max 6 words)\n'
-        '- "icon": a relevant emoji\n'
-        '- "prompt": the full analysis instruction to generate pandas/matplotlib code\n'
-        "Do not include any text outside the JSON array."
+        "You are a data analyst. Given a dataset schema with column names, "
+        "types, and sample statistics, write a brief 2-3 sentence description "
+        "of what this dataset contains and what kind of data it represents. "
+        "Be specific about the domain (healthcare, finance, education, etc.). "
+        "Do NOT use markdown. Just plain text."
     )
-
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": json.dumps(schema_json, default=str)},
     ]
+    try:
+        data = await _call_gateway(TASK_SUGGEST, messages)
+        desc = _extract_content(data)
+        if desc:
+            logger.info("Block 0 describe: %s", desc[:80])
+            return desc
+        return "Dataset loaded successfully."
+    except Exception as e:
+        logger.error("Describe dataset failed: %s", e)
+        return "Dataset loaded. AI description unavailable."
 
+
+async def describe_result(
+    initial_description: str,
+    latest_result: dict,
+) -> str:
+    """Block N describe: AI describes what a specific analysis result shows.
+
+    Context = Block 0 description + latest block's code/stdout/result.
+    """
+    system_prompt = (
+        "You are a data analyst writing for a student. "
+        "Describe what this analysis result shows in 2-3 clear sentences. "
+        "Mention specific numbers, trends, or patterns. "
+        "Do NOT use markdown. Just plain text."
+    )
+    context = (
+        f"Dataset: {initial_description}\n\n"
+        f"Analysis: {latest_result.get('prompt', '')}\n"
+        f"Code:\n{latest_result.get('code', '')}\n\n"
+        f"Output: {latest_result.get('stdout', '')}\n"
+        f"Result: {latest_result.get('result', '')}"
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": context},
+    ]
+    try:
+        data = await _call_gateway(TASK_INTERPRET, messages)
+        desc = _extract_content(data)
+        if desc:
+            logger.info("Block N describe: %s", desc[:80])
+            return desc
+        return "Analysis completed."
+    except Exception as e:
+        logger.error("Describe result failed: %s", e)
+        return "Analysis completed."
+
+
+async def suggest(
+    schema_json: dict,
+    initial_description: str = "",
+    latest_result: dict | None = None,
+) -> list[dict]:
+    """Context-aware suggestions. Uses Block 0 + last block for smarter picks.
+
+    Each suggestion: {"label": str, "icon": str, "prompt": str}
+    """
+    system_prompt = (
+        "You are a data analysis assistant. Suggest exactly 3 NEW insightful "
+        "analyses the user should perform next based on the dataset and any "
+        "previous analysis context. Do NOT repeat previous analyses. "
+        "Return ONLY a JSON array of 3 objects, each with:\n"
+        '- "label": short title (max 4 words)\n'
+        '- "icon": a single relevant emoji\n'
+        '- "prompt": the full analysis instruction to generate pandas/matplotlib code\n'
+        "Do not include any text outside the JSON array."
+    )
+    context_parts = [json.dumps(schema_json, default=str)]
+    if initial_description:
+        context_parts.append(f"\nDataset: {initial_description}")
+    if latest_result:
+        context_parts.append(
+            f"\nLast analysis: {latest_result.get('prompt', '')}"
+            f"\nResult: {latest_result.get('result', '')}"
+            f"\nDescription: {latest_result.get('description', '')}"
+        )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": "\n".join(context_parts)},
+    ]
     try:
         data = await _call_gateway(TASK_SUGGEST, messages)
         content = _extract_content(data)
-
-        # Parse the JSON array from the response
         cleaned = _strip_code_fences(content)
         suggestions = json.loads(cleaned)
         if isinstance(suggestions, list):
             return suggestions[:3]
         return []
-
     except Exception as e:
         logger.error("Suggest failed: %s", e)
         return _fallback_suggestions()
