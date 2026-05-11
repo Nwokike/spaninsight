@@ -1,120 +1,96 @@
-# 📊 Spaninsight
+<p align="center">
+  <img src="src/assets/logo.png" alt="Spaninsight" width="320" />
+</p>
 
-**Privacy-First Data Intelligence Platform**
+<h1 align="center">Spaninsight</h1>
 
-Import data, create AI-powered surveys, and generate professional reports — all without your data ever leaving your device.
+<p align="center">
+  <b>High-Performance Privacy-First Data Intelligence Platform</b>
+</p>
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Desktop%20%7C%20Web-brightgreen.svg)]()
-[![Python](https://img.shields.io/badge/python-3.13-blue.svg)]()
+<p align="center">
+  Professional data analysis, AI-powered survey generation, and automated reporting.
+  <br />
+  Your data stays on your device — local execution, global intelligence.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Proprietary-Software-red?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows" />
+  <img src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android" />
+  <img src="https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.13" />
+</p>
 
 ---
 
-## What is Spaninsight?
+## Core Capabilities
 
-Spaninsight is a zero-cost, privacy-first data analysis platform built for university students, academics, and small businesses. It combines AI-powered code generation with local execution — your data stays on your device while AI handles the heavy thinking.
-
-### Key Features
-
-| Feature | Description |
-|---------|-------------|
-| 🤖 **AI Analysis** | Import CSV/Excel → AI suggests insights → generates Python code → renders charts locally |
-| 📝 **Smart Surveys** | Describe a survey in plain English (or voice) → AI generates the form → share a link → collect responses |
-| 🚀 **Autopilot Mode** | One tap generates a complete analysis report with charts and descriptions |
-| 📄 **Export** | Download reports as PDF or PowerPoint, or share a public link |
-| 🎙️ **Voice Commands** | Describe analyses or surveys via 60-second voice notes |
-| 🔒 **100% Privacy** | All data processing runs locally via embedded Python — nothing leaves your phone |
-| 💰 **Free** | 50 daily credits, invite friends for +10 bonus credits per referral |
+| Capability | Description |
+|:---|:---|
+| **Automated Analysis** | Intelligent data ingestion (CSV/Excel) with AI-suggested insights and local code execution. |
+| **Smart Surveys** | Natural language survey generation (Text/Voice) with automated D1 schema deployment. |
+| **Autopilot Engine** | Multi-pass analysis orchestration for comprehensive automated report generation. |
+| **Enterprise Export** | Professional rendering of reports to PDF and PowerPoint formats with R2 cloud sharing. |
+| **Local Security** | Sandbox-restricted Python execution environment ensuring 100% data residency. |
 
 ---
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────┐
-│                    FLET APP (Client)                  │
-│  ┌────────┐ ┌──────────┐ ┌───────┐ ┌──────────────┐ │
-│  │  Home  │ │ Analysis │ │ Forms │ │   Settings   │ │
-│  └────────┘ └──────────┘ └───────┘ └──────────────┘ │
-│       │           │           │                      │
-│  ┌────┴───────────┴───────────┴──────────────────┐   │
-│  │        Local Python Engine (pandas, plt)       │   │
-│  └────────────────────┬──────────────────────────┘   │
-└───────────────────────┼──────────────────────────────┘
-                        │ HTTPS (AI only)
-                        ▼
-┌──────────────────────────────────────────────────────┐
-│         CLOUDFLARE WORKER (api.spaninsight.com)       │
-│  ┌────────────┐  ┌──────┐  ┌────┐  ┌────────────┐   │
-│  │  AI Routes │  │  D1  │  │ R2 │  │ Referrals  │   │
-│  │ Groq+NVIDIA│  │Forms │  │Rpts│  │  Tracking  │   │
-│  └────────────┘  └──────┘  └────┘  └────────────┘   │
-└──────────────────────────────────────────────────────┘
-```
+```mermaid
+graph TD
+    subgraph Client ["Flet Client (Android/Desktop/Web)"]
+        UI["UI Layer (Home, Analysis, Forms, Settings)"]
+        Engine["Local Python Engine (Pandas, Matplotlib)"]
+        Sandbox["Restricted Execution Sandbox"]
+    end
 
-### Zero-Cost Stack
+    subgraph Cloud ["Spaninsight Cloud (api.spaninsight.com)"]
+        Worker["Cloudflare Worker Gateway"]
+        D1[("Cloudflare D1 (SQL)")]
+        R2[("Cloudflare R2 (Storage)")]
+    end
 
-- **Client**: Flet (Python) — Android, Desktop, Web
-- **AI Gateway**: Cloudflare Workers (free tier)
-- **Database**: Cloudflare D1 (serverless SQLite)
-- **Storage**: Cloudflare R2 (public report sharing)
-- **AI Models**: Groq (primary, fast) + NVIDIA NIM (fallback, heavy reasoning)
+    subgraph AI ["AI Inference Layer"]
+        Groq["Groq API (Llama 3.3, Whisper)"]
+        NVIDIA["NVIDIA NIM (Nemotron, Mistral)"]
+    end
+
+    UI <--> Engine
+    Engine --> Sandbox
+    UI <--> Worker
+    Worker <--> D1
+    Worker <--> R2
+    Worker <--> AI
+```
 
 ---
 
 ## Project Structure
 
-```
+```text
 spaninsight/
 ├── gateway/
 │   ├── index.js          # Cloudflare Worker (AI + D1 + R2)
 │   └── schema.sql        # D1 database schema
 ├── src/
 │   ├── main.py            # App entry point
-│   ├── core/
-│   │   ├── constants.py   # API config, limits, security
-│   │   ├── state.py       # Observable app state
-│   │   ├── theme.py       # Design tokens
-│   │   ├── tokens.py      # Spacing, sizing, radius
-│   │   └── styles.py      # Reusable UI patterns
-│   ├── components/
-│   │   ├── chart_card.py       # Chart display card
-│   │   ├── credit_badge.py     # Credits indicator
-│   │   ├── data_preview.py     # DataTable preview
-│   │   ├── file_import_card.py # File upload card
-│   │   ├── stat_card.py        # Stat display
-│   │   └── suggestion_chips.py # AI suggestion pills
-│   ├── services/
-│   │   ├── ai_service.py       # Gateway client (all AI routes)
-│   │   ├── audio_service.py    # Voice recording
-│   │   ├── camera_service.py   # Vision capture
-│   │   ├── credit_service.py   # Credit management
-│   │   ├── file_service.py     # CSV/Excel loading
-│   │   ├── file_picker_service.py
-│   │   ├── forms_service.py    # D1 forms CRUD
-│   │   ├── sandbox.py          # Safe exec() environment
-│   │   ├── uuid_service.py     # Identity management
-│   │   └── ad_service.py       # AdMob integration
-│   └── views/
-│       ├── home_view.py        # Marketing landing
-│       ├── analysis_view.py    # Block-chain analysis engine
-│       ├── forms_view.py       # Survey creation + dashboard
-│       ├── report_view.py      # Export + sharing
-│       └── settings_view.py    # Account + preferences
-└── requirements.txt
+│   ├── core/              # Global state, constants, and themes
+│   ├── components/        # Reusable UI widgets
+│   ├── services/          # Business logic (AI, Audio, Sandbox, DB)
+│   └── views/             # Functional application screens
+└── requirements.txt       # Production dependencies
 ```
 
 ---
 
-## Setup
+## Getting Started
 
 ### Prerequisites
-
 - Python 3.13+
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
+- [uv](https://github.com/astral-sh/uv) (recommended)
 
-### Install
-
+### Installation
 ```bash
 git clone https://github.com/Nwokike/spaninsight.git
 cd spaninsight
@@ -122,68 +98,50 @@ uv venv
 uv pip install -r requirements.txt
 ```
 
-### Run
-
+### Execution
 ```bash
 flet run
 ```
 
-### Cloudflare Infrastructure
+---
 
-The gateway requires these Cloudflare bindings:
+## Infrastructure Configuration
 
-| Binding | Type | Name |
-|---------|------|------|
-| `GROQ_API_KEYS` | Secret | Comma-separated Groq API keys |
-| `NVIDIA_API_KEYS` | Secret | Comma-separated NVIDIA NIM keys |
-| `CLIENT_SECRET_KEY` | Secret | `spaninsight-mobile-v1` |
-| `DB` | D1 Database | `spaninsight-db` |
-| `REPORTS` | R2 Bucket | `spaninsight-reports` |
+The application requires the following Cloudflare Worker bindings for production functionality:
 
-Deploy the Worker:
-1. Create D1 database and run `gateway/schema.sql`
-2. Create R2 bucket
-3. Bind both to the Worker
-4. Deploy `gateway/index.js`
+| Binding | Type | Required For |
+|:---|:---|:---|
+| `GROQ_API_KEYS` | Secret | Primary Inference (Llama/Whisper) |
+| `NVIDIA_API_KEYS` | Secret | Fallback Reasoning & Vision |
+| `DB` | D1 Database | Survey Management & Response Storage |
+| `REPORTS` | R2 Bucket | Public Report Sharing & Persistence |
 
 ---
 
-## AI Gateway Routes
+## Intelligence Fallback System
 
-| Route | Models (Priority Order) | Purpose |
-|-------|------------------------|---------|
-| `suggest` | Groq llama-3.1-8b → NVIDIA gemma-4-31b | Schema reading, suggestions |
-| `code` | Groq llama-3.3-70b → qwen3-32b → gpt-oss-120b → NVIDIA nemotron/mistral | Python code generation |
-| `interpret` | Groq llama-3.3-70b → qwen3-32b → NVIDIA gpt-oss-120b | Result interpretation |
-| `vision` | Groq llama-4-scout → NVIDIA nemotron-omni → gemma-4 | Image analysis |
-| `audio` | Groq whisper-large-v3 → whisper-large-v3-turbo | Voice transcription |
+The Spaninsight Gateway implements a robust multi-model fallback strategy to ensure high availability:
 
-All routes use a **double fallback** pattern — if one model fails or rate-limits, the next one picks up automatically.
+1. **Tier 1 (Groq)**: Ultra-low latency inference for code generation and transcription.
+2. **Tier 2 (NVIDIA NIM)**: High-fidelity reasoning for complex data interpretation and vision tasks.
+3. **Tier 3 (Circuit Breaker)**: Graceful degradation and user-side notification on network/API failure.
 
 ---
 
-## Security
+## Compliance & Security
 
-- **Sandbox**: AI-generated code runs in a restricted `exec()` with blocked terms (`import os`, `subprocess`, `open(`, etc.)
-- **Auth**: All API requests require `X-App-Secret` + `User-Agent: SpaninsightApp/X.X.X`
-- **Privacy**: Data files never leave the device — only schema summaries are sent to AI
-- **Turnstile**: Public form submissions protected by Cloudflare CAPTCHA
-- **File Limits**: Max 15MB uploads, 50-row preview pagination
-
----
-
-## Credits Economy
-
-| Action | Cost |
-|--------|------|
-| AI Suggestion | 1 credit |
-| Custom Prompt / Voice | 3 credits |
-| Autopilot (full report) | 15 credits |
-| **Daily Free** | **50 credits** |
-| Referral Bonus | +10 daily credits per invite |
+- **Data Residency**: No raw data files are transmitted to the cloud. Only metadata headers are used for AI context.
+- **Execution Sandbox**: Strict AST-based filtering prevents unauthorized system calls within the local environment.
+- **Authentication**: Stateless HMAC-based secret validation for all gateway communication.
 
 ---
 
 ## License
 
-MIT © 2026 Spaninsight
+This project is proprietary software. All rights reserved.
+
+---
+
+<p align="center">
+  <em>Developed by Spaninsight Engineering</em>
+</p>
