@@ -1,4 +1,4 @@
-"""Home view — landing dashboard with quick actions and branding."""
+"""Home view — marketing landing dashboard with quick actions and branding."""
 
 from __future__ import annotations
 
@@ -16,13 +16,7 @@ def build_home_view(
     on_import_file: callable,
     on_navigate: callable,
 ) -> ft.View:
-    """Build the Home landing tab.
-
-    Args:
-        page: Flet page.
-        on_import_file: Callback to start file import flow.
-        on_navigate: Callback(route: str) for navigation.
-    """
+    """Build the Home landing tab."""
 
     # ── Hero section ────────────────────────────────────────────────
     hero = ft.Container(
@@ -42,7 +36,7 @@ def build_home_view(
                     color=ft.Colors.ON_SURFACE_VARIANT,
                     text_align=ft.TextAlign.CENTER,
                 ),
-                ft.Container(height=tokens.SPACE_XXL),
+                ft.Container(height=tokens.SPACE_XL),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=0,
@@ -83,11 +77,10 @@ def build_home_view(
                     controls=[
                         _action_card(
                             icon=ft.Icons.DYNAMIC_FORM_ROUNDED,
-                            title="Create Form",
-                            subtitle="Coming soon",
+                            title="Create Survey",
+                            subtitle="AI-powered forms",
                             color=theme.WARNING,
                             on_click=lambda e: on_navigate("/forms"),
-                            disabled=True,
                         ),
                         _action_card(
                             icon=ft.Icons.ASSESSMENT_ROUNDED,
@@ -158,6 +151,62 @@ def build_home_view(
         border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.SUCCESS)),
     )
 
+    # ── What you can do ─────────────────────────────────────────────
+    features = ft.Container(
+        content=ft.Column(
+            controls=[
+                ft.Text(
+                    "What Spaninsight Does",
+                    size=tokens.FONT_MD,
+                    weight=ft.FontWeight.W_600,
+                ),
+                ft.Container(height=tokens.SPACE_SM),
+                _feature_card(
+                    ft.Icons.AUTO_AWESOME_ROUNDED,
+                    "AI-Powered Analysis",
+                    "Import any CSV or Excel file. AI suggests insights, "
+                    "writes Python code, and generates charts — all locally on your device.",
+                    theme.PRIMARY,
+                ),
+                _feature_card(
+                    ft.Icons.DYNAMIC_FORM_ROUNDED,
+                    "Smart Surveys",
+                    "Describe a survey in plain English. AI generates the form. "
+                    "Share a link, collect responses, and download as CSV to analyze.",
+                    theme.WARNING,
+                ),
+                _feature_card(
+                    ft.Icons.ROCKET_LAUNCH_ROUNDED,
+                    "Autopilot Mode",
+                    "One tap. AI runs 5 analysis passes, generates charts, "
+                    "writes descriptions, and builds a complete report automatically.",
+                    theme.ACCENT,
+                ),
+                _feature_card(
+                    ft.Icons.PICTURE_AS_PDF_ROUNDED,
+                    "Export & Share",
+                    "Download your report as PDF or PowerPoint. Or share a "
+                    "public link — anyone can view your insights in a browser.",
+                    theme.SUCCESS,
+                ),
+                _feature_card(
+                    ft.Icons.MIC_ROUNDED,
+                    "Voice Commands",
+                    "Speak your analysis request in a 60-second voice note. "
+                    "Spaninsight transcribes it and runs the analysis for you.",
+                    "#9C27B0",
+                ),
+            ],
+            spacing=tokens.SPACE_MD,
+        ),
+        padding=ft.Padding(
+            left=tokens.SPACE_LG,
+            right=tokens.SPACE_LG,
+            top=tokens.SPACE_LG,
+            bottom=tokens.SPACE_SM,
+        ),
+    )
+
     # ── How it works ────────────────────────────────────────────────
     how_it_works = ft.Container(
         content=ft.Column(
@@ -168,9 +217,9 @@ def build_home_view(
                     weight=ft.FontWeight.W_600,
                 ),
                 ft.Container(height=tokens.SPACE_SM),
-                _step_row("1", "Import", "Upload a CSV or Excel file"),
+                _step_row("1", "Import", "Upload a CSV or Excel file (up to 15MB)"),
                 _step_row("2", "Analyze", "AI suggests insights or use Autopilot"),
-                _step_row("3", "Share", "Export as PDF or share a public link"),
+                _step_row("3", "Export", "Download PDF, PPTX, or share a public link"),
             ],
             spacing=tokens.SPACE_MD,
         ),
@@ -178,12 +227,36 @@ def build_home_view(
             left=tokens.SPACE_LG,
             right=tokens.SPACE_LG,
             top=tokens.SPACE_LG,
-            bottom=tokens.SPACE_XXXL,
+            bottom=tokens.SPACE_SM,
         ),
     )
 
+    # ── Credits info ────────────────────────────────────────────────
+    credits_info = ft.Container(
+        content=ft.Row(
+            controls=[
+                ft.Icon(ft.Icons.BOLT_ROUNDED, size=20, color=theme.ACCENT),
+                ft.Column([
+                    ft.Text("50 Free Credits Daily", size=tokens.FONT_SM, weight="w600"),
+                    ft.Text(
+                        "Each analysis costs 1 credit. Invite friends for +10 bonus credits per referral.",
+                        size=tokens.FONT_XS,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ], spacing=2, expand=True),
+            ],
+            spacing=tokens.SPACE_MD,
+            vertical_alignment="center",
+        ),
+        padding=ft.Padding(tokens.SPACE_LG, tokens.SPACE_MD, tokens.SPACE_LG, tokens.SPACE_MD),
+        margin=ft.Margin(tokens.SPACE_LG, 0, tokens.SPACE_LG, tokens.SPACE_LG),
+        border_radius=tokens.RADIUS_LG,
+        bgcolor=ft.Colors.with_opacity(0.06, theme.ACCENT),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.ACCENT)),
+    )
+
     content = ft.Column(
-        controls=[hero, quick_actions, privacy_banner, how_it_works],
+        controls=[hero, quick_actions, privacy_banner, features, how_it_works, credits_info, ft.Container(height=80)],
         scroll=ft.ScrollMode.AUTO,
         expand=True,
         spacing=0,
@@ -209,11 +282,11 @@ def build_home_view(
     async def _toggle_theme(e, p: ft.Page):
         p.theme_mode = ft.ThemeMode.LIGHT if p.theme_mode == ft.ThemeMode.DARK else ft.ThemeMode.DARK
         state.theme_mode = p.theme_mode
-        
+
         # Persist
         storage = SecureStorage()
         await storage.set(STORAGE_THEME, "light" if p.theme_mode == ft.ThemeMode.LIGHT else "dark")
-        
+
         # Update icon directly to avoid full page reload
         e.control.icon = ft.Icons.LIGHT_MODE_ROUNDED if p.theme_mode == ft.ThemeMode.DARK else ft.Icons.DARK_MODE_ROUNDED
         p.update()
@@ -265,6 +338,44 @@ def _action_card(
         on_click=on_click if not disabled else None,
         ink=not disabled,
         opacity=opacity,
+    )
+
+
+def _feature_card(icon: str, title: str, desc: str, color: str) -> ft.Container:
+    """Build a marketing feature card."""
+    return ft.Container(
+        content=ft.Row(
+            controls=[
+                ft.Container(
+                    content=ft.Icon(icon, size=24, color=color),
+                    width=44,
+                    height=44,
+                    border_radius=12,
+                    bgcolor=ft.Colors.with_opacity(0.1, color),
+                    alignment=ft.Alignment.CENTER,
+                ),
+                ft.Column(
+                    controls=[
+                        ft.Text(title, size=tokens.FONT_SM, weight=ft.FontWeight.W_600),
+                        ft.Text(
+                            desc,
+                            size=tokens.FONT_XS,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            max_lines=3,
+                            overflow="ellipsis",
+                        ),
+                    ],
+                    spacing=2,
+                    expand=True,
+                ),
+            ],
+            spacing=tokens.SPACE_MD,
+            vertical_alignment="start",
+        ),
+        padding=14,
+        border_radius=12,
+        bgcolor=theme.GLASS_BG,
+        border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
     )
 
 

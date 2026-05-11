@@ -25,7 +25,7 @@ def build_settings_view(
     async def on_copy_uuid(e):
         user_uuid = await uuid_service.get_uuid()
         if user_uuid:
-            await page.set_clipboard_async(user_uuid)
+            page.clipboard = user_uuid
             page.snack_bar = ft.SnackBar(
                 content=ft.Text("UUID copied to clipboard"),
                 duration=2000,
@@ -36,7 +36,7 @@ def build_settings_view(
     async def on_copy_phrase(e):
         phrase = await uuid_service.get_backup_phrase()
         if phrase:
-            await page.set_clipboard_async(phrase)
+            page.clipboard = phrase
             page.snack_bar = ft.SnackBar(
                 content=ft.Text("Backup phrase copied!"),
                 duration=2000,
@@ -100,7 +100,7 @@ def build_settings_view(
         """Share the user's invite code (first 8 chars of UUID)."""
         invite_code = state.user_uuid[:8] if state.user_uuid else ""
         if invite_code:
-            await page.set_clipboard_async(invite_code)
+            page.clipboard = invite_code
             page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Invite code copied: {invite_code}"),
                 duration=3000,

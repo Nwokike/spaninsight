@@ -17,6 +17,7 @@ import flet as ft
 from core import theme, tokens
 from core.state import state
 from services import ai_service, forms_service
+from services.audio_service import AudioService
 from services.file_picker_service import FilePickerService
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,11 @@ def build_forms_view(page: ft.Page) -> ft.View:
     user_forms: list[dict] = []
     is_loading = {"value": False}
     is_creating = {"value": False}
+    is_recording = {"value": False}
     active_form: dict = {"data": None}  # currently viewed form detail
+
+    # Voice recording
+    audio_svc = AudioService(page)
 
     # ── Handlers ─────────────────────────────────────────────────────
 
@@ -83,7 +88,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 )
                 page.snack_bar.open = True
                 # Copy link to clipboard
-                await page.set_clipboard_async(result["url"])
+                page.clipboard = result["url"]
                 await load_forms()
             else:
                 _show_error("Failed to create form. Check your connection.")
@@ -94,6 +99,47 @@ def build_forms_view(page: ft.Page) -> ft.View:
         finally:
             is_creating["value"] = False
             _rebuild()
+
+    async def on_voice_toggle(e):
+        """Toggle voice recording for form description."""
+        if is_recording["value"]:
+            # Stop recording
+            result = await audio_svc.stop_recording()
+            is_recording["value"] = False
+            _rebuild()
+
+            if result:
+                audio_bytes, mime_type = result
+                page.snack_bar = ft.SnackBar(ft.Text("Transcribing..."), duration=2000)
+                page.snack_bar.open = True
+                page.update()
+
+                transcript = await ai_service.transcribe_audio(audio_bytes, mime_type)
+                if transcript and not transcript.startswith("["):
+                    if form_prompt_field.current:
+                        form_prompt_field.current.value = transcript
+                        page.update()
+                else:
+                    _show_error("Could not transcribe audio. Try again.")
+        else:
+            # Start recording
+            started = await audio_svc.start_recording(
+                on_auto_stop=lambda res: page.run_task(_handle_auto_stop, res)
+            )
+            if started:
+                is_recording["value"] = True
+                _rebuild()
+
+    async def _handle_auto_stop(result):
+        """Handle auto-stop after 60s."""
+        is_recording["value"] = False
+        _rebuild()
+        if result:
+            audio_bytes, mime_type = result
+            transcript = await ai_service.transcribe_audio(audio_bytes, mime_type)
+            if transcript and not transcript.startswith("[") and form_prompt_field.current:
+                form_prompt_field.current.value = transcript
+                page.update()
 
     async def on_view_form(form: dict):
         active_form["data"] = form
@@ -109,7 +155,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
 
     async def on_copy_link(form_id: str):
         url = f"https://f.spaninsight.com/{form_id}"
-        await page.set_clipboard_async(url)
+        page.clipboard = url
         page.snack_bar = ft.SnackBar(ft.Text("Link copied!"), duration=2000)
         page.snack_bar.open = True
         page.update()
@@ -342,21 +388,28 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 ft.Row([
                     ft.TextField(
                         ref=form_prompt_field,
-                        hint_text="e.g. Patient feedback form for cardiology...",
+                        hint_text="Describe your survey or tap the mic...",
                         expand=True,
                         border_radius=12,
                         max_lines=3,
                         min_lines=1,
                         on_submit=lambda e: page.run_task(on_create_form, e),
+                        disabled=is_creating["value"] or is_recording["value"],
+                    ),
+                    ft.IconButton(
+                        ft.Icons.STOP_ROUNDED if is_recording["value"] else ft.Icons.MIC_ROUNDED,
+                        icon_color=theme.ERROR if is_recording["value"] else theme.ACCENT,
+                        tooltip="Stop recording" if is_recording["value"] else "Describe with voice",
+                        on_click=lambda e: page.run_task(on_voice_toggle, e),
                         disabled=is_creating["value"],
                     ),
                     ft.IconButton(
                         ft.Icons.SEND_ROUNDED,
                         icon_color=theme.PRIMARY,
                         on_click=lambda e: page.run_task(on_create_form, e),
-                        disabled=is_creating["value"],
+                        disabled=is_creating["value"] or is_recording["value"],
                     ),
-                ], spacing=8),
+                ], spacing=4),
                 ft.ProgressBar(visible=is_creating["value"]),
             ], spacing=4),
             padding=20, margin=ft.Margin(20, 10, 20, 10),

@@ -123,7 +123,7 @@ def build_report_view(page: ft.Page, on_back=None) -> ft.View:
                 if resp.status_code == 201:
                     data = resp.json()
                     url = data.get("url", "")
-                    await page.set_clipboard_async(url)
+                    page.clipboard = url
                     page.snack_bar = ft.SnackBar(
                         ft.Text(f"Link copied! {url}"), duration=5000)
                     page.snack_bar.open = True
