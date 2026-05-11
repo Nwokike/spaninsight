@@ -309,7 +309,7 @@ def build_analysis_view(
                         padding=12,
                         bgcolor="#0D0D1A",
                         border_radius=ft.BorderRadius(top_left=0, top_right=0, bottom_left=8, bottom_right=8),
-                        max_height=200,
+                        height=200,
                     ),
                 ],
                 spacing=0,
@@ -451,7 +451,11 @@ def build_analysis_view(
         if content_column.current:
             content_column.current.controls = _build_content()
             # Scroll to bottom if new blocks added
-            content_column.current.scroll_to(offset=-1, duration=500)
+            async def do_scroll():
+                try:
+                    await content_column.current.scroll_to(offset=-1, duration=500)
+                except Exception: pass
+            p.run_task(do_scroll)
             p.update()
 
     # Initial check
