@@ -41,11 +41,11 @@ _HEADERS = {
 
 # Timeouts per task type (match gateway's own timeouts)
 _TIMEOUTS = {
-    TASK_SUGGEST: 15.0,
-    TASK_CODE: 30.0,
-    TASK_INTERPRET: 15.0,
-    TASK_VISION: 28.0,
-    TASK_AUDIO: 20.0,
+    TASK_SUGGEST: 25.0,
+    TASK_CODE: 45.0,
+    TASK_INTERPRET: 20.0,
+    TASK_VISION: 40.0,
+    TASK_AUDIO: 30.0,
 }
 
 

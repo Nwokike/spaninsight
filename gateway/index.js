@@ -13,79 +13,47 @@
  *    - NVIDIA_API_KEYS    : "key1, key2"       (Comma-separated string of your NVIDIA keys)
  *    - CLIENT_SECRET_KEY  : "spaninsight-mobile-v1" (Your secure app password)
  * 
- * 2. HOW TO CALL THIS GATEWAY FROM YOUR FLET APP (PYTHON EXAMPLES):
- * 
- *    [A] Standard Task (Suggest, Code, Interpret, Vision)
- *    ---------------------------------------------------
- *    import requests
- * 
- *    headers = {
- *        "X-App-Secret": "spaninsight-mobile-v1", # MUST MATCH CLIENT_SECRET_KEY
- *        "User-Agent": "SpaninsightApp/1.0",      # REQUIRED TO BYPASS SCRAPER BLOCK
- *        "Content-Type": "application/json"
- *    }
- *    payload = {
- *        "task_type": "vision", # Options: "suggest", "code", "interpret", "vision"
- *        "stream": True,
- *        "messages": [
- *            {
- *                "role": "user", 
- *                "content": [
- *                    {"type": "text", "text": "What's in this image?"},
- *                    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
- *                ]
- *            }
- *        ]
- *    }
- *    # Make sure to handle the stream and look for reasoning_content if streaming!
- * 
- *    [B] Audio Task (Whisper Voice Commands)
- *    ---------------------------------------------------
- *    import requests
- * 
- *    headers = {
- *        "X-App-Secret": "spaninsight-mobile-v1",
- *        "User-Agent": "SpaninsightApp/1.0"
- *        # DO NOT set Content-Type here, requests sets multipart/form-data automatically
- *    }
- *    files = {
- *        "file": ("audio.m4a", open("path/to/audio.m4a", "rb"), "audio/mp4")
- *    }
- *    data = {
- *        "task_type": "audio"
- *    }
- *    response = requests.post("https://api.spaninsight.com/chat", headers=headers, files=files, data=data)
- * 
  * =============================================================================
  */
 
 // STRICTLY GROQ & NVIDIA ONLY (No Gemini)
+// GROQ is prioritized first across all routes.
 const ROUTES = {
   // Fast schema reading and action suggestions
   suggest: [ 
-    { provider: "groq", id: "llama-3.1-8b-instant" } 
+    { provider: "groq", id: "llama-3.1-8b-instant" },
+    // NVIDIA Fallback
+    { provider: "nvidia", id: "google/gemma-4-31b-it", extraParams: { max_tokens: 16384, chat_template_kwargs: { enable_thinking: true } } }
   ],
   
   // Heavy reasoning models for Pandas/Matplotlib Python code generation
   code: [
+    { provider: "groq", id: "llama-3.3-70b-versatile" }, 
+    { provider: "groq", id: "qwen/qwen3-32b" },          
+    { provider: "groq", id: "openai/gpt-oss-120b" },
+    // NVIDIA Fallbacks (with heavy token budgets)
     { provider: "nvidia", id: "nvidia/nemotron-3-super-120b-a12b", extraParams: { max_tokens: 16384, reasoning_budget: 16384, chat_template_kwargs: { enable_thinking: true } } },
     { provider: "nvidia", id: "mistralai/mistral-medium-3.5-128b", extraParams: { max_tokens: 16384, reasoning_effort: "high" } },
-    { provider: "nvidia", id: "openai/gpt-oss-120b" },
-    { provider: "nvidia", id: "google/gemma-4-31b-it", extraParams: { max_tokens: 16384, chat_template_kwargs: { enable_thinking: true } } },
-    { provider: "groq", id: "openai/gpt-oss-120b" }
+    { provider: "nvidia", id: "openai/gpt-oss-120b", extraParams: { max_tokens: 4096 } },
+    { provider: "nvidia", id: "google/gemma-4-31b-it", extraParams: { max_tokens: 16384, chat_template_kwargs: { enable_thinking: true } } }
   ],
   
   // Fast models to turn local Pandas numerical results into human insights
   interpret: [
+    { provider: "groq", id: "llama-3.3-70b-versatile" }, 
     { provider: "groq", id: "qwen/qwen3-32b" },
     { provider: "groq", id: "openai/gpt-oss-120b" },
-    { provider: "nvidia", id: "openai/gpt-oss-120b" }
+    // NVIDIA Fallbacks
+    { provider: "nvidia", id: "openai/gpt-oss-120b", extraParams: { max_tokens: 4096 } },
+    { provider: "nvidia", id: "google/gemma-4-31b-it", extraParams: { max_tokens: 16384, chat_template_kwargs: { enable_thinking: true } } }
   ],
 
   // Visual data extraction and chart interpretation
   vision: [
     { provider: "groq", id: "meta-llama/llama-4-scout-17b-16e-instruct" },
-    { provider: "nvidia", id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", extraParams: { max_tokens: 65536, reasoning_budget: 16384, chat_template_kwargs: { enable_thinking: true } } }
+    // NVIDIA Fallbacks
+    { provider: "nvidia", id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", extraParams: { max_tokens: 65536, reasoning_budget: 16384, chat_template_kwargs: { enable_thinking: true } } },
+    { provider: "nvidia", id: "google/gemma-4-31b-it", extraParams: { max_tokens: 16384, chat_template_kwargs: { enable_thinking: true } } }
   ],
   
   // Audio transcription for app voice commands
@@ -131,7 +99,7 @@ export default {
     const clientSecret = request.headers.get("X-App-Secret");
     const userAgent = request.headers.get("User-Agent") || "";
     
-    // SECURITY GATE: Checks for the secret key AND the specific User-Agent from the Flet app
+    // SECURITY GATE
     const isValidSecret = clientSecret === env.CLIENT_SECRET_KEY;
     const isValidApp = isValidSecret && userAgent.includes("SpaninsightApp");
 
@@ -140,7 +108,7 @@ export default {
       return new Response(null, { headers: corsHeaders(origin, isValidApp) });
     }
 
-    // Block unauthorized requests to main endpoints
+    // Block unauthorized requests
     if (!isValidApp && request.url.includes("/chat")) {
       console.warn(`Unauthorized access blocked. UA: ${userAgent}`);
       return json({ error: "Unauthorized Gateway Access. Check headers." }, 401, origin, false);
@@ -148,7 +116,7 @@ export default {
 
     const url = new URL(request.url);
 
-    // Healthcheck endpoint (Use this in Flet on startup to verify gateway is online)
+    // Healthcheck endpoint
     if (url.pathname === "/health") {
       return json({ 
         status: "ok", 
@@ -188,15 +156,13 @@ async function handleChat(request, env, origin, isValidApp) {
     return json({ error: "Invalid payload format" }, 400, origin, isValidApp);
   }
 
-  // Extract task_type to route to the correct models
+  // Extract task_type
   let taskType = isFormData ? (body.get("task_type") || "audio") : (body.task_type || "suggest");
   let isStreaming = isFormData ? false : (body.stream || false);
 
-  // Remove task_type so the upstream LLM API doesn't throw a validation error
   if (isFormData) body.delete("task_type");
   else delete body.task_type;
 
-  // EXPLICIT AUDIO CHECK: Prevent users from sending JSON to Whisper endpoints
   if (taskType === "audio" && !isFormData) {
     return json({ error: "Audio processing requires multipart/form-data with a file payload." }, 400, origin, isValidApp);
   }
@@ -226,33 +192,28 @@ async function handleChat(request, env, origin, isValidApp) {
         endpoint = ENDPOINTS.groq_audio;
         const formDataPayload = new FormData();
         
-        // Rebuild FormData cleanly per loop so the file isn't consumed/lost on retry
         for (const [key, value] of body.entries()) formDataPayload.append(key, value);
         formDataPayload.set("model", modelConfig.id);
         
         fetchOptions.body = formDataPayload;
       } 
-      // TEXT / VISION CHAT HANDLING (Sanitized Payload)
+      // TEXT / VISION CHAT HANDLING
       else {
         fetchOptions.headers["Content-Type"] = "application/json";
         const safePayload = {
-          ...body, // Spread Flet's base JSON (messages, temperature, etc.)
+          ...body, 
           stream: isStreaming,
           model: modelConfig.id,
-          ...(modelConfig.extraParams || {}) // Overwrite with our heavy reasoning parameters
+          ...(modelConfig.extraParams || {}) 
         };
         fetchOptions.body = JSON.stringify(safePayload);
       }
 
-      // DYNAMIC TIMEOUT REFINEMENT: 
-      // Cloudflare Free Workers kill scripts at exactly 30s.
-      // Vision and Code are heavier, give them 28s. Fast tasks get 15s.
       const timeoutMs = (taskType === "code" || taskType === "vision") ? 28000 : 15000;
       const resp = await fetchWithTimeout(endpoint, fetchOptions, timeoutMs);
 
       if (resp.ok) {
         if (isStreaming && !isFormData) {
-          // STREAM ERROR HANDLING: Manually pump the stream to catch mid-flight crashes
           const { readable, writable } = new TransformStream();
           const writer = writable.getWriter();
           const reader = resp.body.getReader();
@@ -268,7 +229,6 @@ async function handleChat(request, env, origin, isValidApp) {
             } catch (err) {
               console.error(`[${modelConfig.provider}] Stream crashed:`, err);
               const enc = new TextEncoder();
-              // Send final SSE chunk so Flet app knows it failed, preventing infinite UI hang
               await writer.write(enc.encode('\ndata: {"error": "Stream interrupted mid-flight"}\n\n'));
               await writer.close();
             }
@@ -282,14 +242,23 @@ async function handleChat(request, env, origin, isValidApp) {
         }
 
         const data = await resp.json();
-        data._spaninsight_model_used = modelConfig.id; // Useful for Flet UI debugging
+        data._spaninsight_model_used = modelConfig.id; 
         return json(data, 200, origin, isValidApp);
       }
 
-      // IF WE REACH HERE, THE API CALL FAILED
+      // HANDLE FAILURES (INCLUDING 429 RATE LIMITS)
       const status = resp.status;
       const errText = await resp.text().catch(() => "");
-      lastError = `[${modelConfig.provider}] ${modelConfig.id} HTTP ${status} — ${errText.slice(0, 150)}`;
+      
+      let errorLog = `[${modelConfig.provider}] ${modelConfig.id} HTTP ${status} — ${errText.slice(0, 150)}`;
+      
+      // Check for Rate Limit Headers
+      if (status === 429) {
+          const retryAfter = resp.headers.get("retry-after");
+          errorLog += ` (Rate Limited! Retry After: ${retryAfter || 'unknown'}s)`;
+      }
+      
+      lastError = errorLog;
       console.warn(`Fallback triggered: ${lastError}`); 
       
       // Loop continues to next model...
@@ -302,11 +271,10 @@ async function handleChat(request, env, origin, isValidApp) {
     }
   }
 
-  // IF ALL MODELS IN THE CATEGORY FAIL
+  // IF ALL MODELS FAIL
   return json({ error: `All fallback models for '${taskType}' exhausted.`, last_error: lastError }, 503, origin, isValidApp);
 }
 
-// FLEXIBLE CORS: If secret is valid, allow the origin. Otherwise, block it.
 function corsHeaders(origin, isValidApp = false) {
   const allowOrigin = isValidApp ? (origin || "*") : (ALLOWED_ORIGINS.includes(origin) ? origin : "null");
   

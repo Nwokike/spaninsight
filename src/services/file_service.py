@@ -95,87 +95,68 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
 
 
 def get_data_summary(df: pd.DataFrame) -> dict:
-    """Generate a comprehensive summary for the AI.
+    """Generate a comprehensive but token-efficient summary for the AI.
 
     Includes everything pandas can tell us: shape, dtypes, head, tail,
-    describe, nunique, null counts, memory usage, and top values.
-    The AI should NEVER have to guess — this is definitive.
+    describe, nunique, null counts, and top values.
+    Truncates long strings and limits column counts to keep payload safe.
     """
-    import io
-
-    # Basic shape
+    # 1. Shape and basics
     summary = {
         "shape": {"rows": len(df), "columns": len(df.columns)},
-        "column_names": list(df.columns),
-        "dtypes": {col: str(df[col].dtype) for col in df.columns},
         "memory_usage_mb": round(df.memory_usage(deep=True).sum() / (1024 * 1024), 2),
     }
 
-    # Head and tail (as dicts for JSON serialization)
-    try:
-        summary["head_5_rows"] = df.head(5).to_dict(orient="records")
-    except Exception:
-        summary["head_5_rows"] = str(df.head(5))
-
-    try:
-        summary["tail_3_rows"] = df.tail(3).to_dict(orient="records")
-    except Exception:
-        summary["tail_3_rows"] = str(df.tail(3))
-
-    # Describe (numeric stats)
-    try:
-        desc = df.describe(include="all")
-        # Convert to dict, handling NaN
-        summary["describe"] = {}
-        for col in desc.columns:
-            summary["describe"][col] = {
-                stat: (round(float(val), 4) if pd.notna(val) and isinstance(val, (int, float)) else str(val))
-                for stat, val in desc[col].items()
-                if pd.notna(val)
-            }
-    except Exception:
-        summary["describe"] = "unavailable"
-
-    # Null counts and percentages
-    null_counts = df.isnull().sum()
-    summary["null_info"] = {
-        col: {
-            "count": int(null_counts[col]),
-            "percent": round(null_counts[col] / len(df) * 100, 1),
-        }
-        for col in df.columns
-        if null_counts[col] > 0
-    }
-
-    # Unique value counts
-    summary["unique_counts"] = {col: int(df[col].nunique()) for col in df.columns}
-
-    # Per-column detail
-    columns_detail = []
-    for col in df.columns:
+    # 2. Column-level mapping (Dtypes + Nulls + Unique)
+    cols = []
+    # Limit to first 25 columns to avoid massive payloads for wide datasets
+    target_cols = df.columns[:25]
+    for col in target_cols:
         col_info = {
             "name": col,
             "dtype": str(df[col].dtype),
             "nulls": int(df[col].isnull().sum()),
             "unique": int(df[col].nunique()),
         }
+        # Add basic stats for numeric
         if pd.api.types.is_numeric_dtype(df[col]):
             d = df[col].describe()
             col_info["stats"] = {
                 "mean": round(float(d.get("mean", 0)), 2),
-                "std": round(float(d.get("std", 0)), 2),
                 "min": float(d.get("min", 0)),
-                "25%": float(d.get("25%", 0)),
-                "50%": float(d.get("50%", 0)),
-                "75%": float(d.get("75%", 0)),
                 "max": float(d.get("max", 0)),
             }
         else:
-            top = df[col].value_counts().head(5)
-            col_info["top_values"] = {str(k): int(v) for k, v in top.items()}
-        columns_detail.append(col_info)
+            # Top values for categorical
+            top = df[col].value_counts().head(3)
+            col_info["top_values"] = {str(k)[:50]: int(v) for k, v in top.items()}
+        cols.append(col_info)
+    summary["columns"] = cols
 
-    summary["columns"] = columns_detail
+    # 3. Head and tail (Truncated strings)
+    def _safe_df_dict(sub_df):
+        # Truncate any cell that is a string and > 100 chars
+        sub_df = sub_df.copy()
+        for col in sub_df.columns:
+            if sub_df[col].dtype == "object":
+                sub_df[col] = sub_df[col].apply(lambda x: str(x)[:100] + "..." if len(str(x)) > 100 else x)
+        return sub_df.to_dict(orient="records")
+
+    try:
+        summary["head_5_rows"] = _safe_df_dict(df.head(5))
+        summary["tail_3_rows"] = _safe_df_dict(df.tail(3))
+    except Exception:
+        summary["head_5_rows"] = "unavailable"
+
+    # 4. Describe overall (if not too wide)
+    if len(df.columns) <= 15:
+        try:
+            desc = df.describe(include="all").to_dict()
+            # Handled NaN by str() if needed
+            summary["pandas_describe"] = desc
+        except Exception:
+            pass
+
     return summary
 
 
