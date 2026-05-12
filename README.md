@@ -110,8 +110,8 @@
 ┌──────────────────────────────────────────────────────────┐
 │              CLOUDFLARE EDGE (Gateway Worker)            │
 │  ┌──────────────┐  ┌────────┐  ┌─────┐  ┌───────────┐  │
-│  │ AI Inference  │  │ D1 SQL │  │ R2  │  │ Turnstile │  │
-│  │ Groq + NVIDIA │  │  Forms │  │Rpts │  │   Verify  │  │
+│  │ AI Inference │  │ D1 SQL │  │ R2  │  │ Turnstile │  │
+│  │ api gateway  │  │  Forms │  │Rpts │  │   Verify  │  │
 │  └──────────────┘  └────────┘  └─────┘  └───────────┘  │
 └──────────────────────────────────────────────────────────┘
 ```
