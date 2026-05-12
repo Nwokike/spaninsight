@@ -22,8 +22,16 @@
 | Platform | Download | Notes |
 |:--------:|:--------:|:------|
 | 🌐 **Web** | [**app.spaninsight.com**](https://app.spaninsight.com) | Works in any modern browser |
-| 🤖 **Android** | [**spaninsight.apk**](https://github.com/Nwokike/spaninsight/releases/latest/download/spaninsight.apk) | Universal APK for phones and tablets |
 | 🪟 **Windows** | [**SpanInsight_Setup.exe**](https://github.com/Nwokike/spaninsight/releases/latest/download/SpanInsight_Setup.exe) | Windows 10/11 64-bit Installer |
+
+### Android
+
+| Variant | Download | Size |
+|:--------|:--------:|:-----|
+| 📦 **Universal APK** | [**spaninsight.apk**](https://github.com/Nwokike/spaninsight/releases/latest/download/spaninsight.apk) | All architectures (~larger) |
+| 📱 **ARM64** (most phones) | [**spaninsight-arm64-v8a.apk**](https://github.com/Nwokike/spaninsight/releases/latest/download/spaninsight-arm64-v8a.apk) | Modern 64-bit devices |
+| 📱 **ARMv7** (older phones) | [**spaninsight-armeabi-v7a.apk**](https://github.com/Nwokike/spaninsight/releases/latest/download/spaninsight-armeabi-v7a.apk) | 32-bit ARM devices |
+| 💻 **x86_64** (emulators) | [**spaninsight-x86_64.apk**](https://github.com/Nwokike/spaninsight/releases/latest/download/spaninsight-x86_64.apk) | Chromebooks & emulators |
 
 ---
 

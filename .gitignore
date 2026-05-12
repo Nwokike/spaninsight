@@ -41,4 +41,4 @@ uv.lock
 # Temp
 scratch/
 *.log
-gateway/
+release_notes.md
