@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows" />
-  <img src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android" />
-  <img src="https://img.shields.io/badge/Web-4285F4?style=flat-square&logo=google-chrome&logoColor=white" alt="Web" />
+  <a href="#download"><img src="https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows" /></a>
+  <a href="#android"><img src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android" /></a>
+  <a href="#download"><img src="https://img.shields.io/badge/Web-4285F4?style=flat-square&logo=google-chrome&logoColor=white" alt="Web" /></a>
   <br>
   <img src="https://img.shields.io/badge/Built%20with-Flet%200.85-00B0FF?style=flat-square" alt="Built with Flet" />
 </p>
@@ -47,28 +47,6 @@
 
 ---
 
-## Screenshots
-
-### Data Intelligence Hub
-
-<p align="center">
-  <img src="screenshots/analysis_dashboard.png" width="90%" alt="Analysis Dashboard" />
-</p>
-<p align="center"><em>Real-time data visualization with AI-driven trend detection</em></p>
-
-<table>
-  <tr>
-    <td><img src="screenshots/survey_builder.png" width="100%" alt="Smart Survey Builder" /></td>
-    <td><img src="screenshots/export_options.png" width="100%" alt="Professional Export" /></td>
-  </tr>
-  <tr>
-    <td align="center"><em>Generate surveys from voice or text prompts</em></td>
-    <td align="center"><em>Export to PDF, PPTX, or share via secure link</em></td>
-  </tr>
-</table>
-
----
-
 ## Features
 
 - **Privacy-First AI** — Analysis runs locally; only AI prompts touch the cloud, never your raw data.
@@ -86,7 +64,7 @@
 |:---|:---|:---|
 | **Frontend** | Flet (Python/Flutter) | Reactive UI with smooth animations |
 | **Compute** | Local Python Runtime | Pandas-based data processing & Matplotlib rendering |
-| **AI Gateway** | Cloudflare Worker | Multi-model AI orchestration (Groq + NVIDIA) with automatic failover |
+| **AI Gateway** | Cloudflare Worker | Multi-model AI orchestration with automatic failover |
 | **Database** | Cloudflare D1 | Forms, responses, referrals, UUID recovery |
 | **Storage** | Cloudflare R2 | Public report hosting with 30-day auto-cleanup |
 | **Local Storage** | Secure Storage API | AES-256 encrypted credentials & config |
@@ -114,24 +92,25 @@
 │  │ api gateway  │  │  Forms │  │Rpts │  │   Verify  │  │
 │  └──────────────┘  └────────┘  └─────┘  └───────────┘  │
 └──────────────────────────────────────────────────────────┘
-```
+````
 
 ---
 
 ## Credit System
 
-| Action | Credits |
-|--------|---------|
-| AI Suggestion | 1 |
-| Custom Prompt / Voice | 3 |
-| Autopilot (Full Report) | 15 |
-| **Daily Allowance** | **50 FREE** |
+| Action                  | Credits     |
+| ----------------------- | ----------- |
+| AI Suggestion           | 1           |
+| Custom Prompt / Voice   | 3           |
+| Autopilot (Full Report) | 15          |
+| **Daily Allowance**     | **50 FREE** |
 
 ---
 
 ## Privacy & Security
 
 Spaninsight is designed with a **Privacy-First** philosophy.
+
 1. **Local Execution**: Data processing (filtering, grouping, analysis) happens entirely on your device.
 2. **Encryption**: All communication with the AI gateway is encrypted via TLS 1.3.
 3. **Data Residency**: We do not store your uploaded CSV/Excel/JSON files. Insights are generated on the fly.
@@ -142,3 +121,6 @@ Spaninsight is designed with a **Privacy-First** philosophy.
 ## Legal Disclaimer
 
 Spaninsight is a data analysis tool. While it uses advanced AI to suggest insights, users are responsible for verifying the accuracy of automated reports before making business decisions. Spaninsight does not take responsibility for data loss resulting from local sandbox execution errors.
+
+```
+```
