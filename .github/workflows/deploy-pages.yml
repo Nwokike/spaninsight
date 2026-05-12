@@ -33,12 +33,22 @@ jobs:
         uses: astral-sh/setup-uv@v6
         
       - name: Build Web App
-        # Custom domain (app.spaninsight.com) means base-url is root "/"
+        # Custom domain (app.spaninsight.com) = root base URL
         run: uv run flet build web --yes --project spaninsight --product "Spaninsight" --org com.spaninsight --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
         
-      - name: Add CNAME for custom domain
-        # GitHub Pages needs this file to remember the custom domain after each deploy
-        run: echo "app.spaninsight.com" > build/web/CNAME
+      - name: Post-build patches
+        run: |
+          # CNAME for custom domain persistence
+          echo "app.spaninsight.com" > build/web/CNAME
+          
+          # SEO: Add meta description to index.html
+          sed -i 's|<meta name="description" content="">|<meta name="description" content="Spaninsight — Autonomous data intelligence platform. AI-powered analysis, smart surveys, and automated reports for everyone.">|' build/web/index.html
+          
+          # SEO: Add Open Graph tags after <title>
+          sed -i 's|</title>|</title>\n  <meta property="og:title" content="Spaninsight" />\n  <meta property="og:description" content="AI-powered data analysis, smart surveys, and automated reports." />\n  <meta property="og:type" content="website" />\n  <meta property="og:url" content="https://app.spaninsight.com" />|' build/web/index.html
+          
+          # PWA: Fix manifest description
+          sed -i 's|"description": ""|"description": "Autonomous data intelligence for everyone"|' build/web/manifest.json
         
       - name: Setup Pages
         uses: actions/configure-pages@v5
