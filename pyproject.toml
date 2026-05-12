@@ -1,7 +1,7 @@
 [project]
 name = "spaninsight"
-version = "0.1.0"
-description = "Privacy-first data intelligence. Analyze data with AI, locally on your device."
+version = "1.0.0"
+description = "A high-performance, privacy-first data intelligence platform for smart data collection, analysis and reporting."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -30,6 +30,9 @@ path = "src"
 [tool.flet.android]
 bundle_id = "com.spaninsight.app"
 
+[tool.flet.android.manifest_application]
+usesCleartextTraffic = "true"
+
 [tool.flet.android.meta_data]
 "com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-3940256099942544~3347511713"
 
@@ -37,3 +40,10 @@ bundle_id = "com.spaninsight.app"
 "android.permission.INTERNET" = true
 "android.permission.ACCESS_NETWORK_STATE" = true
 "android.permission.RECORD_AUDIO" = true
+"android.permission.WAKE_LOCK" = true
+"android.permission.WRITE_EXTERNAL_STORAGE" = true
+"android.permission.READ_EXTERNAL_STORAGE" = true
+
+[tool.flet.android.feature]
+"android.software.leanback" = false
+"android.hardware.touchscreen" = true

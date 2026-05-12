@@ -2,24 +2,29 @@
   <img src="src/assets/logo.png" alt="Spaninsight" width="320" />
 </p>
 
-<h1 align="center">Spaninsight</h1>
-
 <p align="center">
-  <b>High-Performance Privacy-First Data Intelligence Platform</b>
+  A high-performance, privacy-first data intelligence platform for smart data collection, analysis and reporting; built with 
+  Python and Flet.
 </p>
 
 <p align="center">
-  Professional data analysis, AI-powered survey generation, and automated reporting.
-  <br />
-  Your data stays on your device — local execution, global intelligence.
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Proprietary-Software-red?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows" />
   <img src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android" />
-  <img src="https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.13" />
+  <img src="https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux" />
+  <img src="https://img.shields.io/badge/Web-4285F4?style=flat-square&logo=google-chrome&logoColor=white" alt="Web" />
+  <br>
+  <img src="https://img.shields.io/badge/Built%20with-Flet%200.85-00B0FF?style=flat-square" alt="Built with Flet" />
 </p>
+
+---
+
+## Download
+
+| Platform | Download | Notes |
+|:--------:|:--------:|:------|
+| 🤖 **Android (Universal)** | [**spaninsight.apk**](https://github.com/Nwokike/spaninsight/releases/latest/download/spaninsight.apk) | All-in-one APK for mobile and tablets |
+| 🪟 **Windows** | [**SpanInsight_Setup.exe**](https://github.com/Nwokike/spaninsight/releases/latest/download/SpanInsight_Setup.exe) | Windows 10/11 64-bit Installer |
+| 🐧 **Linux** | [**spaninsight.zip**](https://github.com/Nwokike/spaninsight/releases/latest/download/spaninsight.zip) | Binary for x86_64 Linux distributions |
 
 ---
 
@@ -28,120 +33,101 @@
 | Capability | Description |
 |:---|:---|
 | **Automated Analysis** | Intelligent data ingestion (CSV/Excel) with AI-suggested insights and local code execution. |
-| **Smart Surveys** | Natural language survey generation (Text/Voice) with automated D1 schema deployment. |
+| **Smart Surveys** | Natural language survey generation (Text/Voice) with real-time preview. |
 | **Autopilot Engine** | Multi-pass analysis orchestration for comprehensive automated report generation. |
-| **Enterprise Export** | Professional rendering of reports to PDF and PowerPoint formats with R2 cloud sharing. |
+| **Enterprise Export** | Professional rendering of reports to PDF and PowerPoint formats with cloud sharing. |
 | **Local Security** | Sandbox-restricted Python execution environment ensuring 100% data residency. |
+
+---
+
+## Screenshots
+
+### Data Intelligence Hub
+
+<p align="center">
+  <img src="screenshots/analysis_dashboard.png" width="90%" alt="Analysis Dashboard" />
+</p>
+<p align="center"><em>Real-time data visualization with AI-driven trend detection</em></p>
+
+<table>
+  <tr>
+    <td><img src="screenshots/survey_builder.png" width="100%" alt="Smart Survey Builder" /></td>
+    <td><img src="screenshots/export_options.png" width="100%" alt="Enterprise Export" /></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Generate surveys from voice or text prompts</em></td>
+    <td align="center"><em>Export to PDF, PPTX, or Share via Secure Link</em></td>
+  </tr>
+</table>
+
+---
+
+## Features
+
+- **Privacy-First AI** — Analysis is performed locally or via secure, encrypted channels with zero data retention.
+- **Voice-to-Insight** — Use natural language voice commands to query your data or build complex survey forms.
+- **Local Sandbox** — Built-in Python runtime (`pandas`, `matplotlib`) runs in a restricted environment for secure data processing.
+- **Credit-Based Orchestration** — Advanced AI tasks utilize a transparent credit system with generous daily free allowances.
+- **Cross-Platform Sync** — Seamlessly transition between Android, Windows, and Linux while maintaining project state.
 
 ---
 
 ## Architecture
 
-```mermaid
-graph TD
-    subgraph Client ["Flet Client (Android/Desktop/Web)"]
-        UI["UI Layer (Home, Analysis, Forms, Settings)"]
-        Engine["Local Python Engine (Pandas, Matplotlib)"]
-        Sandbox["Restricted Execution Sandbox"]
-    end
+| Layer | Technology | Purpose |
+|:---|:---|:---|
+| **Frontend** | Flet (Python/Flutter) | Reactive UI with 120Hz smooth animations |
+| **Compute** | Local Python Runtime | Pandas-based data processing & Matplotlib rendering |
+| **AI Engine** | SpanInsight Cloud | High-speed orchestration and NLP understanding |
+| **Storage** | Secure Storage API | AES-256 encrypted local credential & config storage |
+| **PDF/PPTX** | fpdf2 & python-pptx | Enterprise-grade report generation |
 
-    subgraph Cloud ["Spaninsight Cloud (api.spaninsight.com)"]
-        Worker["Cloudflare Worker Gateway"]
-        D1[("Cloudflare D1 (SQL)")]
-        R2[("Cloudflare R2 (Storage)")]
-    end
-
-    subgraph AI ["AI Inference Layer"]
-        Groq["Groq API (Llama 3.3, Whisper)"]
-        NVIDIA["NVIDIA NIM (Nemotron, Mistral)"]
-    end
-
-    UI <--> Engine
-    Engine --> Sandbox
-    UI <--> Worker
-    Worker <--> D1
-    Worker <--> R2
-    Worker <--> AI
-```
-
----
-
-## Project Structure
+### Visual Flow
 
 ```text
-spaninsight/
-├── gateway/
-│   ├── index.js          # Cloudflare Worker (AI + D1 + R2)
-│   └── schema.sql        # D1 database schema
-├── src/
-│   ├── main.py            # App entry point
-│   ├── core/              # Global state, constants, and themes
-│   ├── components/        # Reusable UI widgets
-│   ├── services/          # Business logic (AI, Audio, Sandbox, DB)
-│   └── views/             # Functional application screens
-└── requirements.txt       # Production dependencies
+┌──────────────────────────────────────────────────────┐
+│                    SPANINSIGHT APP                    │
+│  ┌────────┐ ┌──────────┐ ┌───────┐ ┌──────────────┐ │
+│  │  Home  │ │ Analysis │ │ Forms │ │   Settings   │ │
+│  └────────┘ └──────────┘ └───────┘ └──────────────┘ │
+│       │           │           │                      │
+│  ┌────┴───────────┴───────────┴──────────────────┐   │
+│  │        Local Python Runtime (pandas, plt)      │   │
+│  └────────────────────┬──────────────────────────┘   │
+└───────────────────────┼──────────────────────────────┘
+                        │ HTTPS (api.spaninsight.com)
+                        ▼
+┌──────────────────────────────────────────────────────┐
+│                  SPANINSIGHT CLOUD                   │
+│  ┌────────────┐  ┌──────┐  ┌────┐  ┌────────────┐   │
+│  │ AI Engine  │  │Data  │  │Vault │  │ Orchestration│   │
+│  │            │  │Sync  │  │Storage│  │   Service    │   │
+│  └────────────┘  └──────┘  └────┘  └────────────┘   │
+└──────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Getting Started
+## Credit System
 
-### Prerequisites
-- Python 3.13+
-- [uv](https://github.com/astral-sh/uv) (recommended)
-
-### Installation
-```bash
-git clone https://github.com/Nwokike/spaninsight.git
-cd spaninsight
-uv venv
-uv pip install -r requirements.txt
-```
-
-### Execution
-```bash
-flet run
-```
+| Action | Credits |
+|--------|---------|
+| AI Suggestion | 1 |
+| Custom Prompt / Voice | 3 |
+| Autopilot (Full Report) | 15 |
+| **Daily Allowance** | **50 FREE** |
 
 ---
 
-## Infrastructure Configuration
+## Privacy & Security
 
-The application requires the following Cloudflare Worker bindings for production functionality:
-
-| Binding | Type | Required For |
-|:---|:---|:---|
-| `GROQ_API_KEYS` | Secret | Primary Inference (Llama/Whisper) |
-| `NVIDIA_API_KEYS` | Secret | Fallback Reasoning & Vision |
-| `DB` | D1 Database | Survey Management & Response Storage |
-| `REPORTS` | R2 Bucket | Public Report Sharing & Persistence |
+SpanInsight is designed with a **Privacy-First** philosophy.
+1. **Local Execution**: Heavy data processing (filtering, grouping, math) happens on your device.
+2. **Encryption**: All communication with the AI Engine is encrypted via TLS 1.3.
+3. **Data Residency**: We do not store your uploaded CSV/Excel files on our servers. Insights are generated on the fly.
 
 ---
 
-## Intelligence Fallback System
+## Legal Disclaimer
 
-The Spaninsight Gateway implements a robust multi-model fallback strategy to ensure high availability:
-
-1. **Tier 1 (Groq)**: Ultra-low latency inference for code generation and transcription.
-2. **Tier 2 (NVIDIA NIM)**: High-fidelity reasoning for complex data interpretation and vision tasks.
-3. **Tier 3 (Circuit Breaker)**: Graceful degradation and user-side notification on network/API failure.
-
----
-
-## Compliance & Security
-
-- **Data Residency**: No raw data files are transmitted to the cloud. Only metadata headers are used for AI context.
-- **Execution Sandbox**: Strict AST-based filtering prevents unauthorized system calls within the local environment.
-- **Authentication**: Stateless HMAC-based secret validation for all gateway communication.
-
----
-
-## License
-
-This project is proprietary software. All rights reserved.
-
----
-
-<p align="center">
-  <em>Developed by Spaninsight Engineering</em>
-</p>
+SpanInsight is a data analysis tool. While it uses advanced AI to suggest insights, users are responsible for verifying the accuracy of automated reports before making business decisions. SpanInsight does not take responsibility for data loss resulting from local sandbox execution errors.
