@@ -8,7 +8,11 @@ import flet as ft
 
 from core import theme, tokens
 from core.state import state
-from core.constants import STORAGE_THEME
+from core.constants import (
+    STORAGE_THEME, STORAGE_UUID, STORAGE_CREDITS,
+    STORAGE_BONUS_CREDITS, STORAGE_LAST_RESET, STORAGE_REFERRAL_CODE,
+    STORAGE_ONBOARDING_DONE,
+)
 from core.styles import section_header, setting_tile
 from flet_secure_storage import SecureStorage
 
@@ -66,6 +70,15 @@ def build_settings_view(
                 dialog.open = False
                 page.update()
                 if confirmed:
+                    # Wipe ALL SecureStorage keys
+                    storage = SecureStorage()
+                    for key in [STORAGE_UUID, STORAGE_THEME, STORAGE_CREDITS,
+                                STORAGE_BONUS_CREDITS, STORAGE_LAST_RESET,
+                                STORAGE_REFERRAL_CODE, STORAGE_ONBOARDING_DONE]:
+                        try:
+                            await storage.delete(key)
+                        except Exception:
+                            pass
                     state.clear_data()
                     state.credits_remaining = 50
                     state.user_uuid = ""
@@ -160,6 +173,17 @@ def build_settings_view(
                     icon_size=tokens.ICON_MD,
                     tooltip="Share invite code",
                     on_click=lambda e: page.run_task(_share_invite, e),
+                ),
+            ),
+            setting_tile(
+                icon=ft.Icons.CARD_GIFTCARD_ROUNDED,
+                title="Enter Invite Code",
+                subtitle="Paste a friend's code to unlock bonus credits",
+                trailing=ft.IconButton(
+                    icon=ft.Icons.INPUT_ROUNDED,
+                    icon_size=tokens.ICON_MD,
+                    tooltip="Enter code",
+                    on_click=lambda e: page.run_task(_enter_referral_code, e),
                 ),
             ),
 

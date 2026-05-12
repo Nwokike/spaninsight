@@ -24,9 +24,10 @@ TASK_AUDIO = "audio"
 TASK_VISION = "vision"
 
 # ── File Limits ─────────────────────────────────────────────────────
-MAX_FILE_SIZE_MB = 15
+# Modern phones have 4GB+ RAM. pandas can handle ~100MB CSVs comfortably.
+MAX_FILE_SIZE_MB = 100
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+ALLOWED_EXTENSIONS = {".csv", ".json",".xlsx", ".xls"}
 
 # ── Data Display ────────────────────────────────────────────────────
 DATA_PREVIEW_ROWS = 50
@@ -69,11 +70,11 @@ BLOCKED_TERMS = [
 
 SANDBOX_TIMEOUT_SEC = 10
 
-# ── Storage Keys (for page.client_storage) ──────────────────────────
+# ── Storage Keys (for SecureStorage) ────────────────────────────────
 STORAGE_UUID = "spaninsight_uuid"
 STORAGE_THEME = "spaninsight.theme"
 STORAGE_CREDITS = "spaninsight_credits"
 STORAGE_BONUS_CREDITS = "spaninsight_bonus_credits"
 STORAGE_LAST_RESET = "spaninsight_last_reset"
 STORAGE_REFERRAL_CODE = "spaninsight_referral_code"
-STORAGE_THEME_MODE = "spaninsight_theme_mode"
+STORAGE_ONBOARDING_DONE = "spaninsight_onboarding_done"

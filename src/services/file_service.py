@@ -1,7 +1,7 @@
 """File import service — CSV/Excel loading with validation.
 
 Handles the complete pipeline from file selection to pandas DataFrame,
-enforcing the 15MB size limit to prevent Android OOM crashes.
+enforcing the 100MB size limit to keep Android stable.
 """
 
 from __future__ import annotations
@@ -69,8 +69,22 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
                 df = pd.read_csv(file_path, encoding="utf-8")
             except UnicodeDecodeError:
                 df = pd.read_csv(file_path, encoding="latin-1")
-        elif ext in (".xlsx", ".xls"):
+        elif ext == ".json":
+            # try reading JSON line-delimited (default)
+            try:
+                df = pd.read_json(file_path, lines=True)
+            except ValueError:
+                # fallback: try reading as normal JSON array
+                df = pd.read_json(file_path)
+        elif ext == ".xlsx":
             df = pd.read_excel(file_path, engine="openpyxl")
+        elif ext == ".xls":
+            # Old Excel format requires xlrd engine
+            try:
+                df = pd.read_excel(file_path, engine="xlrd")
+            except ImportError:
+                # xlrd not installed — try openpyxl as fallback (won't work for true .xls)
+                df = pd.read_excel(file_path, engine="openpyxl")
         else:
             raise FileValidationError(f"Unsupported format: {ext}")
 

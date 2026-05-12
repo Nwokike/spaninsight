@@ -11,11 +11,12 @@ import flet as ft
 from core import theme, tokens
 from core.state import state
 from components.chart_card import build_chart_card
+from services.ad_service import AdService
 
 logger = logging.getLogger(__name__)
 
 
-def build_report_view(page: ft.Page, on_back=None) -> ft.View:
+def build_report_view(page: ft.Page, on_back=None, ad_service: AdService | None = None) -> ft.View:
     """Build the report view with export and sharing."""
 
     # ── Export Handlers ──────────────────────────────────────────────
@@ -29,25 +30,25 @@ def build_report_view(page: ft.Page, on_back=None) -> ft.View:
         page.update()
 
         try:
+            # Show interstitial ad during generation
+            if ad_service:
+                await ad_service.show_interstitial()
+
             pdf_bytes = _generate_pdf()
 
-            def _on_save(result):
-                if result.path:
-                    with open(result.path, "wb") as f:
-                        f.write(pdf_bytes)
-                    page.snack_bar = ft.SnackBar(ft.Text(f"PDF saved!"), duration=3000)
-                    page.snack_bar.open = True
-                    page.update()
-
-            picker = ft.FilePicker(on_result=_on_save)
-            page.overlay.append(picker)
-            page.update()
-            picker.save_file(
+            # Flet 0.85.0: FilePicker is a Service, NOT a Control
+            picker = ft.FilePicker()
+            result = await picker.save_file(
                 dialog_title="Save Report PDF",
                 file_name="spaninsight_report.pdf",
-                file_type=ft.FilePickerFileType.CUSTOM,
                 allowed_extensions=["pdf"],
             )
+            if result:
+                with open(result, "wb") as f:
+                    f.write(pdf_bytes)
+                page.snack_bar = ft.SnackBar(ft.Text("PDF saved!"), duration=3000)
+                page.snack_bar.open = True
+                page.update()
         except Exception as err:
             logger.exception("PDF export failed")
             page.snack_bar = ft.SnackBar(
@@ -65,25 +66,23 @@ def build_report_view(page: ft.Page, on_back=None) -> ft.View:
         page.update()
 
         try:
+            if ad_service:
+                await ad_service.show_interstitial()
+
             pptx_bytes = _generate_pptx()
 
-            def _on_save(result):
-                if result.path:
-                    with open(result.path, "wb") as f:
-                        f.write(pptx_bytes)
-                    page.snack_bar = ft.SnackBar(ft.Text("PPTX saved!"), duration=3000)
-                    page.snack_bar.open = True
-                    page.update()
-
-            picker = ft.FilePicker(on_result=_on_save)
-            page.overlay.append(picker)
-            page.update()
-            picker.save_file(
+            picker = ft.FilePicker()
+            result = await picker.save_file(
                 dialog_title="Save Report PPTX",
                 file_name="spaninsight_report.pptx",
-                file_type=ft.FilePickerFileType.CUSTOM,
                 allowed_extensions=["pptx"],
             )
+            if result:
+                with open(result, "wb") as f:
+                    f.write(pptx_bytes)
+                page.snack_bar = ft.SnackBar(ft.Text("PPTX saved!"), duration=3000)
+                page.snack_bar.open = True
+                page.update()
         except Exception as err:
             logger.exception("PPTX export failed")
             page.snack_bar = ft.SnackBar(
@@ -273,8 +272,8 @@ def build_report_view(page: ft.Page, on_back=None) -> ft.View:
                 ft.Text("No report yet", size=16, weight="w500", color=ft.Colors.ON_SURFACE_VARIANT),
                 ft.Text("Pin analysis results to build your report.", size=13, color=ft.Colors.with_opacity(0.5, ft.Colors.ON_SURFACE)),
                 ft.Container(height=20),
-                ft.ElevatedButton("Start Analysis", icon=ft.Icons.ANALYTICS_ROUNDED,
-                                  on_click=lambda _: page.go("/analysis")),
+                ft.Button("Start Analysis", icon=ft.Icons.ANALYTICS_ROUNDED,
+                          on_click=lambda _: setattr(page, 'route', '/analysis') or page.update()),
             ], horizontal_alignment="center", spacing=8),
             expand=True, alignment=ft.Alignment.CENTER,
         )

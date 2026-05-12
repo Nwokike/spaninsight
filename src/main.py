@@ -75,10 +75,24 @@ async def main(page: ft.Page):
 
     page.on_error = on_error
 
-    # ── Initialize Services ─────────────────────────────────────────
+    # ── Initialize Services ─────────────────────────────────
     uuid_service = UUIDService(page)
     credit_service = CreditService(page)
     ad_service = AdService(page)
+
+    # ── Splash Screen (P8) ──────────────────────────────────
+    splash = ft.Container(
+        content=ft.Column([
+            ft.Image("logo.png", width=220, height=80, fit="contain"),
+            ft.Container(height=12),
+            ft.Text("Smart Data Intelligence", size=13, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Container(height=40),
+            ft.ProgressRing(width=24, height=24, stroke_width=2),
+        ], horizontal_alignment="center", alignment="center"),
+        expand=True, alignment=ft.Alignment.CENTER,
+    )
+    page.views.append(ft.View(route="/splash", controls=[splash], padding=0))
+    page.update()
 
     # Generate or load UUID
     state.user_uuid = await uuid_service.get_or_create_uuid()
@@ -86,7 +100,7 @@ async def main(page: ft.Page):
 
     # Load Theme
     from flet_secure_storage import SecureStorage
-    from core.constants import STORAGE_THEME
+    from core.constants import STORAGE_THEME, STORAGE_ONBOARDING_DONE
     storage = SecureStorage()
     saved_theme = await storage.get(STORAGE_THEME)
     if saved_theme == "dark":
@@ -102,6 +116,44 @@ async def main(page: ft.Page):
 
     # Preload interstitial ad
     page.run_task(ad_service.preload_interstitial)
+
+    # ── Gateway Health Check (I8) + Version Check (P9) ──────────
+    async def _startup_checks():
+        from services import ai_service
+        state.gateway_online = await ai_service.check_health()
+        if not state.gateway_online:
+            logger.warning("Gateway offline — AI features will use fallbacks")
+        # P9: Version check
+        try:
+            import httpx
+            from core.constants import API_BASE_URL, APP_SECRET, USER_AGENT, APP_VERSION
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{API_BASE_URL}/version",
+                    headers={"X-App-Secret": APP_SECRET, "User-Agent": USER_AGENT},
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    min_ver = data.get("min_version", "0.0.0")
+                    if APP_VERSION < min_ver:
+                        page.snack_bar = ft.SnackBar(
+                            ft.Text("A required update is available. Please update Spaninsight."),
+                            duration=8000,
+                        )
+                        page.snack_bar.open = True
+                        page.update()
+        except Exception:
+            pass  # Non-blocking
+
+    await _startup_checks()
+
+    # ── Ensure splash shows at least 1s ─────────────────────────
+    await asyncio.sleep(1.0)
+
+    # ── Check Onboarding (P5) ────────────────────────────────
+    onboarding_done = await storage.get(STORAGE_ONBOARDING_DONE)
+    needs_onboarding = not onboarding_done
 
     # ── Navigation Bar ──────────────────────────────────────────────
     nav_bar = ft.NavigationBar(
@@ -123,6 +175,11 @@ async def main(page: ft.Page):
                 label="Forms",
             ),
             ft.NavigationBarDestination(
+                icon=ft.Icons.ASSESSMENT_OUTLINED,
+                selected_icon=ft.Icons.ASSESSMENT_ROUNDED,
+                label="Report",
+            ),
+            ft.NavigationBarDestination(
                 icon=ft.Icons.SETTINGS_OUTLINED,
                 selected_icon=ft.Icons.SETTINGS_ROUNDED,
                 label="Settings",
@@ -134,7 +191,7 @@ async def main(page: ft.Page):
     )
 
     # Tab routes mapping
-    TAB_ROUTES = ["/home", "/analysis", "/forms", "/settings"]
+    TAB_ROUTES = ["/home", "/analysis", "/forms", "/report", "/settings"]
 
     # ── Navigation Helpers ──────────────────────────────────────────
     async def navigate(route: str):
@@ -196,6 +253,16 @@ async def main(page: ft.Page):
             page.views.append(view)
             nav_bar.selected_index = 2
 
+        elif route == "/report":
+            from views.report_view import build_report_view
+
+            view = build_report_view(
+                page=page,
+                ad_service=ad_service,
+            )
+            page.views.append(view)
+            nav_bar.selected_index = 3
+
         elif route == "/settings":
             from views.settings_view import build_settings_view
 
@@ -205,15 +272,7 @@ async def main(page: ft.Page):
                 credit_service=credit_service,
             )
             page.views.append(view)
-            nav_bar.selected_index = 3
-
-        elif route == "/report":
-            from views.report_view import build_report_view
-
-            view = build_report_view(
-                page=page,
-            )
-            page.views.append(view)
+            nav_bar.selected_index = 4
 
         else:
             from views.home_view import build_home_view
@@ -225,8 +284,8 @@ async def main(page: ft.Page):
             )
             page.views.append(view)
 
-        # Attach nav bar to the current view (except report)
-        if route != "/report" and page.views:
+        # Attach nav bar to the current view
+        if page.views:
             page.views[-1].navigation_bar = nav_bar
 
         page.update()
@@ -239,12 +298,22 @@ async def main(page: ft.Page):
             page.route = top.route
         page.update()
 
-    # ── Register Handlers ───────────────────────────────────────────
+    # ── Register Handlers ──────────────────────────────────
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    # ── Initial Route ───────────────────────────────────────────────
-    await navigate("/home")
+    # ── Initial Route ───────────────────────────────────────
+    if needs_onboarding:
+        from views.onboarding_view import build_onboarding_view
+
+        def _on_onboarding_done():
+            page.run_task(navigate, "/home")
+
+        page.views.clear()
+        page.views.append(build_onboarding_view(page, _on_onboarding_done))
+        page.update()
+    else:
+        await navigate("/home")
 
 
 # ── Entry Point ─────────────────────────────────────────────────────

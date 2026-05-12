@@ -18,7 +18,6 @@ from core import theme, tokens
 from core.state import state
 from services import ai_service, forms_service
 from services.audio_service import AudioService
-from services.file_picker_service import FilePickerService
 
 logger = logging.getLogger(__name__)
 
@@ -29,70 +28,56 @@ def build_forms_view(page: ft.Page) -> ft.View:
     content_column = ft.Ref[ft.Column]()
     form_prompt_field = ft.Ref[ft.TextField]()
 
-    # ── State ────────────────────────────────────────────────────────
     user_forms: list[dict] = []
     is_loading = {"value": False}
     is_creating = {"value": False}
     is_recording = {"value": False}
-    active_form: dict = {"data": None}  # currently viewed form detail
+    active_form: dict = {"data": None}
 
-    # Voice recording
     audio_svc = AudioService(page)
-
-    # ── Handlers ─────────────────────────────────────────────────────
 
     async def load_forms():
         is_loading["value"] = True
         _rebuild()
-        forms = await forms_service.list_forms(state.user_uuid)
-        user_forms.clear()
-        user_forms.extend(forms)
-        is_loading["value"] = False
-        _rebuild()
+        try:
+            forms = await forms_service.list_forms(state.user_uuid)
+            user_forms.clear()
+            user_forms.extend(forms)
+        except Exception as e:
+            logger.error("Failed to load forms: %s", e)
+            _show_error("Could not load forms. Check your connection.")
+        finally:
+            is_loading["value"] = False
+            _rebuild()
 
     async def on_create_form(e):
-        if not form_prompt_field.current:
-            return
+        if not form_prompt_field.current: return
         prompt = form_prompt_field.current.value.strip()
-        if not prompt:
-            return
-
+        if not prompt: return
         is_creating["value"] = True
         _rebuild()
-
         try:
-            # Use AI to generate form schema from description
-            schema = await _ai_generate_form_schema(prompt)
+            schema = await ai_service.generate_form_schema(prompt)
             if not schema:
                 _show_error("AI could not generate a form schema. Try again.")
                 is_creating["value"] = False
                 _rebuild()
                 return
-
             title = schema.get("title", prompt[:50])
             description = schema.get("description", "")
             fields = schema.get("fields", [])
-
             result = await forms_service.create_form(
-                user_uuid=state.user_uuid,
-                title=title,
-                description=description,
-                schema_json=fields,
+                user_uuid=state.user_uuid, title=title,
+                description=description, schema_json=fields,
             )
-
             if result:
                 form_prompt_field.current.value = ""
-                page.snack_bar = ft.SnackBar(
-                    ft.Text(f"Form created! Share: {result['url']}"),
-                    duration=5000,
-                )
+                page.snack_bar = ft.SnackBar(ft.Text(f"Form created! Share: {result['url']}"), duration=5000)
                 page.snack_bar.open = True
-                # Copy link to clipboard
                 page.clipboard = result["url"]
                 await load_forms()
             else:
                 _show_error("Failed to create form. Check your connection.")
-
         except Exception as err:
             _show_error(f"Error: {err}")
             logger.exception("Create form error")
@@ -101,19 +86,15 @@ def build_forms_view(page: ft.Page) -> ft.View:
             _rebuild()
 
     async def on_voice_toggle(e):
-        """Toggle voice recording for form description."""
         if is_recording["value"]:
-            # Stop recording
             result = await audio_svc.stop_recording()
             is_recording["value"] = False
             _rebuild()
-
             if result:
                 audio_bytes, mime_type = result
                 page.snack_bar = ft.SnackBar(ft.Text("Transcribing..."), duration=2000)
                 page.snack_bar.open = True
                 page.update()
-
                 transcript = await ai_service.transcribe_audio(audio_bytes, mime_type)
                 if transcript and not transcript.startswith("["):
                     if form_prompt_field.current:
@@ -122,7 +103,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 else:
                     _show_error("Could not transcribe audio. Try again.")
         else:
-            # Start recording
             started = await audio_svc.start_recording(
                 on_auto_stop=lambda res: page.run_task(_handle_auto_stop, res)
             )
@@ -131,7 +111,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 _rebuild()
 
     async def _handle_auto_stop(result):
-        """Handle auto-stop after 60s."""
         is_recording["value"] = False
         _rebuild()
         if result:
@@ -143,7 +122,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
 
     async def on_view_form(form: dict):
         active_form["data"] = form
-        # Load responses
         resp_data = await forms_service.get_responses(form["id"])
         active_form["data"]["_responses"] = resp_data.get("responses", [])
         active_form["data"]["_count"] = resp_data.get("count", 0)
@@ -184,80 +162,39 @@ def build_forms_view(page: ft.Page) -> ft.View:
         if not responses:
             _show_error("No responses to download.")
             return
-
         csv_bytes = forms_service.responses_to_csv_bytes(responses)
-
-        # Save via file picker
-        def _on_save_result(result):
-            if result.path:
-                with open(result.path, "wb") as f:
-                    f.write(csv_bytes)
-                page.snack_bar = ft.SnackBar(ft.Text(f"Saved to {result.path}"), duration=3000)
-                page.snack_bar.open = True
-                page.update()
-
-        picker = ft.FilePicker(on_result=_on_save_result)
-        page.overlay.append(picker)
-        page.update()
-        picker.save_file(
-            dialog_title="Save Responses CSV",
-            file_name=f"{form['title'].replace(' ', '_')}_responses.csv",
-            file_type=ft.FilePickerFileType.CUSTOM,
-            allowed_extensions=["csv"],
-        )
+        # Flet 0.85.0: FilePicker is a Service, NOT a Control — no overlay
+        picker = ft.FilePicker()
+        async def _do_save():
+            result = await picker.save_file(
+                dialog_title="Save Responses CSV",
+                file_name=f"{form['title'].replace(' ', '_')}_responses.csv",
+                allowed_extensions=["csv"],
+            )
+            if result:
+                try:
+                    with open(result, "wb") as f:
+                        f.write(csv_bytes)
+                    page.snack_bar = ft.SnackBar(ft.Text("Saved!"), duration=3000)
+                    page.snack_bar.open = True
+                    page.update()
+                except Exception as err:
+                    _show_error(f"Save failed: {err}")
+        page.run_task(_do_save)
 
     async def on_analyze_responses(form: dict):
         responses = form.get("_responses", [])
         if not responses:
             _show_error("No responses to analyze.")
             return
-
         import pandas as pd
         rows = [r["data"] for r in responses]
         df = pd.DataFrame(rows)
-
         from services import file_service
         state.set_dataframe(df, f"{form['title']}_responses")
         state.current_df_summary = file_service.get_data_summary(df)
-
         page.route = "/analysis"
         page.update()
-
-    # ── AI Form Generation ───────────────────────────────────────────
-
-    async def _ai_generate_form_schema(prompt: str) -> dict | None:
-        """Use the suggest route to generate a form schema from a description."""
-        import json as _json
-
-        system_prompt = (
-            "You are a form builder AI. Given a description of a survey or questionnaire, "
-            "generate a JSON object with:\n"
-            '- "title": the form title\n'
-            '- "description": a brief description\n'
-            '- "fields": an array of field objects, each with:\n'
-            '  - "name": field identifier (snake_case)\n'
-            '  - "label": display label\n'
-            '  - "type": one of "text", "number", "email", "select", "radio", "checkbox", "textarea"\n'
-            '  - "required": boolean\n'
-            '  - "options": array of strings (only for select/radio/checkbox)\n'
-            "Return ONLY the JSON object. No markdown fences."
-        )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ]
-
-        try:
-            data = await ai_service._call_gateway(ai_service.TASK_SUGGEST, messages)
-            content = ai_service._extract_content(data)
-            cleaned = ai_service._strip_code_fences(content)
-            return _json.loads(cleaned)
-        except Exception as e:
-            logger.error("AI form gen failed: %s", e)
-            return None
-
-    # ── Error helper ─────────────────────────────────────────────────
 
     def _show_error(msg: str):
         page.snack_bar = ft.SnackBar(
@@ -265,186 +202,184 @@ def build_forms_view(page: ft.Page) -> ft.View:
         page.snack_bar.open = True
         page.update()
 
-    # ── UI Builders ──────────────────────────────────────────────────
-
     def _build_form_card(form: dict) -> ft.Container:
         is_expired = False
         try:
             from datetime import datetime
             exp = datetime.fromisoformat(form["expires_at"].replace("Z", "+00:00"))
             is_expired = exp < datetime.now(exp.tzinfo)
-        except Exception:
-            pass
-
+        except Exception: pass
         status_color = theme.ERROR if is_expired else theme.SUCCESS
         status_text = "Expired" if is_expired else "Active"
-
         return ft.Container(
             content=ft.Row([
                 ft.Column([
                     ft.Text(form["title"], weight="bold", size=14, max_lines=1, overflow="ellipsis"),
                     ft.Row([
-                        ft.Container(
-                            content=ft.Text(status_text, size=9, color=status_color, weight="bold"),
-                            padding=ft.Padding(6, 2, 6, 2),
-                            border_radius=4,
-                            bgcolor=ft.Colors.with_opacity(0.1, status_color),
-                        ),
+                        ft.Container(content=ft.Text(status_text, size=9, color=status_color, weight="bold"),
+                                     padding=ft.Padding(6, 2, 6, 2), border_radius=4,
+                                     bgcolor=ft.Colors.with_opacity(0.1, status_color)),
                         ft.Text(f"{form.get('response_count', 0)} responses", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
                     ], spacing=8),
                 ], spacing=4, expand=True),
                 ft.IconButton(ft.Icons.ARROW_FORWARD_IOS_ROUNDED, icon_size=16,
                               on_click=lambda e, f=form: page.run_task(on_view_form, f)),
             ]),
-            padding=14,
-            border_radius=12,
-            bgcolor=theme.GLASS_BG,
+            padding=14, border_radius=12, bgcolor=theme.GLASS_BG,
             border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
             margin=ft.Margin(20, 0, 20, 8),
-            on_click=lambda e, f=form: page.run_task(on_view_form, f),
-            ink=True,
+            on_click=lambda e, f=form: page.run_task(on_view_form, f), ink=True,
         )
 
     def _build_form_detail(form: dict) -> list[ft.Control]:
         controls = []
-
-        # Back button
-        controls.append(ft.Container(
-            content=ft.Row([
-                ft.IconButton(ft.Icons.ARROW_BACK_ROUNDED, on_click=on_back_to_list),
-                ft.Text(form["title"], weight="bold", size=16, expand=True),
-            ]),
-            padding=ft.Padding(10, 0, 10, 0),
-        ))
-
-        # Info
+        controls.append(ft.Container(content=ft.Row([
+            ft.IconButton(ft.Icons.ARROW_BACK_ROUNDED, on_click=on_back_to_list),
+            ft.Text(form["title"], weight="bold", size=16, expand=True),
+        ]), padding=ft.Padding(10, 0, 10, 0)))
         resp_count = form.get("_count", form.get("response_count", 0))
-        controls.append(ft.Container(
-            content=ft.Column([
-                ft.Row([ft.Icon(ft.Icons.PEOPLE_ROUNDED, size=16, color=theme.ACCENT),
-                        ft.Text(f"{resp_count} responses", weight="w500")], spacing=8),
-                ft.Row([ft.Icon(ft.Icons.TIMER_ROUNDED, size=16, color=theme.WARNING),
-                        ft.Text(f"Expires: {form.get('expires_at', '')[:10]}", size=12)], spacing=8),
-            ], spacing=8),
-            padding=16, margin=ft.Margin(20, 8, 20, 8),
-            border_radius=12, bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
-        ))
+        controls.append(ft.Container(content=ft.Column([
+            ft.Row([ft.Icon(ft.Icons.PEOPLE_ROUNDED, size=16, color=theme.ACCENT),
+                    ft.Text(f"{resp_count} responses", weight="w500")], spacing=8),
+            ft.Row([ft.Icon(ft.Icons.TIMER_ROUNDED, size=16, color=theme.WARNING),
+                    ft.Text(f"Expires: {form.get('expires_at', '')[:10]}", size=12)], spacing=8),
+        ], spacing=8), padding=16, margin=ft.Margin(20, 8, 20, 8),
+            border_radius=12, bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR)))
 
-        # Action buttons
-        controls.append(ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.ElevatedButton("Copy Link", icon=ft.Icons.LINK_ROUNDED,
-                                      on_click=lambda e: page.run_task(on_copy_link, form["id"])),
-                    ft.ElevatedButton("Renew +7d", icon=ft.Icons.UPDATE_ROUNDED,
-                                      on_click=lambda e: page.run_task(on_renew_form, form["id"])),
-                ], spacing=8, wrap=True),
-                ft.Row([
-                    ft.ElevatedButton("Download CSV", icon=ft.Icons.DOWNLOAD_ROUNDED,
-                                      on_click=lambda e: page.run_task(on_download_csv, form)),
-                    ft.ElevatedButton("Analyze", icon=ft.Icons.ANALYTICS_ROUNDED,
-                                      on_click=lambda e: page.run_task(on_analyze_responses, form)),
-                ], spacing=8, wrap=True),
-                ft.TextButton("Delete Form", icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-                              style=ft.ButtonStyle(color=theme.ERROR),
-                              on_click=lambda e: page.run_task(on_delete_form, form["id"])),
-            ], spacing=8),
-            padding=ft.Padding(20, 8, 20, 8),
-        ))
+        # ── Form Fields Preview ──────────────────────────────────────
+        schema_json = form.get("schema_json", "")
+        fields = []
+        if isinstance(schema_json, str) and schema_json:
+            try:
+                import json
+                fields = json.loads(schema_json)
+            except Exception:
+                pass
+        elif isinstance(schema_json, list):
+            fields = schema_json
 
-        # Response preview (first 50)
+        if fields:
+            field_controls = []
+            for idx, field in enumerate(fields):
+                label = field.get("label", field.get("name", f"Field {idx+1}"))
+                ftype = field.get("type", "text")
+                required = field.get("required", False)
+                options = field.get("options", [])
+
+                type_icons = {
+                    "text": ft.Icons.SHORT_TEXT_ROUNDED,
+                    "textarea": ft.Icons.NOTES_ROUNDED,
+                    "number": ft.Icons.NUMBERS_ROUNDED,
+                    "email": ft.Icons.EMAIL_ROUNDED,
+                    "select": ft.Icons.LIST_ROUNDED,
+                    "radio": ft.Icons.RADIO_BUTTON_CHECKED_ROUNDED,
+                    "checkbox": ft.Icons.CHECK_BOX_ROUNDED,
+                }
+
+                field_row_controls = [
+                    ft.Icon(type_icons.get(ftype, ft.Icons.TEXT_FIELDS_ROUNDED), size=16, color=theme.ACCENT),
+                    ft.Column([
+                        ft.Row([
+                            ft.Text(label, size=13, weight="w500", expand=True),
+                            ft.Container(
+                                content=ft.Text(ftype.upper(), size=9, color=theme.PRIMARY, weight="bold"),
+                                padding=ft.Padding(6, 2, 6, 2), border_radius=4,
+                                bgcolor=ft.Colors.with_opacity(0.08, theme.PRIMARY),
+                            ),
+                            ft.Text("*", size=14, color=theme.ERROR, weight="bold") if required else ft.Container(),
+                        ], spacing=6),
+                        ft.Text(", ".join(options[:5]), size=10, color=ft.Colors.ON_SURFACE_VARIANT, max_lines=1, overflow="ellipsis") if options else ft.Container(),
+                    ], spacing=2, expand=True),
+                ]
+                field_controls.append(ft.Container(
+                    content=ft.Row(field_row_controls, spacing=10, vertical_alignment="start"),
+                    padding=ft.Padding(12, 8, 12, 8),
+                    border_radius=8,
+                    bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.ON_SURFACE),
+                ))
+
+            controls.append(ft.Container(content=ft.Column([
+                ft.Text(f"Form Fields ({len(fields)})", weight="bold", size=13),
+                ft.Column(field_controls, spacing=4),
+            ], spacing=8), padding=ft.Padding(20, 8, 20, 8)))
+
+        # ── Action Buttons ───────────────────────────────────────────
+        controls.append(ft.Container(content=ft.Column([
+            ft.Row([
+                ft.Button("Copy Link", icon=ft.Icons.LINK_ROUNDED,
+                          on_click=lambda e: page.run_task(on_copy_link, form["id"])),
+                ft.Button("Renew +7d", icon=ft.Icons.UPDATE_ROUNDED,
+                          on_click=lambda e: page.run_task(on_renew_form, form["id"])),
+            ], spacing=8, wrap=True),
+            ft.Row([
+                ft.Button("Download CSV", icon=ft.Icons.DOWNLOAD_ROUNDED,
+                          on_click=lambda e: page.run_task(on_download_csv, form)),
+                ft.Button("Analyze", icon=ft.Icons.ANALYTICS_ROUNDED,
+                          on_click=lambda e: page.run_task(on_analyze_responses, form)),
+            ], spacing=8, wrap=True),
+            ft.TextButton("Delete Form", icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                          style=ft.ButtonStyle(color=theme.ERROR),
+                          on_click=lambda e: page.run_task(on_delete_form, form["id"])),
+        ], spacing=8), padding=ft.Padding(20, 8, 20, 8)))
         responses = form.get("_responses", [])
         if responses:
             import pandas as pd
             rows = [r["data"] for r in responses[:50]]
             df = pd.DataFrame(rows)
-
             from components.data_preview import build_data_preview
-            controls.append(ft.Container(
-                content=ft.Column([
-                    ft.Text(f"Latest {min(50, len(responses))} Responses", weight="bold", size=13),
-                    build_data_preview(df),
-                ], spacing=8),
-                padding=ft.Padding(20, 8, 20, 8),
-            ))
-
+            controls.append(ft.Container(content=ft.Column([
+                ft.Text(f"Latest {min(50, len(responses))} Responses", weight="bold", size=13),
+                build_data_preview(df),
+            ], spacing=8), padding=ft.Padding(20, 8, 20, 8)))
         controls.append(ft.Container(height=100))
         return controls
 
     def _build_content() -> list[ft.Control]:
-        # Form detail view
         if active_form["data"]:
             return _build_form_detail(active_form["data"])
-
-        # Main list view
         controls = []
-
-        # Create form section
-        controls.append(ft.Container(
-            content=ft.Column([
-                ft.Text("Create a Survey", weight="bold", size=16),
-                ft.Text("Describe your form and AI will generate it.", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Container(height=8),
-                ft.Row([
-                    ft.TextField(
-                        ref=form_prompt_field,
-                        hint_text="Describe your survey or tap the mic...",
-                        expand=True,
-                        border_radius=12,
-                        max_lines=3,
-                        min_lines=1,
-                        on_submit=lambda e: page.run_task(on_create_form, e),
-                        disabled=is_creating["value"] or is_recording["value"],
-                    ),
-                    ft.IconButton(
-                        ft.Icons.STOP_ROUNDED if is_recording["value"] else ft.Icons.MIC_ROUNDED,
-                        icon_color=theme.ERROR if is_recording["value"] else theme.ACCENT,
-                        tooltip="Stop recording" if is_recording["value"] else "Describe with voice",
-                        on_click=lambda e: page.run_task(on_voice_toggle, e),
-                        disabled=is_creating["value"],
-                    ),
-                    ft.IconButton(
-                        ft.Icons.SEND_ROUNDED,
-                        icon_color=theme.PRIMARY,
-                        on_click=lambda e: page.run_task(on_create_form, e),
-                        disabled=is_creating["value"] or is_recording["value"],
-                    ),
-                ], spacing=4),
-                ft.ProgressBar(visible=is_creating["value"]),
+        controls.append(ft.Container(content=ft.Column([
+            ft.Text("Create a Survey", weight="bold", size=16),
+            ft.Text("Describe your questionnaire — perfect for research projects, "
+                     "customer feedback, or student data collection.",
+                     size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Container(height=8),
+            ft.Row([
+                ft.TextField(ref=form_prompt_field,
+                             hint_text="e.g. 'A survey about student study habits...'",
+                             expand=True, border_radius=12, max_lines=3, min_lines=1,
+                             on_submit=lambda e: page.run_task(on_create_form, e),
+                             disabled=is_creating["value"] or is_recording["value"]),
+                ft.IconButton(ft.Icons.STOP_ROUNDED if is_recording["value"] else ft.Icons.MIC_ROUNDED,
+                              icon_color=theme.ERROR if is_recording["value"] else theme.ACCENT,
+                              tooltip="Stop recording" if is_recording["value"] else "Describe with voice",
+                              on_click=lambda e: page.run_task(on_voice_toggle, e),
+                              disabled=is_creating["value"]),
+                ft.IconButton(ft.Icons.SEND_ROUNDED, icon_color=theme.PRIMARY,
+                              on_click=lambda e: page.run_task(on_create_form, e),
+                              disabled=is_creating["value"] or is_recording["value"]),
             ], spacing=4),
-            padding=20, margin=ft.Margin(20, 10, 20, 10),
-            border_radius=16, bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
-        ))
-
-        # Your Forms header
-        controls.append(ft.Container(
-            content=ft.Row([
-                ft.Text("Your Forms", weight="bold", size=16),
-                ft.TextButton("Refresh", icon=ft.Icons.REFRESH_ROUNDED,
-                              on_click=lambda e: page.run_task(load_forms)),
-            ], alignment="spaceBetween"),
-            padding=ft.Padding(20, 16, 20, 4),
-        ))
-
-        # Loading
+            ft.ProgressBar(visible=is_creating["value"]),
+        ], spacing=4), padding=20, margin=ft.Margin(20, 10, 20, 10),
+            border_radius=16, bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR)))
+        controls.append(ft.Container(content=ft.Row([
+            ft.Text("Your Forms", weight="bold", size=16),
+            ft.TextButton("Refresh", icon=ft.Icons.REFRESH_ROUNDED,
+                          on_click=lambda e: page.run_task(load_forms)),
+        ], alignment="spaceBetween"), padding=ft.Padding(20, 16, 20, 4)))
         if is_loading["value"]:
-            controls.append(ft.Container(
-                content=ft.Row([ft.ProgressRing(width=16, height=16), ft.Text("Loading forms...")], spacing=10, alignment="center"),
-                padding=20,
-            ))
+            controls.append(ft.Container(content=ft.Row([
+                ft.ProgressRing(width=16, height=16), ft.Text("Loading forms...")
+            ], spacing=10, alignment="center"), padding=20))
         elif not user_forms:
-            controls.append(ft.Container(
-                content=ft.Column([
-                    ft.Icon(ft.Icons.DYNAMIC_FORM_ROUNDED, size=48, color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE)),
-                    ft.Text("No forms yet", color=ft.Colors.ON_SURFACE_VARIANT, size=13),
-                    ft.Text("Create your first form above!", color=ft.Colors.ON_SURFACE_VARIANT, size=11),
-                ], horizontal_alignment="center", spacing=8),
-                padding=40, alignment=ft.Alignment.CENTER,
-            ))
+            controls.append(ft.Container(content=ft.Column([
+                ft.Icon(ft.Icons.DYNAMIC_FORM_ROUNDED, size=48, color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE)),
+                ft.Text("No forms yet", color=ft.Colors.ON_SURFACE_VARIANT, size=13),
+                ft.Text("Create your first survey above!", color=ft.Colors.ON_SURFACE_VARIANT, size=11),
+            ], horizontal_alignment="center", spacing=8), padding=40, alignment=ft.Alignment.CENTER))
         else:
             for form in user_forms:
                 controls.append(_build_form_card(form))
-
         controls.append(ft.Container(height=100))
         return controls
 
@@ -453,22 +388,11 @@ def build_forms_view(page: ft.Page) -> ft.View:
             content_column.current.controls = _build_content()
             page.update()
 
-    # Load forms on view creation
     page.run_task(load_forms)
 
     return ft.View(
         route="/forms",
-        appbar=ft.AppBar(
-            title=ft.Text("Forms", weight="bold"),
-            bgcolor=ft.Colors.TRANSPARENT,
-        ),
-        controls=[
-            ft.Column(
-                ref=content_column,
-                controls=_build_content(),
-                scroll="auto",
-                expand=True,
-            ),
-        ],
+        appbar=ft.AppBar(title=ft.Text("Forms", weight="bold"), bgcolor=ft.Colors.TRANSPARENT),
+        controls=[ft.Column(ref=content_column, controls=_build_content(), scroll="auto", expand=True)],
         padding=0,
     )

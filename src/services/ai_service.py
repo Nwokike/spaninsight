@@ -355,6 +355,40 @@ async def analyze_image_for_data(image_bytes: bytes, mime_type: str, schema_json
     return await generate_code(prompt, schema_json)
 
 
+async def generate_form_schema(prompt: str) -> dict | None:
+    """Use the suggest route to generate a form schema from a natural language description.
+
+    Returns a dict with "title", "description", "fields" keys, or None on failure.
+    """
+    system_prompt = (
+        "You are a form builder AI. Given a description of a survey or questionnaire, "
+        "generate a JSON object with:\n"
+        '- "title": the form title\n'
+        '- "description": a brief description\n'
+        '- "fields": an array of field objects, each with:\n'
+        '  - "name": field identifier (snake_case)\n'
+        '  - "label": display label\n'
+        '  - "type": one of "text", "number", "email", "select", "radio", "checkbox", "textarea"\n'
+        '  - "required": boolean\n'
+        '  - "options": array of strings (only for select/radio/checkbox)\n'
+        "Return ONLY the JSON object. No markdown fences."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt},
+    ]
+
+    try:
+        data = await _call_gateway(TASK_SUGGEST, messages)
+        content = _extract_content(data)
+        cleaned = _strip_code_fences(content)
+        return json.loads(cleaned)
+    except Exception as e:
+        logger.error("AI form gen failed: %s", e)
+        return None
+
+
 # ── Private helpers ─────────────────────────────────────────────────
 
 
@@ -435,7 +469,7 @@ def _strip_code_fences(text: str) -> str:
     return cleaned.strip()
 
 
-def _fallback_suggestions() -> list[dict]:
+def fallback_suggestions() -> list[dict]:
     """Return default suggestions when the AI is unavailable."""
     return [
         {

@@ -6,6 +6,7 @@ exec() namespace. Filesystem, network, and system access are blocked.
 
 from __future__ import annotations
 
+import contextlib
 import io
 import logging
 import signal
@@ -40,6 +41,19 @@ def validate_code(code: str) -> tuple[bool, str]:
         return False, "Code exceeds 200 lines — too complex for mobile execution."
 
     return True, ""
+
+
+@contextlib.contextmanager
+def _capture_stdout():
+    """Context manager that guarantees sys.stdout is restored,
+    even on BaseException (KeyboardInterrupt, SystemExit, etc.)."""
+    old_stdout = sys.stdout
+    captured = io.StringIO()
+    sys.stdout = captured
+    try:
+        yield captured
+    finally:
+        sys.stdout = old_stdout
 
 
 def execute_code(
@@ -106,73 +120,76 @@ def execute_code(
         "True": True,
         "False": False,
         "None": None,
+        "bool": bool,
+        "map": map,
+        "filter": filter,
+        "isinstance": isinstance,
+        "type": type,
+        "hasattr": hasattr,
+        "getattr": getattr,
     }
-
-    # Capture stdout
-    old_stdout = sys.stdout
-    sys.stdout = captured_output = io.StringIO()
 
     # Close any existing figures to prevent memory leaks
     plt.close("all")
 
-    try:
-        # Timeout protection (Unix only — on Windows/Android we skip)
-        if hasattr(signal, "SIGALRM"):
-            def _timeout_handler(signum, frame):
-                raise TimeoutError("Code execution exceeded time limit.")
+    with _capture_stdout() as captured_output:
+        try:
+            # Timeout protection (Unix only — on Windows/Android we skip)
+            if hasattr(signal, "SIGALRM"):
+                def _timeout_handler(signum, frame):
+                    raise TimeoutError("Code execution exceeded time limit.")
 
-            signal.signal(signal.SIGALRM, _timeout_handler)
-            signal.alarm(SANDBOX_TIMEOUT_SEC)
+                signal.signal(signal.SIGALRM, _timeout_handler)
+                signal.alarm(SANDBOX_TIMEOUT_SEC)
 
-        exec(code, {"__builtins__": {}}, namespace)
+            exec(code, {"__builtins__": {}}, namespace)
 
-        if hasattr(signal, "SIGALRM"):
-            signal.alarm(0)  # Cancel timeout
+            if hasattr(signal, "SIGALRM"):
+                signal.alarm(0)  # Cancel timeout
 
-        # Check if a matplotlib figure was created
-        figure = None
-        if plt.get_fignums():
-            figure = plt.gcf()
+            # Check if a matplotlib figure was created
+            figure = None
+            if plt.get_fignums():
+                figure = plt.gcf()
 
-        return {
-            "success": True,
-            "result": namespace.get("result"),
-            "figure": figure,
-            "stdout": captured_output.getvalue(),
-            "error": None,
-        }
+            return {
+                "success": True,
+                "result": namespace.get("result"),
+                "figure": figure,
+                "stdout": captured_output.getvalue(),
+                "error": None,
+            }
 
-    except TimeoutError:
-        return {
-            "success": False,
-            "result": None,
-            "figure": None,
-            "stdout": captured_output.getvalue(),
-            "error": f"Execution timed out after {SANDBOX_TIMEOUT_SEC} seconds.",
-        }
-    except MemoryError:
-        return {
-            "success": False,
-            "result": None,
-            "figure": None,
-            "stdout": captured_output.getvalue(),
-            "error": "Out of memory — dataset may be too large for this operation.",
-        }
-    except Exception as e:
-        tb = traceback.format_exc()
-        # Sanitize traceback — remove file paths
-        sanitized = "\n".join(
-            line for line in tb.split("\n")
-            if "File" not in line or "<string>" in line
-        )
-        return {
-            "success": False,
-            "result": None,
-            "figure": None,
-            "stdout": captured_output.getvalue(),
-            "error": f"{type(e).__name__}: {e}\n{sanitized}".strip(),
-        }
-    finally:
-        sys.stdout = old_stdout
-        if hasattr(signal, "SIGALRM"):
-            signal.alarm(0)
+        except TimeoutError:
+            return {
+                "success": False,
+                "result": None,
+                "figure": None,
+                "stdout": captured_output.getvalue(),
+                "error": f"Execution timed out after {SANDBOX_TIMEOUT_SEC} seconds.",
+            }
+        except MemoryError:
+            return {
+                "success": False,
+                "result": None,
+                "figure": None,
+                "stdout": captured_output.getvalue(),
+                "error": "Out of memory — dataset may be too large for this operation.",
+            }
+        except Exception as e:
+            tb = traceback.format_exc()
+            # Sanitize traceback — remove file paths
+            sanitized = "\n".join(
+                line for line in tb.split("\n")
+                if "File" not in line or "<string>" in line
+            )
+            return {
+                "success": False,
+                "result": None,
+                "figure": None,
+                "stdout": captured_output.getvalue(),
+                "error": f"{type(e).__name__}: {e}\n{sanitized}".strip(),
+            }
+        finally:
+            if hasattr(signal, "SIGALRM"):
+                signal.alarm(0)

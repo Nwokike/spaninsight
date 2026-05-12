@@ -64,7 +64,7 @@ class FilePickerService:
         try:
             result = await self._picker.pick_files(
                 allow_multiple=False,
-                allowed_extensions=["csv", "xlsx", "xls"],
+                allowed_extensions=["csv", "xlsx", "xls", "json"],
                 with_data=False,  # We read from path for large data files
             )
 

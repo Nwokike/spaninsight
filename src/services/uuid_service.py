@@ -14,8 +14,9 @@ import uuid
 
 import flet as ft
 from flet_secure_storage import SecureStorage
+import httpx
 
-from core.constants import STORAGE_UUID
+from core.constants import STORAGE_UUID, API_BASE_URL, APP_SECRET, USER_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,21 @@ class UUIDService:
         new_uuid = str(uuid.uuid4())
         await self._storage.set(STORAGE_UUID, new_uuid)
         logger.info("Generated new UUID: %s...%s", new_uuid[:8], new_uuid[-4:])
+
+        # Store UUID→phrase mapping in D1 for later restore
+        phrase = self.uuid_to_phrase(new_uuid)
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    f"{API_BASE_URL}/uuid/store",
+                    headers={"X-App-Secret": APP_SECRET, "User-Agent": USER_AGENT,
+                             "Content-Type": "application/json"},
+                    json={"uuid": new_uuid, "phrase_hash": self._hash_phrase(phrase)},
+                    timeout=5.0,
+                )
+        except Exception as e:
+            logger.warning("Could not store UUID mapping remotely: %s", e)
+
         return new_uuid
 
     async def get_uuid(self) -> str | None:
@@ -103,17 +119,61 @@ class UUIDService:
         return " ".join(words)
 
     def _phrase_to_uuid(self, phrase: str) -> str | None:
-        """Reverse a 6-word phrase back to a UUID."""
+        """Reverse a 6-word phrase to a UUID by querying D1.
+
+        The phrase is hashed and sent to the gateway which looks up
+        the stored UUID→phrase_hash mapping.
+        """
         words = phrase.split()
         if len(words) != 6:
             return None
 
-        # This is a lossy conversion — we can't fully reconstruct the UUID
-        # from only 6 bytes. Instead, we store the full UUID and the phrase
-        # is just a human-friendly display. For restore, we verify the
-        # phrase matches the stored UUID's phrase.
-        # In production, you'd store the UUID on Cloudflare D1 keyed by phrase.
-        return None
+        # Validate all words exist in our word list
+        for w in words:
+            if w not in _WORD_LIST:
+                return None
+
+        return phrase  # Return the phrase; actual D1 lookup happens in restore_uuid
+
+    async def restore_uuid(self, backup_phrase: str) -> bool:
+        """Restore UUID from a backup phrase by querying D1."""
+        phrase = backup_phrase.strip().lower()
+        words = phrase.split()
+        if len(words) != 6:
+            return False
+
+        # Validate all words exist
+        for w in words:
+            if w not in _WORD_LIST:
+                return False
+
+        try:
+            phrase_hash = self._hash_phrase(phrase)
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{API_BASE_URL}/uuid/restore",
+                    params={"phrase_hash": phrase_hash},
+                    headers={"X-App-Secret": APP_SECRET, "User-Agent": USER_AGENT},
+                    timeout=10.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    restored_uuid = data.get("uuid")
+                    if restored_uuid:
+                        await self._storage.set(STORAGE_UUID, restored_uuid)
+                        logger.info("UUID restored from backup phrase.")
+                        return True
+                else:
+                    logger.warning("UUID restore failed: HTTP %d", resp.status_code)
+        except Exception as e:
+            logger.error("Failed to restore UUID: %s", e)
+        return False
+
+    @staticmethod
+    def _hash_phrase(phrase: str) -> str:
+        """SHA-256 hash of the phrase for D1 lookup."""
+        import hashlib
+        return hashlib.sha256(phrase.encode()).hexdigest()[:32]
 
     async def get_backup_phrase(self) -> str:
         """Get the backup phrase for the current UUID."""

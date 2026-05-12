@@ -31,7 +31,7 @@ def build_home_view(
                 ),
                 ft.Container(height=tokens.SPACE_SM),
                 ft.Text(
-                    "Privacy-First Data Intelligence",
+                    "Autonomous Data Intelligence for Everyone",
                     size=tokens.FONT_SM,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                     text_align=ft.TextAlign.CENTER,
@@ -165,21 +165,22 @@ def build_home_view(
                     ft.Icons.AUTO_AWESOME_ROUNDED,
                     "AI-Powered Analysis",
                     "Import any CSV or Excel file. AI suggests insights, "
-                    "writes Python code, and generates charts — all locally on your device.",
+                    "writes Python code, and generates charts — great for "
+                    "research projects, business reports, or personal data.",
                     theme.PRIMARY,
                 ),
                 _feature_card(
                     ft.Icons.DYNAMIC_FORM_ROUNDED,
                     "Smart Surveys",
-                    "Describe a survey in plain English. AI generates the form. "
-                    "Share a link, collect responses, and download as CSV to analyze.",
+                    "Describe a questionnaire in plain English or voice. AI generates it. "
+                    "Share a link, collect responses, and analyze — great for research, feedback, and more.",
                     theme.WARNING,
                 ),
                 _feature_card(
                     ft.Icons.ROCKET_LAUNCH_ROUNDED,
                     "Autopilot Mode",
-                    "One tap. AI runs 5 analysis passes, generates charts, "
-                    "writes descriptions, and builds a complete report automatically.",
+                    "One tap. AI runs multiple analysis passes, generates charts, "
+                    "writes descriptions, and builds a complete report for presentations.",
                     theme.ACCENT,
                 ),
                 _feature_card(
@@ -217,7 +218,7 @@ def build_home_view(
                     weight=ft.FontWeight.W_600,
                 ),
                 ft.Container(height=tokens.SPACE_SM),
-                _step_row("1", "Import", "Upload a CSV or Excel file (up to 15MB)"),
+                _step_row("1", "Import", "Upload a CSV or Excel file (up to 100MB)"),
                 _step_row("2", "Analyze", "AI suggests insights or use Autopilot"),
                 _step_row("3", "Export", "Download PDF, PPTX, or share a public link"),
             ],

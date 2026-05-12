@@ -72,13 +72,17 @@ async def list_forms(user_uuid: str) -> list[dict]:
         return []
 
 
-async def get_responses(form_id: str) -> dict:
+async def get_responses(form_id: str, user_uuid: str = "") -> dict:
     """Fetch all responses for a form. Returns {count, responses}."""
     try:
         async with httpx.AsyncClient() as client:
+            params = {}
+            if user_uuid:
+                params["uuid"] = user_uuid
             resp = await client.get(
                 f"{API_BASE_URL}/forms/{form_id}/responses",
                 headers=_HEADERS,
+                params=params,
                 timeout=15.0,
             )
             if resp.status_code == 200:
@@ -89,13 +93,14 @@ async def get_responses(form_id: str) -> dict:
         return {"count": 0, "responses": []}
 
 
-async def renew_form(form_id: str) -> str | None:
+async def renew_form(form_id: str, user_uuid: str = "") -> str | None:
     """Extend form expiry by 7 days. Returns new expires_at or None."""
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{API_BASE_URL}/forms/{form_id}/renew",
                 headers=_HEADERS,
+                json={"uuid": user_uuid} if user_uuid else None,
                 timeout=10.0,
             )
             if resp.status_code == 200:
@@ -106,13 +111,15 @@ async def renew_form(form_id: str) -> str | None:
         return None
 
 
-async def delete_form(form_id: str) -> bool:
+async def delete_form(form_id: str, user_uuid: str = "") -> bool:
     """Delete a form and all its responses."""
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.delete(
+            resp = await client.request(
+                "DELETE",
                 f"{API_BASE_URL}/forms/{form_id}",
                 headers=_HEADERS,
+                json={"uuid": user_uuid} if user_uuid else None,
                 timeout=10.0,
             )
             return resp.status_code == 200
