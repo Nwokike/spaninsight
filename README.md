@@ -62,11 +62,10 @@
 
 | Layer | Technology | Purpose |
 |:---|:---|:---|
-| **Frontend** | Flet (Python/Flutter) | Reactive UI with smooth animations |
+| **Frontend** | Flet | Reactive UI with smooth animations |
 | **Compute** | Local Python Runtime | Pandas-based data processing & Matplotlib rendering |
-| **AI Gateway** | Cloudflare Worker | Multi-model AI orchestration with automatic failover |
+| **AI Gateway** | spaninsight cloud (api.spaninsight.com) | Multi-model AI orchestration with automatic failover |
 | **Database** | Cloudflare D1 | Forms, responses, referrals, UUID recovery |
-| **Storage** | Cloudflare R2 | Public report hosting with 30-day auto-cleanup |
 | **Local Storage** | Secure Storage API | AES-256 encrypted credentials & config |
 | **PDF/PPTX** | fpdf2 & python-pptx | Professional report generation |
 
@@ -121,6 +120,3 @@ Spaninsight is designed with a **Privacy-First** philosophy.
 ## Legal Disclaimer
 
 Spaninsight is a data analysis tool. While it uses advanced AI to suggest insights, users are responsible for verifying the accuracy of automated reports before making business decisions. Spaninsight does not take responsibility for data loss resulting from local sandbox execution errors.
-
-```
-```
