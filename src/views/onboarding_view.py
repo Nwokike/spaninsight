@@ -12,12 +12,11 @@ from __future__ import annotations
 
 import flet as ft
 
-from core import theme, tokens
+from core import theme
 from core.constants import STORAGE_ONBOARDING_DONE
-from flet_secure_storage import SecureStorage
 
 
-def build_onboarding_view(page: ft.Page, on_done: callable) -> ft.View:
+def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.View:
     """Build the onboarding swipe-through."""
 
     current_page = {"index": 0}
@@ -106,8 +105,8 @@ def build_onboarding_view(page: ft.Page, on_done: callable) -> ft.View:
         page.run_task(_finish)
 
     async def _finish():
-        storage = SecureStorage()
-        await storage.set(STORAGE_ONBOARDING_DONE, "true")
+        if storage:
+            await storage.set(STORAGE_ONBOARDING_DONE, "true")
         on_done()
 
     is_last = current_page["index"] == len(slides) - 1

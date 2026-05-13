@@ -51,7 +51,7 @@ def build_file_import_card(
                     weight=ft.FontWeight.W_600,
                 ),
                 ft.Text(
-                    "Tap to select a file (max 15 MB)",
+                    "Tap to select a file (max 100 MB)",
                     size=tokens.FONT_SM,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),

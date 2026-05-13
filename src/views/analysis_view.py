@@ -480,7 +480,6 @@ def build_analysis_view(
 
             def toggle(e, ref=adv):
                 ref.current.visible = not ref.current.visible
-                icon = e.control.content.controls[1] if hasattr(e.control, 'content') else None
                 page.update()
 
             controls.append(ft.Container(
@@ -648,7 +647,7 @@ def build_analysis_view(
     # Initial check
     if state.trigger_file_picker:
         state.trigger_file_picker = False
-        page.run_task(lambda: file_picker_svc.pick_data_file())
+        file_picker_svc.pick_data_file()
 
     return ft.View(
         route="/analysis",

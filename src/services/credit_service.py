@@ -10,7 +10,6 @@ import logging
 from datetime import date
 
 import flet as ft
-from flet_secure_storage import SecureStorage
 
 from core.constants import (
     DAILY_FREE_CREDITS,
@@ -26,9 +25,9 @@ logger = logging.getLogger(__name__)
 class CreditService:
     """Manages the local credit economy."""
 
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, storage):
         self._page = page
-        self._storage = SecureStorage()
+        self._storage = storage
 
     async def initialize(self) -> int:
         """Load credits from storage, reset if new day. Returns current balance."""

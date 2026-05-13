@@ -19,6 +19,7 @@ import flet as ft
 
 from core.theme import AppTheme
 from core.state import state
+from services.storage_service import StorageService
 from services.uuid_service import UUIDService
 from services.credit_service import CreditService
 from services.ad_service import AdService
@@ -76,40 +77,28 @@ async def main(page: ft.Page):
     page.on_error = on_error
 
     # ── Initialize Services ─────────────────────────────────
-    uuid_service = UUIDService(page)
-    credit_service = CreditService(page)
+    storage = StorageService(page)
+    uuid_service = UUIDService(page, storage)
+    credit_service = CreditService(page, storage)
     ad_service = AdService(page)
-
-    # ── Splash Screen (P8) ──────────────────────────────────
-    splash = ft.Container(
-        content=ft.Column([
-            ft.Image("logo.png", width=220, height=80, fit="contain"),
-            ft.Container(height=12),
-            ft.Text("Smart Data Intelligence", size=13, color=ft.Colors.ON_SURFACE_VARIANT),
-            ft.Container(height=40),
-            ft.ProgressRing(width=24, height=24, stroke_width=2),
-        ], horizontal_alignment="center", alignment="center"),
-        expand=True, alignment=ft.Alignment.CENTER,
-    )
-    page.views.append(ft.View(route="/splash", controls=[splash], padding=0))
-    page.update()
 
     # Generate or load UUID
     state.user_uuid = await uuid_service.get_or_create_uuid()
     logger.info("User UUID: %s", uuid_service.get_masked_uuid(state.user_uuid))
 
     # Load Theme
-    from flet_secure_storage import SecureStorage
     from core.constants import STORAGE_THEME, STORAGE_ONBOARDING_DONE
-    storage = SecureStorage()
-    saved_theme = await storage.get(STORAGE_THEME)
-    if saved_theme == "dark":
-        page.theme_mode = ft.ThemeMode.DARK
-    elif saved_theme == "light":
-        page.theme_mode = ft.ThemeMode.LIGHT
-    else:
-        page.theme_mode = ft.ThemeMode.SYSTEM
-    state.theme_mode = page.theme_mode
+    try:
+        saved_theme = await storage.get(STORAGE_THEME)
+        if saved_theme == "dark":
+            page.theme_mode = ft.ThemeMode.DARK
+        elif saved_theme == "light":
+            page.theme_mode = ft.ThemeMode.LIGHT
+        else:
+            page.theme_mode = ft.ThemeMode.SYSTEM
+        state.theme_mode = page.theme_mode
+    except Exception as e:
+        logger.warning("Theme load failed (using default): %s", e)
 
     # Initialize credits (daily reset)
     state.credits_remaining = await credit_service.initialize()
@@ -147,13 +136,6 @@ async def main(page: ft.Page):
             pass  # Non-blocking
 
     await _startup_checks()
-
-    # ── Ensure splash shows at least 1s ─────────────────────────
-    await asyncio.sleep(1.0)
-
-    # ── Check Onboarding (P5) ────────────────────────────────
-    onboarding_done = await storage.get(STORAGE_ONBOARDING_DONE)
-    needs_onboarding = not onboarding_done
 
     # ── Navigation Bar ──────────────────────────────────────────────
     nav_bar = ft.NavigationBar(
@@ -232,6 +214,7 @@ async def main(page: ft.Page):
                 page=page,
                 on_import_file=on_import_file,
                 on_navigate=nav_to,
+                storage=storage,
             )
             page.views.append(view)
             nav_bar.selected_index = 0
@@ -270,6 +253,7 @@ async def main(page: ft.Page):
                 page=page,
                 uuid_service=uuid_service,
                 credit_service=credit_service,
+                storage=storage,
             )
             page.views.append(view)
             nav_bar.selected_index = 4
@@ -281,6 +265,7 @@ async def main(page: ft.Page):
                 page=page,
                 on_import_file=on_import_file,
                 on_navigate=nav_to,
+                storage=storage,
             )
             page.views.append(view)
 
@@ -303,17 +288,7 @@ async def main(page: ft.Page):
     page.on_view_pop = view_pop
 
     # ── Initial Route ───────────────────────────────────────
-    if needs_onboarding:
-        from views.onboarding_view import build_onboarding_view
-
-        def _on_onboarding_done():
-            page.run_task(navigate, "/home")
-
-        page.views.clear()
-        page.views.append(build_onboarding_view(page, _on_onboarding_done))
-        page.update()
-    else:
-        await navigate("/home")
+    await navigate("/home")
 
 
 # ── Entry Point ─────────────────────────────────────────────────────

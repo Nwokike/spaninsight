@@ -1,7 +1,7 @@
 """UUID identity service — generation, backup phrase, and restore.
 
 Privacy-first: no accounts, no servers. Identity is a UUID4 stored
-locally in SecureStorage (mobile) or client_storage (desktop).
+locally in StorageService (works on all platforms).
 
 The backup phrase converts the UUID to a human-readable 6-word
 mnemonic so users can recover their identity after reinstall.
@@ -13,7 +13,6 @@ import logging
 import uuid
 
 import flet as ft
-from flet_secure_storage import SecureStorage
 import httpx
 
 from core.constants import STORAGE_UUID, API_BASE_URL, APP_SECRET, USER_AGENT
@@ -61,9 +60,9 @@ _WORD_LIST = [
 class UUIDService:
     """Manages the user's local UUID identity."""
 
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, storage):
         self._page = page
-        self._storage = SecureStorage()
+        self._storage = storage
 
     async def get_or_create_uuid(self) -> str:
         """Return existing UUID or generate a new one."""
@@ -95,18 +94,6 @@ class UUIDService:
         """Return stored UUID or None."""
         return await self._storage.get(STORAGE_UUID)
 
-    async def restore_uuid(self, backup_phrase: str) -> bool:
-        """Restore UUID from a backup phrase. Returns True on success."""
-        try:
-            restored = self._phrase_to_uuid(backup_phrase.strip().lower())
-            if restored:
-                await self._storage.set(STORAGE_UUID, restored)
-                logger.info("UUID restored from backup phrase.")
-                return True
-        except Exception as e:
-            logger.error("Failed to restore UUID: %s", e)
-        return False
-
     def uuid_to_phrase(self, user_uuid: str) -> str:
         """Convert a UUID string to a 6-word backup phrase."""
         hex_str = user_uuid.replace("-", "")
@@ -119,11 +106,7 @@ class UUIDService:
         return " ".join(words)
 
     def _phrase_to_uuid(self, phrase: str) -> str | None:
-        """Reverse a 6-word phrase to a UUID by querying D1.
-
-        The phrase is hashed and sent to the gateway which looks up
-        the stored UUID→phrase_hash mapping.
-        """
+        """Validate a 6-word phrase. Returns phrase if valid, None otherwise."""
         words = phrase.split()
         if len(words) != 6:
             return None

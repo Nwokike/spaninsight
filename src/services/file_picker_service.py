@@ -30,7 +30,7 @@ class FilePickerService:
         self._page = page
         self._on_result = on_result
 
-        # Flet 0.85.0: FilePicker is a Service, not a Control. Do NOT add to overlay.
+        # Flet 0.85: FilePicker is a Service, NOT a Control. Do not add to overlay.
         self._picker = ft.FilePicker()
 
     def pick_data_file(self):

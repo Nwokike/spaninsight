@@ -14,7 +14,7 @@ import logging
 
 import flet as ft
 
-from core import theme, tokens
+from core import theme
 from core.state import state
 from services import ai_service, forms_service
 from services.audio_service import AudioService
@@ -32,6 +32,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
     is_loading = {"value": False}
     is_creating = {"value": False}
     is_recording = {"value": False}
+    recording_time = {"value": 0}
     active_form: dict = {"data": None}
 
     audio_svc = AudioService(page)
@@ -51,9 +52,11 @@ def build_forms_view(page: ft.Page) -> ft.View:
             _rebuild()
 
     async def on_create_form(e):
-        if not form_prompt_field.current: return
+        if not form_prompt_field.current:
+            return
         prompt = form_prompt_field.current.value.strip()
-        if not prompt: return
+        if not prompt:
+            return
         is_creating["value"] = True
         _rebuild()
         try:
@@ -74,7 +77,10 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 form_prompt_field.current.value = ""
                 page.snack_bar = ft.SnackBar(ft.Text(f"Form created! Share: {result['url']}"), duration=5000)
                 page.snack_bar.open = True
-                page.clipboard = result["url"]
+                try:
+                    await page.clipboard.set(result["url"])
+                except Exception:
+                    pass
                 await load_forms()
             else:
                 _show_error("Failed to create form. Check your connection.")
@@ -108,6 +114,15 @@ def build_forms_view(page: ft.Page) -> ft.View:
             )
             if started:
                 is_recording["value"] = True
+                recording_time["value"] = 0
+                _rebuild()
+                page.run_task(_update_timer)
+
+    async def _update_timer():
+        while is_recording["value"]:
+            await asyncio.sleep(1)
+            if is_recording["value"]:
+                recording_time["value"] += 1
                 _rebuild()
 
     async def _handle_auto_stop(result):
@@ -133,7 +148,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
 
     async def on_copy_link(form_id: str):
         url = f"https://f.spaninsight.com/{form_id}"
-        page.clipboard = url
+        await page.clipboard.set(url)
         page.snack_bar = ft.SnackBar(ft.Text("Link copied!"), duration=2000)
         page.snack_bar.open = True
         page.update()
@@ -208,7 +223,8 @@ def build_forms_view(page: ft.Page) -> ft.View:
             from datetime import datetime
             exp = datetime.fromisoformat(form["expires_at"].replace("Z", "+00:00"))
             is_expired = exp < datetime.now(exp.tzinfo)
-        except Exception: pass
+        except Exception:
+            pass
         status_color = theme.ERROR if is_expired else theme.SUCCESS
         status_text = "Expired" if is_expired else "Active"
         return ft.Container(
@@ -350,15 +366,18 @@ def build_forms_view(page: ft.Page) -> ft.View:
                              expand=True, border_radius=12, max_lines=3, min_lines=1,
                              on_submit=lambda e: page.run_task(on_create_form, e),
                              disabled=is_creating["value"] or is_recording["value"]),
-                ft.IconButton(ft.Icons.STOP_ROUNDED if is_recording["value"] else ft.Icons.MIC_ROUNDED,
-                              icon_color=theme.ERROR if is_recording["value"] else theme.ACCENT,
-                              tooltip="Stop recording" if is_recording["value"] else "Describe with voice",
-                              on_click=lambda e: page.run_task(on_voice_toggle, e),
-                              disabled=is_creating["value"]),
+                ft.Row([
+                    ft.Text(f"00:{recording_time['value']:02d} / 01:00", size=11, color=theme.ERROR, weight="bold", visible=is_recording["value"]),
+                    ft.IconButton(ft.Icons.STOP_ROUNDED if is_recording["value"] else ft.Icons.MIC_ROUNDED,
+                                  icon_color=theme.ERROR if is_recording["value"] else theme.ACCENT,
+                                  tooltip="Stop recording" if is_recording["value"] else "Describe with voice",
+                                  on_click=lambda e: page.run_task(on_voice_toggle, e),
+                                  disabled=is_creating["value"]),
+                ], spacing=2, vertical_alignment="center"),
                 ft.IconButton(ft.Icons.SEND_ROUNDED, icon_color=theme.PRIMARY,
                               on_click=lambda e: page.run_task(on_create_form, e),
                               disabled=is_creating["value"] or is_recording["value"]),
-            ], spacing=4),
+            ], spacing=4, vertical_alignment="center"),
             ft.ProgressBar(visible=is_creating["value"]),
         ], spacing=4), padding=20, margin=ft.Margin(20, 10, 20, 10),
             border_radius=16, bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR)))

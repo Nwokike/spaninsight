@@ -8,7 +8,7 @@ import logging
 
 import flet as ft
 
-from core import theme, tokens
+from core import theme
 from core.state import state
 from components.chart_card import build_chart_card
 from services.ad_service import AdService
@@ -211,7 +211,6 @@ def build_report_view(page: ft.Page, on_back=None, ad_service: AdService | None 
             slide = prs.slides.add_slide(prs.slide_layouts[5])  # Blank
 
             # Title
-            from pptx.util import Emu
             txBox = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12), Inches(0.8))
             tf = txBox.text_frame
             tf.text = chart.get("prompt", f"Analysis {i + 1}")

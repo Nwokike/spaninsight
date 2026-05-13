@@ -8,13 +8,13 @@ from core import theme, tokens
 from core.state import state
 from core.constants import STORAGE_THEME
 from components.credit_badge import build_credit_badge
-from flet_secure_storage import SecureStorage
 
 
 def build_home_view(
     page: ft.Page,
     on_import_file: callable,
     on_navigate: callable,
+    storage=None,
 ) -> ft.View:
     """Build the Home landing tab."""
 
@@ -281,12 +281,15 @@ def build_home_view(
     )
 
     async def _toggle_theme(e, p: ft.Page):
-        p.theme_mode = ft.ThemeMode.LIGHT if p.theme_mode == ft.ThemeMode.DARK else ft.ThemeMode.DARK
+        is_dark = p.theme_mode == ft.ThemeMode.DARK or (
+            p.theme_mode == ft.ThemeMode.SYSTEM and p.platform_brightness == ft.ThemeMode.DARK
+        )
+        p.theme_mode = ft.ThemeMode.LIGHT if is_dark else ft.ThemeMode.DARK
         state.theme_mode = p.theme_mode
 
         # Persist
-        storage = SecureStorage()
-        await storage.set(STORAGE_THEME, "light" if p.theme_mode == ft.ThemeMode.LIGHT else "dark")
+        if storage:
+            await storage.set(STORAGE_THEME, "light" if p.theme_mode == ft.ThemeMode.LIGHT else "dark")
 
         # Update icon directly to avoid full page reload
         e.control.icon = ft.Icons.LIGHT_MODE_ROUNDED if p.theme_mode == ft.ThemeMode.DARK else ft.Icons.DARK_MODE_ROUNDED

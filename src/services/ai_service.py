@@ -21,7 +21,6 @@ from core.constants import (
     API_CHAT_ENDPOINT,
     API_HEALTH_ENDPOINT,
     APP_SECRET,
-    MAX_VOICE_DURATION_SEC,
     TASK_CODE,
     TASK_INTERPRET,
     TASK_SUGGEST,
@@ -267,7 +266,7 @@ async def suggest(
         return []
     except Exception as e:
         logger.error("Suggest failed: %s", e)
-        return _fallback_suggestions()
+        return fallback_suggestions()
 
 
 async def generate_code(prompt: str, schema_json: dict) -> str:
