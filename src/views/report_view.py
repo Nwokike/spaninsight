@@ -14,6 +14,7 @@ from core.constants import API_BASE_URL
 from core.state import state
 from core.utils import figure_to_png_bytes
 from components.chart_card import build_chart_card
+from components.brand_header import build_brand_header
 from services.ad_service import AdService
 from services.api_client import request_with_retry
 
@@ -300,40 +301,46 @@ def build_report_view(
     # ── Content ─────────────────────────────────────────────────────
 
     if not state.charts:
-        content = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Container(height=100),
-                    ft.Icon(
-                        ft.Icons.BAR_CHART_ROUNDED,
-                        size=80,
-                        color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        content = ft.Column(
+            [
+                build_brand_header(show_tagline=True, spacing_below=True),
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(
+                                ft.Icons.BAR_CHART_ROUNDED,
+                                size=80,
+                                color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+                            ),
+                            ft.Text(
+                                "No report yet",
+                                size=16,
+                                weight="w500",
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                            ft.Text(
+                                "Pin analysis results to build your report.",
+                                size=13,
+                                color=ft.Colors.with_opacity(0.5, ft.Colors.ON_SURFACE),
+                            ),
+                            ft.Container(height=20),
+                            ft.FilledButton(
+                                "Start Analysis",
+                                icon=ft.Icons.ANALYTICS_ROUNDED,
+                                on_click=lambda _: (
+                                    setattr(page, "route", "/analysis") or page.update()
+                                ),
+                            ),
+                        ],
+                        horizontal_alignment="center",
+                        spacing=8,
                     ),
-                    ft.Text(
-                        "No report yet",
-                        size=16,
-                        weight="w500",
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
-                    ft.Text(
-                        "Pin analysis results to build your report.",
-                        size=13,
-                        color=ft.Colors.with_opacity(0.5, ft.Colors.ON_SURFACE),
-                    ),
-                    ft.Container(height=20),
-                    ft.FilledButton(
-                        "Start Analysis",
-                        icon=ft.Icons.ANALYTICS_ROUNDED,
-                        on_click=lambda _: (
-                            setattr(page, "route", "/analysis") or page.update()
-                        ),
-                    ),
-                ],
-                horizontal_alignment="center",
-                spacing=8,
-            ),
+                    alignment=ft.Alignment.CENTER,
+                    padding=20,
+                ),
+            ],
+            scroll="auto",
             expand=True,
-            alignment=ft.Alignment.CENTER,
         )
     else:
         report_cards = [
@@ -349,6 +356,7 @@ def build_report_view(
 
         content = ft.Column(
             [
+                build_brand_header(show_tagline=True, spacing_below=True),
                 ft.Container(
                     content=ft.Text(
                         f"Your report contains {len(state.charts)} insights",

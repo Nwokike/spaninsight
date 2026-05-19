@@ -38,7 +38,7 @@ def build_splash_view() -> ft.View:
                             text_align=ft.TextAlign.CENTER,
                         ),
                         ft.Text(
-                            "Autonomous data intelligence for everyone.",
+                            "Autonomous Data Intelligence for Everyone",
                             size=14,
                             color=ft.Colors.ON_SURFACE_VARIANT,
                             text_align=ft.TextAlign.CENTER,

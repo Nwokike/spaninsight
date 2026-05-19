@@ -17,6 +17,7 @@ from core.constants import (
     STORAGE_REFERRAL_CODE,
 )
 from core.styles import section_header, setting_tile
+from components.brand_header import build_brand_header
 
 logger = logging.getLogger(__name__)
 
@@ -389,6 +390,11 @@ def build_settings_view(
                 icon=ft.Icons.PRIVACY_TIP_OUTLINED,
                 title="Privacy Policy",
                 subtitle="Your data never leaves your device",
+            ),
+            ft.Container(height=tokens.SPACE_XL),
+            ft.Container(
+                content=build_brand_header(show_tagline=True, spacing_below=False),
+                opacity=0.6,
             ),
             ft.Container(height=tokens.SPACE_XXXL),
         ],

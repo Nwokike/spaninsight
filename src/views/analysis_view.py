@@ -24,6 +24,7 @@ from components.file_import_card import build_file_import_card
 from components.stat_card import build_stat_card
 from components.data_preview import build_data_preview
 from components.suggestion_chips import build_suggestion_chips
+from components.brand_header import build_brand_header
 from services import ai_service, file_service, sandbox
 from services.file_service import FileValidationError
 from services.file_picker_service import FilePickerService
@@ -600,10 +601,7 @@ def build_analysis_view(
             else:
                 res.append(ft.Container(
                     content=ft.Column([
-                        ft.Container(height=60),
-                        ft.Image("logo.png", width=200, height=80, fit="contain"),
-                        ft.Text("Autonomous Data Intelligence", color=ft.Colors.ON_SURFACE_VARIANT),
-                        ft.Container(height=40),
+                        build_brand_header(show_tagline=True, spacing_below=True),
                         build_file_import_card(on_pick_file, False),
                         ft.Container(height=20),
                         ft.Row([

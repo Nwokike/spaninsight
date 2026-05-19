@@ -8,6 +8,7 @@ from core import theme, tokens
 from core.state import state
 from core.constants import STORAGE_THEME
 from components.credit_badge import build_credit_badge
+from components.brand_header import build_brand_header
 
 
 def build_home_view(
@@ -19,29 +20,7 @@ def build_home_view(
     """Build the Home landing tab."""
 
     # ── Hero section ────────────────────────────────────────────────
-    hero = ft.Container(
-        content=ft.Column(
-            controls=[
-                ft.Container(height=tokens.SPACE_LG),
-                ft.Image(
-                    src="logo.png",
-                    width=200,
-                    height=65,
-                    fit=ft.BoxFit.CONTAIN,
-                ),
-                ft.Container(height=tokens.SPACE_SM),
-                ft.Text(
-                    "Autonomous Data Intelligence for Everyone",
-                    size=tokens.FONT_SM,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
-                    text_align=ft.TextAlign.CENTER,
-                ),
-                ft.Container(height=tokens.SPACE_XL),
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=0,
-        ),
-    )
+    hero = build_brand_header(show_tagline=True, spacing_below=True)
 
     # ── Quick action cards ──────────────────────────────────────────
     quick_actions = ft.Container(

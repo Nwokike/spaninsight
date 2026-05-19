@@ -18,6 +18,7 @@ import flet as ft
 from core import theme
 from core.state import state
 from components.form_editor import build_form_editor
+from components.brand_header import build_brand_header
 from services import ai_service, forms_service
 from services.audio_service import AudioService
 
@@ -717,6 +718,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
 
         # State 1: Create + list
         controls = []
+        controls.append(build_brand_header(show_tagline=True, spacing_below=True))
         controls.append(
             ft.Container(
                 content=ft.Column(
