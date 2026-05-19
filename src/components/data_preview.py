@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import flet as ft
-import pandas as pd
 
 from core import tokens
 from core.constants import DATA_PREVIEW_ROWS
 
 
-def build_data_preview(df: pd.DataFrame) -> ft.Column:
+def build_data_preview(df) -> ft.Column:
     """Build a scrollable DataTable preview of the first 50 rows.
 
     Args:
@@ -54,7 +53,9 @@ def build_data_preview(df: pd.DataFrame) -> ft.Column:
         rows=rows,
         border=ft.Border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)),
         border_radius=tokens.RADIUS_MD,
-        horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.06, ft.Colors.ON_SURFACE)),
+        horizontal_lines=ft.BorderSide(
+            1, ft.Colors.with_opacity(0.06, ft.Colors.ON_SURFACE)
+        ),
         column_spacing=tokens.SPACE_LG,
         heading_row_height=40,
         data_row_max_height=36,
@@ -84,7 +85,9 @@ def build_data_preview(df: pd.DataFrame) -> ft.Column:
                     color=ft.Colors.ON_SURFACE_VARIANT,
                     italic=True,
                 ),
-                padding=ft.Padding(left=tokens.SPACE_SM, top=tokens.SPACE_XS, right=0, bottom=0),
+                padding=ft.Padding(
+                    left=tokens.SPACE_SM, top=tokens.SPACE_XS, right=0, bottom=0
+                ),
             ),
         ],
         spacing=tokens.SPACE_XS,
@@ -93,8 +96,15 @@ def build_data_preview(df: pd.DataFrame) -> ft.Column:
 
 def _format_cell(value) -> str:
     """Format a cell value for display."""
-    if pd.isna(value):
-        return "—"
+    import numpy as np
+    import pandas as pd
+    if isinstance(value, (list, np.ndarray)):
+        return ", ".join(str(v) for v in value) if len(value) else "—"
+    try:
+        if pd.isna(value):
+            return "—"
+    except (ValueError, TypeError):
+        pass
     if isinstance(value, float):
         if value == int(value):
             return str(int(value))
