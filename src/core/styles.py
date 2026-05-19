@@ -50,7 +50,9 @@ def solid_card(
     """Adaptive card — glass in dark mode, solid white in light."""
     is_dark = page and page.theme_mode == ft.ThemeMode.DARK
     if is_dark:
-        return glass_card(content, width=width, padding=padding, border_radius=border_radius)
+        return glass_card(
+            content, width=width, padding=padding, border_radius=border_radius
+        )
     return ft.Container(
         content=content,
         width=width,

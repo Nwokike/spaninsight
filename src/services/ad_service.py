@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 # Try importing flet_ads — only available on mobile
 try:
     import flet_ads as fta
+
     _HAS_ADS = True
 except ImportError:
     _HAS_ADS = False
@@ -25,9 +26,28 @@ except ImportError:
 class AdService:
     """Manages AdMob banner and interstitial ads."""
 
-    # Test IDs — swap before Play Store submission
-    BANNER_ID_ANDROID = "ca-app-pub-3940256099942544/9214589741"
-    INTERSTITIAL_ID_ANDROID = "ca-app-pub-3940256099942544/1033173712"
+    # Set to False before Play Store submission — then replace with real IDs
+    USE_TEST_IDS = True
+
+    # Test IDs (Google's official test units)
+    BANNER_ID_ANDROID_TEST = "ca-app-pub-3940256099942544/9214589741"
+    INTERSTITIAL_ID_ANDROID_TEST = "ca-app-pub-3940256099942544/1033173712"
+
+    # TODO: Replace with real Ad Unit IDs before production release
+    BANNER_ID_ANDROID_PROD = ""
+    INTERSTITIAL_ID_ANDROID_PROD = ""
+
+    @property
+    def banner_id(self) -> str:
+        if self.USE_TEST_IDS:
+            return self.BANNER_ID_ANDROID_TEST
+        return self.BANNER_ID_ANDROID_PROD
+
+    @property
+    def interstitial_id(self) -> str:
+        if self.USE_TEST_IDS:
+            return self.INTERSTITIAL_ID_ANDROID_TEST
+        return self.INTERSTITIAL_ID_ANDROID_PROD
 
     def __init__(self, page: ft.Page):
         self.page = page
@@ -46,7 +66,7 @@ class AdService:
             return ft.Container(width=0, height=0)
         try:
             ad = fta.BannerAd(
-                unit_id=self.BANNER_ID_ANDROID,
+                unit_id=self.banner_id,
                 width=320,
                 height=50,
                 on_error=lambda e: None,
@@ -67,7 +87,7 @@ class AdService:
             return
         try:
             self.interstitial = fta.InterstitialAd(
-                unit_id=self.INTERSTITIAL_ID_ANDROID,
+                unit_id=self.interstitial_id,
                 on_load=lambda e: None,
                 on_error=lambda e: None,
                 on_close=self._handle_close,

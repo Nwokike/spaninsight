@@ -91,9 +91,7 @@ class AudioService:
             return self._recording
         except Exception as e:
             logger.error("Failed to start recording: %s", e)
-            self._page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Recording error: {e}")
-            )
+            self._page.snack_bar = ft.SnackBar(content=ft.Text(f"Recording error: {e}"))
             self._page.snack_bar.open = True
             self._page.update()
             return False
@@ -159,7 +157,9 @@ class AudioService:
                     )
                     file_path.unlink(missing_ok=True)
                     self._page.snack_bar = ft.SnackBar(
-                        content=ft.Text("Voice note too large. Please keep it under 25MB."),
+                        content=ft.Text(
+                            "Voice note too large. Please keep it under 25MB."
+                        ),
                         bgcolor=ft.Colors.ERROR,
                     )
                     self._page.snack_bar.open = True

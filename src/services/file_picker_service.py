@@ -64,7 +64,7 @@ class FilePickerService:
         try:
             result = await self._picker.pick_files(
                 allow_multiple=False,
-                allowed_extensions=["csv", "xlsx", "xls", "json"],
+                allowed_extensions=["csv", "xlsx", "json"],
                 with_data=False,  # We read from path for large data files
             )
 
@@ -99,7 +99,9 @@ class FilePickerService:
                 if file.bytes and self._on_result:
                     mime, _ = mimetypes.guess_type(file.name)
                     if not mime:
-                        ext = file.name.split(".")[-1].lower() if "." in file.name else ""
+                        ext = (
+                            file.name.split(".")[-1].lower() if "." in file.name else ""
+                        )
                         mime_map = {"png": "image/png", "webp": "image/webp"}
                         mime = mime_map.get(ext, "image/jpeg")
                     self._on_result(file.bytes, mime, file.name)

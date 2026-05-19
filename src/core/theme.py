@@ -9,32 +9,32 @@ from __future__ import annotations
 import flet as ft
 
 # ── Brand Palette ───────────────────────────────────────────────────
-PRIMARY = "#6C63FF"          # Electric indigo
-PRIMARY_DARK = "#5A52D5"     # Pressed state
-PRIMARY_LIGHT = "#8B83FF"    # Hover state
-ACCENT = "#00D9FF"           # Cyan data glow
-ACCENT_DIM = "#00A8C6"       # Subdued accent
+PRIMARY = "#6C63FF"  # Electric indigo
+PRIMARY_DARK = "#5A52D5"  # Pressed state
+PRIMARY_LIGHT = "#8B83FF"  # Hover state
+ACCENT = "#00D9FF"  # Cyan data glow
+ACCENT_DIM = "#00A8C6"  # Subdued accent
 
-SUCCESS = "#00E676"          # Chart green / positive
-WARNING = "#FFB74D"          # Amber warning
-ERROR = "#FF5252"            # Red error
+SUCCESS = "#00E676"  # Chart green / positive
+WARNING = "#FFB74D"  # Amber warning
+ERROR = "#FF5252"  # Red error
 
 # ── Dark Mode Surfaces ──────────────────────────────────────────────
-DARK_BG_1 = "#0A0B14"       # Deepest background
-DARK_BG_2 = "#0D0F1A"       # Primary background
-DARK_SURFACE = "#141627"    # Card surface
+DARK_BG_1 = "#0A0B14"  # Deepest background
+DARK_BG_2 = "#0D0F1A"  # Primary background
+DARK_SURFACE = "#141627"  # Card surface
 DARK_SURFACE_2 = "#1C1E33"  # Elevated surface
-DARK_BORDER = "#2A2D4A"     # Subtle borders
-DARK_TEXT = "#EEEEF5"        # Primary text
-DARK_TEXT_DIM = "#8E90A6"   # Secondary text
+DARK_BORDER = "#2A2D4A"  # Subtle borders
+DARK_TEXT = "#EEEEF5"  # Primary text
+DARK_TEXT_DIM = "#8E90A6"  # Secondary text
 
 # ── Light Mode Surfaces ─────────────────────────────────────────────
-LIGHT_BG = "#F5F6FA"         # Primary background
-LIGHT_SURFACE = "#FFFFFF"    # Card surface
+LIGHT_BG = "#F5F6FA"  # Primary background
+LIGHT_SURFACE = "#FFFFFF"  # Card surface
 LIGHT_SURFACE_2 = "#F0F1F8"  # Elevated surface
-LIGHT_BORDER = "#E0E1EC"     # Subtle borders
-LIGHT_TEXT = "#1A1B2E"       # Primary text
-LIGHT_TEXT_DIM = "#6B6D82"   # Secondary text
+LIGHT_BORDER = "#E0E1EC"  # Subtle borders
+LIGHT_TEXT = "#1A1B2E"  # Primary text
+LIGHT_TEXT_DIM = "#6B6D82"  # Secondary text
 
 # ── Glassmorphism ───────────────────────────────────────────────────
 GLASS_BG_OPACITY = 0.06
@@ -47,9 +47,9 @@ SHADOW_PRIMARY = ft.Colors.with_opacity(0.25, PRIMARY)
 SHADOW_DARK = ft.Colors.with_opacity(0.15, "#000000")
 
 # ── Credit Badge Colours ────────────────────────────────────────────
-CREDIT_HIGH = SUCCESS       # > 20 credits
-CREDIT_MEDIUM = WARNING     # 5–20 credits
-CREDIT_LOW = ERROR          # < 5 credits
+CREDIT_HIGH = SUCCESS  # > 20 credits
+CREDIT_MEDIUM = WARNING  # 5–20 credits
+CREDIT_LOW = ERROR  # < 5 credits
 
 
 # ── Gradient Builders ───────────────────────────────────────────────

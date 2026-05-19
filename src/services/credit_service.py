@@ -28,11 +28,37 @@ class CreditService:
     def __init__(self, page: ft.Page, storage):
         self._page = page
         self._storage = storage
+        self._reserved: int = 0  # Optimistic reservation counter
 
     async def initialize(self) -> int:
         """Load credits from storage, reset if new day. Returns current balance."""
         await self._check_daily_reset()
         return await self._get_credits()
+
+    async def reserve(self, amount: int) -> bool:
+        """Optimistically reserve credits. Returns False if insufficient.
+        
+        Use this before expensive operations to prevent race conditions.
+        Call commit() to finalize or rollback() to release.
+        """
+        current = await self._get_credits()
+        if current - self._reserved < amount:
+            return False
+        self._reserved += amount
+        return True
+
+    async def commit(self, amount: int) -> int:
+        """Finalize a reservation — deduct from actual balance."""
+        current = await self._get_credits()
+        new_balance = max(0, current - amount)
+        await self._storage.set(STORAGE_CREDITS, str(new_balance))
+        self._reserved = max(0, self._reserved - amount)
+        logger.info("Committed %d credits. Remaining: %d", amount, new_balance)
+        return new_balance
+
+    async def rollback(self, amount: int) -> None:
+        """Release a reservation without deducting credits."""
+        self._reserved = max(0, self._reserved - amount)
 
     async def spend(self, amount: int) -> tuple[bool, int]:
         """Deduct credits. Returns (success, remaining)."""

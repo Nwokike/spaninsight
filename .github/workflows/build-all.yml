@@ -27,6 +27,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       
+      - name: Lint with Ruff
+        run: uv run ruff check src/
+        
       - name: Build Windows Portable
         run: uv run flet build windows --yes --project spaninsight --product "Spaninsight" --org com.spaninsight --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v
         

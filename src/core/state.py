@@ -24,30 +24,30 @@ class AppState:
     last_credit_reset: str = ""
 
     # ── Data Pipeline ───────────────────────────────────────────────
-    current_df: Any = None           # Active pandas DataFrame
-    current_df_name: str = ""        # Filename of loaded data
-    current_df_columns: list = []    # Column names cache
-    current_df_rows: int = 0         # Total row count
-    current_df_summary: dict = {}    # df.describe() as dict
+    current_df: Any = None  # Active pandas DataFrame
+    current_df_name: str = ""  # Filename of loaded data
+    current_df_columns: list = None  # Column names cache
+    current_df_rows: int = 0  # Total row count
+    current_df_summary: dict = None  # df.describe() as dict
 
     # ── Analysis ────────────────────────────────────────────────────
-    suggestions: list[dict] = []     # AI suggestion buttons [{label, icon, prompt}]
-    charts: list[dict] = []          # Generated chart history [{figure, code, insight}]
-    current_code: str = ""           # Last generated code
-    current_insight: str = ""        # Last AI interpretation
-    is_analyzing: bool = False       # Loading state for AI calls
+    suggestions: list[dict] = None  # AI suggestion buttons [{label, icon, prompt}]
+    charts: list[dict] = None  # Generated chart history [{figure, figure_png, code, insight}]
+    current_code: str = ""  # Last generated code
+    current_insight: str = ""  # Last AI interpretation
+    is_analyzing: bool = False  # Loading state for AI calls
 
     # ── Forms (Phase 3) ────────────────────────────────────────────
-    forms: list[dict] = []
+    forms: list[dict] = None
 
     # ── Navigation ──────────────────────────────────────────────────
-    current_tab: int = 0             # 0=Home, 1=Analysis, 2=Forms, 3=Settings
+    current_tab: int = 0  # 0=Home, 1=Analysis, 2=Forms, 3=Settings
 
     # ── UI ──────────────────────────────────────────────────────────
     is_loading: bool = False
     gateway_online: bool = True
     trigger_file_picker: bool = False
-    theme_mode: Any = None           # ft.ThemeMode value
+    theme_mode: Any = None  # ft.ThemeMode value
 
     def __init__(self):
         self.suggestions = []

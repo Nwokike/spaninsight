@@ -74,7 +74,7 @@ def build_file_import_card(
                             border_radius=tokens.RADIUS_SM,
                             bgcolor=ft.Colors.with_opacity(0.1, theme.ACCENT),
                         )
-                        for ext in [".csv", ".xlsx", ".xls"]
+                        for ext in [".csv", ".xlsx", ".json"]
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     spacing=tokens.SPACE_SM,

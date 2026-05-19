@@ -9,9 +9,12 @@ import flet as ft
 from core import theme, tokens
 from core.state import state
 from core.constants import (
-    STORAGE_THEME, STORAGE_UUID, STORAGE_CREDITS,
-    STORAGE_BONUS_CREDITS, STORAGE_LAST_RESET, STORAGE_REFERRAL_CODE,
-    STORAGE_ONBOARDING_DONE,
+    STORAGE_THEME,
+    STORAGE_UUID,
+    STORAGE_CREDITS,
+    STORAGE_BONUS_CREDITS,
+    STORAGE_LAST_RESET,
+    STORAGE_REFERRAL_CODE,
 )
 from core.styles import section_header, setting_tile
 
@@ -71,9 +74,14 @@ def build_settings_view(
                 page.update()
                 if confirmed and storage:
                     # Wipe ALL storage keys
-                    for key in [STORAGE_UUID, STORAGE_THEME, STORAGE_CREDITS,
-                                STORAGE_BONUS_CREDITS, STORAGE_LAST_RESET,
-                                STORAGE_REFERRAL_CODE, STORAGE_ONBOARDING_DONE]:
+                    for key in [
+                        STORAGE_UUID,
+                        STORAGE_THEME,
+                        STORAGE_CREDITS,
+                        STORAGE_BONUS_CREDITS,
+                        STORAGE_LAST_RESET,
+                        STORAGE_REFERRAL_CODE,
+                    ]:
                         try:
                             await storage.delete(key)
                         except Exception:
@@ -87,6 +95,7 @@ def build_settings_view(
                     )
                     page.snack_bar.open = True
                     page.update()
+
             return _close
 
         dialog = ft.AlertDialog(
@@ -128,47 +137,47 @@ def build_settings_view(
             code = code_field.current.value.strip() if code_field.current else ""
             if not code or len(code) < 6:
                 page.snack_bar = ft.SnackBar(
-                    ft.Text("Code must be at least 6 characters."), duration=3000,
+                    ft.Text("Code must be at least 6 characters."),
+                    duration=3000,
                 )
                 page.snack_bar.open = True
                 page.update()
                 return
             # Register referral via gateway
             try:
-                import httpx
-                from core.constants import API_BASE_URL, APP_SECRET, USER_AGENT
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(
-                        f"{API_BASE_URL}/referrals",
-                        headers={
-                            "X-App-Secret": APP_SECRET,
-                            "User-Agent": USER_AGENT,
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "referrer_uuid": code,
-                            "referred_uuid": state.user_uuid,
-                        },
-                        timeout=10.0,
+                from core.constants import API_BASE_URL
+                from services.api_client import request_with_retry
+
+                resp = await request_with_retry(
+                    "POST",
+                    f"{API_BASE_URL}/referrals",
+                    json={
+                        "referrer_uuid": code,
+                        "referred_uuid": state.user_uuid,
+                    },
+                    timeout=10.0,
+                )
+                if resp.status_code == 201:
+                    new_cap = await credit_service.add_referral_bonus()
+                    state.credits_remaining = await credit_service.get_balance()
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text(f"Bonus applied! Daily cap now {new_cap}"),
+                        duration=3000,
                     )
-                    if resp.status_code == 201:
-                        new_cap = await credit_service.add_referral_bonus()
-                        state.credits_remaining = await credit_service.get_balance()
-                        page.snack_bar = ft.SnackBar(
-                            ft.Text(f"Bonus applied! Daily cap now {new_cap}"),
-                            duration=3000,
-                        )
-                    elif resp.status_code == 409:
-                        page.snack_bar = ft.SnackBar(
-                            ft.Text("Already used this code."), duration=3000,
-                        )
-                    else:
-                        page.snack_bar = ft.SnackBar(
-                            ft.Text("Invalid code. Try again."), duration=3000,
-                        )
+                elif resp.status_code == 409:
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text("Already used this code."),
+                        duration=3000,
+                    )
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text("Invalid code. Try again."),
+                        duration=3000,
+                    )
             except Exception:
                 page.snack_bar = ft.SnackBar(
-                    ft.Text("Network error. Try again."), duration=3000,
+                    ft.Text("Network error. Try again."),
+                    duration=3000,
                 )
 
             dialog.open = False
@@ -233,7 +242,6 @@ def build_settings_view(
                     on_click=lambda e: page.run_task(on_copy_phrase, e),
                 ),
             ),
-
             # ── Credits Section ─────────────────────────────────
             section_header("Credits"),
             setting_tile(
@@ -263,7 +271,6 @@ def build_settings_view(
                     on_click=lambda e: page.run_task(_enter_referral_code, e),
                 ),
             ),
-
             # ── Appearance Section ──────────────────────────────
             section_header("Appearance"),
             ft.Container(
@@ -303,7 +310,6 @@ def build_settings_view(
                     bottom=14,
                 ),
             ),
-
             # ── Data Section ────────────────────────────────────
             section_header("Data"),
             setting_tile(
@@ -312,7 +318,6 @@ def build_settings_view(
                 subtitle="Remove UUID, credits, and cached data",
                 on_click=lambda e: page.run_task(on_clear_data, e),
             ),
-
             # ── Pro Tier Tease ──────────────────────────────────
             section_header("Premium"),
             ft.Container(
@@ -329,12 +334,16 @@ def build_settings_view(
                                     "Spaninsight Pro",
                                     size=tokens.FONT_MD,
                                     weight=ft.FontWeight.W_500,
-                                    color=ft.Colors.with_opacity(0.5, ft.Colors.ON_SURFACE),
+                                    color=ft.Colors.with_opacity(
+                                        0.5, ft.Colors.ON_SURFACE
+                                    ),
                                 ),
                                 ft.Text(
                                     "Zero ads \u2022 Priority AI \u2022 Unlimited credits",
                                     size=tokens.FONT_XS,
-                                    color=ft.Colors.with_opacity(0.35, ft.Colors.ON_SURFACE),
+                                    color=ft.Colors.with_opacity(
+                                        0.35, ft.Colors.ON_SURFACE
+                                    ),
                                 ),
                             ],
                             spacing=tokens.SPACE_XXS,
@@ -369,7 +378,6 @@ def build_settings_view(
                 border_radius=tokens.RADIUS_MD,
                 opacity=0.6,
             ),
-
             # ── About Section ──────────────────────────────────
             section_header("About"),
             setting_tile(

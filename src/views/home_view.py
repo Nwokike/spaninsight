@@ -237,19 +237,27 @@ def build_home_view(
         content=ft.Row(
             controls=[
                 ft.Icon(ft.Icons.BOLT_ROUNDED, size=20, color=theme.ACCENT),
-                ft.Column([
-                    ft.Text("50 Free Credits Daily", size=tokens.FONT_SM, weight="w600"),
-                    ft.Text(
-                        "Each analysis costs 1 credit. Invite friends for +10 bonus credits per referral.",
-                        size=tokens.FONT_XS,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
-                ], spacing=2, expand=True),
+                ft.Column(
+                    [
+                        ft.Text(
+                            "50 Free Credits Daily", size=tokens.FONT_SM, weight=ft.FontWeight.W_600
+                        ),
+                        ft.Text(
+                            "Each analysis costs 1 credit. Invite friends for +10 bonus credits per referral.",
+                            size=tokens.FONT_XS,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                    ],
+                    spacing=2,
+                    expand=True,
+                ),
             ],
             spacing=tokens.SPACE_MD,
             vertical_alignment="center",
         ),
-        padding=ft.Padding(tokens.SPACE_LG, tokens.SPACE_MD, tokens.SPACE_LG, tokens.SPACE_MD),
+        padding=ft.Padding(
+            tokens.SPACE_LG, tokens.SPACE_MD, tokens.SPACE_LG, tokens.SPACE_MD
+        ),
         margin=ft.Margin(tokens.SPACE_LG, 0, tokens.SPACE_LG, tokens.SPACE_LG),
         border_radius=tokens.RADIUS_LG,
         bgcolor=ft.Colors.with_opacity(0.06, theme.ACCENT),
@@ -257,7 +265,15 @@ def build_home_view(
     )
 
     content = ft.Column(
-        controls=[hero, quick_actions, privacy_banner, features, how_it_works, credits_info, ft.Container(height=80)],
+        controls=[
+            hero,
+            quick_actions,
+            privacy_banner,
+            features,
+            how_it_works,
+            credits_info,
+            ft.Container(height=80),
+        ],
         scroll=ft.ScrollMode.AUTO,
         expand=True,
         spacing=0,
@@ -269,7 +285,9 @@ def build_home_view(
         bgcolor=ft.Colors.TRANSPARENT,
         actions=[
             ft.IconButton(
-                icon=ft.Icons.LIGHT_MODE_ROUNDED if page.theme_mode == ft.ThemeMode.DARK else ft.Icons.DARK_MODE_ROUNDED,
+                icon=ft.Icons.LIGHT_MODE_ROUNDED
+                if page.theme_mode == ft.ThemeMode.DARK
+                else ft.Icons.DARK_MODE_ROUNDED,
                 tooltip="Toggle Theme",
                 on_click=lambda e: page.run_task(_toggle_theme, e, page),
             ),
@@ -282,19 +300,25 @@ def build_home_view(
 
     async def _toggle_theme(e, p: ft.Page):
         is_dark = p.theme_mode == ft.ThemeMode.DARK or (
-            p.theme_mode == ft.ThemeMode.SYSTEM and p.platform_brightness == ft.ThemeMode.DARK
+            p.theme_mode == ft.ThemeMode.SYSTEM
+            and p.platform_brightness == ft.Brightness.DARK
         )
         p.theme_mode = ft.ThemeMode.LIGHT if is_dark else ft.ThemeMode.DARK
         state.theme_mode = p.theme_mode
 
         # Persist
         if storage:
-            await storage.set(STORAGE_THEME, "light" if p.theme_mode == ft.ThemeMode.LIGHT else "dark")
+            await storage.set(
+                STORAGE_THEME, "light" if p.theme_mode == ft.ThemeMode.LIGHT else "dark"
+            )
 
         # Update icon directly to avoid full page reload
-        e.control.icon = ft.Icons.LIGHT_MODE_ROUNDED if p.theme_mode == ft.ThemeMode.DARK else ft.Icons.DARK_MODE_ROUNDED
+        e.control.icon = (
+            ft.Icons.LIGHT_MODE_ROUNDED
+            if p.theme_mode == ft.ThemeMode.DARK
+            else ft.Icons.DARK_MODE_ROUNDED
+        )
         p.update()
-
 
     return ft.View(route="/home", appbar=appbar, controls=[content], padding=0)
 

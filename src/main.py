@@ -55,26 +55,55 @@ async def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     state.theme_mode = page.theme_mode
 
-    # Desktop window sizing
+    # Desktop window sizing — mobile-friendly defaults but resizable
     page.window.width = 420
     page.window.height = 820
     page.window.min_width = 360
     page.window.min_height = 600
+    page.window.max_width = 480  # Keep mobile-like proportions on desktop
 
     page.padding = 0
     page.spacing = 0
 
+    # ── Asset Validation ────────────────────────────────────────────
+    import os
+    assets_dir = os.path.join(os.path.dirname(__file__), "assets")
+    for asset in ("icon.png", "logo.png"):
+        if not os.path.exists(os.path.join(assets_dir, asset)):
+            logger.warning("Missing asset: %s — app may display incorrectly", asset)
+
     # ── Error Handler ───────────────────────────────────────────────
     def on_error(e):
         logger.error("Page error: %s", e.data)
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text("Something went wrong. Please try again.", color=ft.Colors.WHITE),
-            bgcolor=ft.Colors.BLACK,
-        )
-        page.snack_bar.open = True
-        page.update()
+        # Only show snackbar if page is still active
+        try:
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text(
+                    "Something went wrong. Please try again.", color=ft.Colors.WHITE
+                ),
+                bgcolor=ft.Colors.BLACK,
+            )
+            page.snack_bar.open = True
+            page.update()
+        except Exception:
+            pass  # Page may already be closed
 
     page.on_error = on_error
+
+    # ── Shutdown Handler ────────────────────────────────────────────
+    async def on_disconnect(e=None):
+        """Flush storage and close HTTP client on app close."""
+        try:
+            await storage.flush()
+        except Exception:
+            pass
+        try:
+            from services.api_client import close_client
+            await close_client()
+        except Exception:
+            pass
+
+    page.on_disconnect = on_disconnect
 
     # ── Initialize Services ─────────────────────────────────
     storage = StorageService(page)
@@ -87,7 +116,8 @@ async def main(page: ft.Page):
     logger.info("User UUID: %s", uuid_service.get_masked_uuid(state.user_uuid))
 
     # Load Theme
-    from core.constants import STORAGE_THEME, STORAGE_ONBOARDING_DONE
+    from core.constants import STORAGE_THEME
+
     try:
         saved_theme = await storage.get(STORAGE_THEME)
         if saved_theme == "dark":
@@ -109,29 +139,34 @@ async def main(page: ft.Page):
     # ── Gateway Health Check (I8) + Version Check (P9) ──────────
     async def _startup_checks():
         from services import ai_service
+
         state.gateway_online = await ai_service.check_health()
         if not state.gateway_online:
             logger.warning("Gateway offline — AI features will use fallbacks")
         # P9: Version check
         try:
-            import httpx
-            from core.constants import API_BASE_URL, APP_SECRET, USER_AGENT, APP_VERSION
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"{API_BASE_URL}/version",
-                    headers={"X-App-Secret": APP_SECRET, "User-Agent": USER_AGENT},
-                    timeout=5.0,
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    min_ver = data.get("min_version", "0.0.0")
-                    if APP_VERSION < min_ver:
-                        page.snack_bar = ft.SnackBar(
-                            ft.Text("A required update is available. Please update Spaninsight."),
-                            duration=8000,
-                        )
-                        page.snack_bar.open = True
-                        page.update()
+            from core.constants import API_BASE_URL, APP_CLIENT_ID, USER_AGENT, APP_VERSION
+            from core.utils import parse_version
+            from services.api_client import get_client
+
+            client = get_client()
+            resp = await client.get(
+                f"{API_BASE_URL}/version",
+                headers={"X-App-Secret": APP_CLIENT_ID, "User-Agent": USER_AGENT},
+                timeout=5.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                min_ver = data.get("min_version", "0.0.0")
+                if parse_version(APP_VERSION) < parse_version(min_ver):
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text(
+                            "A required update is available. Please update Spaninsight."
+                        ),
+                        duration=8000,
+                    )
+                    page.snack_bar.open = True
+                    page.update()
         except Exception:
             pass  # Non-blocking
 
@@ -258,6 +293,12 @@ async def main(page: ft.Page):
             page.views.append(view)
             nav_bar.selected_index = 4
 
+        elif route == "/splash":
+            from views.splash_view import build_splash_view
+
+            view = build_splash_view()
+            page.views.append(view)
+
         else:
             from views.home_view import build_home_view
 
@@ -269,8 +310,8 @@ async def main(page: ft.Page):
             )
             page.views.append(view)
 
-        # Attach nav bar to the current view
-        if page.views:
+        # Attach nav bar to the current view (skip splash)
+        if page.views and route != "/splash":
             page.views[-1].navigation_bar = nav_bar
 
         page.update()
@@ -287,8 +328,13 @@ async def main(page: ft.Page):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    # ── Initial Route ───────────────────────────────────────
-    await navigate("/home")
+    # ── Splash → Home ────────────────────────────────────────
+    async def splash_complete():
+        await asyncio.sleep(2)
+        await navigate("/home")
+
+    await navigate("/splash")
+    page.run_task(splash_complete)
 
 
 # ── Entry Point ─────────────────────────────────────────────────────

@@ -39,7 +39,9 @@ def validate_file(file_path: str) -> None:
     try:
         size = os.path.getsize(file_path)
     except OSError:
-        raise FileValidationError("Could not read file. It may have been moved or deleted.")
+        raise FileValidationError(
+            "Could not read file. It may have been moved or deleted."
+        )
 
     if size > MAX_FILE_SIZE_BYTES:
         size_mb = size / (1024 * 1024)
@@ -78,13 +80,6 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
                 df = pd.read_json(file_path)
         elif ext == ".xlsx":
             df = pd.read_excel(file_path, engine="openpyxl")
-        elif ext == ".xls":
-            # Old Excel format requires xlrd engine
-            try:
-                df = pd.read_excel(file_path, engine="xlrd")
-            except ImportError:
-                # xlrd not installed — try openpyxl as fallback (won't work for true .xls)
-                df = pd.read_excel(file_path, engine="openpyxl")
         else:
             raise FileValidationError(f"Unsupported format: {ext}")
 
@@ -126,11 +121,12 @@ def get_data_summary(df: pd.DataFrame) -> dict:
     # Limit to first 25 columns to avoid massive payloads for wide datasets
     target_cols = df.columns[:25]
     for col in target_cols:
+        series = df[col].apply(lambda x: ", ".join(x) if isinstance(x, (list, tuple)) else x)
         col_info = {
             "name": col,
             "dtype": str(df[col].dtype),
             "nulls": int(df[col].isnull().sum()),
-            "unique": int(df[col].nunique()),
+            "unique": int(series.nunique()),
         }
         # Add basic stats for numeric
         if pd.api.types.is_numeric_dtype(df[col]):
@@ -142,7 +138,7 @@ def get_data_summary(df: pd.DataFrame) -> dict:
             }
         else:
             # Top values for categorical
-            top = df[col].value_counts().head(3)
+            top = series.value_counts().head(3)
             col_info["top_values"] = {str(k)[:50]: int(v) for k, v in top.items()}
         cols.append(col_info)
     summary["columns"] = cols
@@ -153,7 +149,9 @@ def get_data_summary(df: pd.DataFrame) -> dict:
         sub_df = sub_df.copy()
         for col in sub_df.columns:
             if sub_df[col].dtype == "object":
-                sub_df[col] = sub_df[col].apply(lambda x: str(x)[:100] + "..." if len(str(x)) > 100 else x)
+                sub_df[col] = sub_df[col].apply(
+                    lambda x: str(x)[:100] + "..." if len(str(x)) > 100 else x
+                )
         return sub_df.to_dict(orient="records")
 
     try:

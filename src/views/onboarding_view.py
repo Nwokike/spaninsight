@@ -57,39 +57,52 @@ def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.
     ]
 
     def _build_slide(s: dict) -> ft.Column:
-        return ft.Column([
-            ft.Container(height=80),
-            ft.Container(
-                content=ft.Icon(s["icon"], size=64, color=s["color"]),
-                width=120, height=120, border_radius=60,
-                bgcolor=ft.Colors.with_opacity(0.1, s["color"]),
-                alignment=ft.Alignment.CENTER,
-            ),
-            ft.Container(height=32),
-            ft.Text(s["title"], size=24, weight="bold", text_align="center"),
-            ft.Container(height=12),
-            ft.Text(
-                s["body"], size=14,
-                color=ft.Colors.ON_SURFACE_VARIANT,
-                text_align="center",
-            ),
-        ], horizontal_alignment="center", spacing=0)
+        return ft.Column(
+            [
+                ft.Container(height=80),
+                ft.Container(
+                    content=ft.Icon(s["icon"], size=64, color=s["color"]),
+                    width=120,
+                    height=120,
+                    border_radius=60,
+                    bgcolor=ft.Colors.with_opacity(0.1, s["color"]),
+                    alignment=ft.Alignment.CENTER,
+                ),
+                ft.Container(height=32),
+                ft.Text(s["title"], size=24, weight="bold", text_align="center"),
+                ft.Container(height=12),
+                ft.Text(
+                    s["body"],
+                    size=14,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    text_align="center",
+                ),
+            ],
+            horizontal_alignment="center",
+            spacing=0,
+        )
 
     def _build_indicators() -> list[ft.Control]:
         dots = []
         for i in range(len(slides)):
-            dots.append(ft.Container(
-                width=10 if i == current_page["index"] else 6,
-                height=6,
-                border_radius=3,
-                bgcolor=theme.PRIMARY if i == current_page["index"] else ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE),
-                animate=ft.Animation(200, "easeOut"),
-            ))
+            dots.append(
+                ft.Container(
+                    width=10 if i == current_page["index"] else 6,
+                    height=6,
+                    border_radius=3,
+                    bgcolor=theme.PRIMARY
+                    if i == current_page["index"]
+                    else ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE),
+                    animate=ft.Animation(200, "easeOut"),
+                )
+            )
         return dots
 
     def _update():
         if slide_container.current:
-            slide_container.current.content = _build_slide(slides[current_page["index"]])
+            slide_container.current.content = _build_slide(
+                slides[current_page["index"]]
+            )
         if indicator_row.current:
             indicator_row.current.controls = _build_indicators()
         page.update()
@@ -114,36 +127,52 @@ def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.
     return ft.View(
         route="/onboarding",
         controls=[
-            ft.Column([
-                ft.Row([
-                    ft.TextButton("Skip", on_click=on_skip,
-                                  style=ft.ButtonStyle(color=ft.Colors.ON_SURFACE_VARIANT)),
-                ], alignment="end"),
-                ft.Container(
-                    ref=slide_container,
-                    content=_build_slide(slides[0]),
-                    expand=True,
-                    padding=ft.Padding(32, 0, 32, 0),
-                ),
-                ft.Row(ref=indicator_row, controls=_build_indicators(),
-                       alignment="center", spacing=6),
-                ft.Container(height=24),
-                ft.Container(
-                    content=ft.Button(
-                        "Get Started" if is_last else "Next",
-                        icon=ft.Icons.ARROW_FORWARD_ROUNDED,
-                        on_click=on_next,
-                        width=200, height=48,
-                        style=ft.ButtonStyle(
-                            bgcolor=theme.PRIMARY,
-                            color=ft.Colors.WHITE,
-                            shape=ft.RoundedRectangleBorder(radius=24),
-                        ),
+            ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.TextButton(
+                                "Skip",
+                                on_click=on_skip,
+                                style=ft.ButtonStyle(
+                                    color=ft.Colors.ON_SURFACE_VARIANT
+                                ),
+                            ),
+                        ],
+                        alignment="end",
                     ),
-                    alignment=ft.Alignment.CENTER,
-                ),
-                ft.Container(height=48),
-            ], expand=True),
+                    ft.Container(
+                        ref=slide_container,
+                        content=_build_slide(slides[0]),
+                        expand=True,
+                        padding=ft.Padding(32, 0, 32, 0),
+                    ),
+                    ft.Row(
+                        ref=indicator_row,
+                        controls=_build_indicators(),
+                        alignment="center",
+                        spacing=6,
+                    ),
+                    ft.Container(height=24),
+                    ft.Container(
+                        content=ft.FilledButton(
+                            "Get Started" if is_last else "Next",
+                            icon=ft.Icons.ARROW_FORWARD_ROUNDED,
+                            on_click=on_next,
+                            width=200,
+                            height=48,
+                            style=ft.ButtonStyle(
+                                bgcolor=theme.PRIMARY,
+                                color=ft.Colors.WHITE,
+                                shape=ft.RoundedRectangleBorder(radius=24),
+                            ),
+                        ),
+                        alignment=ft.Alignment.CENTER,
+                    ),
+                    ft.Container(height=48),
+                ],
+                expand=True,
+            ),
         ],
         padding=0,
     )

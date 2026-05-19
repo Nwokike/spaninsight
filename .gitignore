@@ -33,7 +33,7 @@ desktop.ini
 .env.local
 
 # UV
-uv.lock
+# uv.lock is committed for reproducible builds
 
 # Antigravity
 .antigravityignore
@@ -41,4 +41,3 @@ uv.lock
 # Temp
 scratch/
 *.log
-release_notes.md

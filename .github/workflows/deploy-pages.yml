@@ -2,6 +2,15 @@ name: Deploy to GitHub Pages
 
 on:
   workflow_dispatch:
+    inputs:
+      build_version:
+        description: "Build version"
+        required: false
+        default: "1.0.0"
+      build_number:
+        description: "Build number"
+        required: false
+        default: "1"
 
 # Required permissions for GitHub Pages
 permissions:
@@ -31,6 +40,9 @@ jobs:
       
       - name: Setup Python & uv
         uses: astral-sh/setup-uv@v6
+        
+      - name: Lint with Ruff
+        run: uv run ruff check src/
         
       - name: Build Web App
         # Custom domain (app.spaninsight.com) = root base URL
