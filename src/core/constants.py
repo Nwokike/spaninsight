@@ -12,7 +12,7 @@ API_HEALTH_ENDPOINT = f"{API_BASE_URL}/health"
 API_CHAT_ENDPOINT = f"{API_BASE_URL}/chat"
 
 # Headers required by the gateway's security gate
-APP_SECRET = "spaninsight-mobile-v1"
+APP_CLIENT_ID = "spaninsight-mobile-v1"
 APP_VERSION = "1.0.0"
 USER_AGENT = f"SpaninsightApp/{APP_VERSION}"
 
@@ -27,7 +27,7 @@ TASK_VISION = "vision"
 # Modern phones have 4GB+ RAM. pandas can handle ~100MB CSVs comfortably.
 MAX_FILE_SIZE_MB = 100
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-ALLOWED_EXTENSIONS = {".csv", ".json",".xlsx", ".xls"}
+ALLOWED_EXTENSIONS = {".csv", ".json", ".xlsx"}
 
 # ── Data Display ────────────────────────────────────────────────────
 DATA_PREVIEW_ROWS = 50
@@ -66,6 +66,59 @@ BLOCKED_TERMS = [
     "import requests",
     "import urllib",
     "import webbrowser",
+    # Additional bypass prevention
+    "getattr(",
+    "setattr(",
+    "delattr(",
+    "importlib",
+    "__builtins__",
+    "__subclasses__",
+    "__globals__",
+    "__code__",
+    "__class__",
+    "breakpoint",
+    "import io",
+    "import pickle",
+    "import marshal",
+    "import code",
+    # Object introspection bypass vectors
+    ".__bases__",
+    ".__mro__",
+    ".__init__",
+    ".__new__",
+    ".__reduce__",
+    ".__reduce_ex__",
+    ".__getattribute__",
+    "object()",
+    "type(",
+    "hasattr(",
+    "dir(",
+    "vars(",
+    "help(",
+    # Pandas file/network I/O
+    "read_pickle",
+    "to_pickle",
+    "read_sql",
+    "to_sql",
+    "read_hdf",
+    "to_hdf",
+    "read_feather",
+    "to_feather",
+    "read_parquet",
+    "to_parquet",
+    "read_clipboard",
+    "to_clipboard",
+    "read_html",
+    "read_stata",
+    "read_spss",
+    "read_sas",
+    # NumPy file I/O
+    "np.load(",
+    "np.save(",
+    "np.savetxt(",
+    "np.loadtxt(",
+    # Matplotlib file I/O
+    "plt.savefig(",
 ]
 
 SANDBOX_TIMEOUT_SEC = 10
@@ -77,4 +130,3 @@ STORAGE_CREDITS = "spaninsight_credits"
 STORAGE_BONUS_CREDITS = "spaninsight_bonus_credits"
 STORAGE_LAST_RESET = "spaninsight_last_reset"
 STORAGE_REFERRAL_CODE = "spaninsight_referral_code"
-STORAGE_ONBOARDING_DONE = "spaninsight_onboarding_done"
