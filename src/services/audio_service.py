@@ -118,7 +118,14 @@ class AudioService:
                 self._page.update()
 
                 if on_auto_stop and result:
-                    on_auto_stop(result)
+                    # C4 FIX: Check if callback is async and handle appropriately
+                    if asyncio.iscoroutinefunction(on_auto_stop):
+                        await on_auto_stop(result)
+                    else:
+                        callback_result = on_auto_stop(result)
+                        # If it returned a coroutine (e.g. from page.run_task), await it
+                        if asyncio.iscoroutine(callback_result):
+                            await callback_result
         except asyncio.CancelledError:
             pass  # Manually stopped before timeout — expected
 
@@ -137,17 +144,46 @@ class AudioService:
             self._recording = False
             logger.info("Audio recording stopped, saved to: %s", saved_path)
 
-            # If saved_path is a blob URL (web), we can't read it from Python.
-            # We try to use our local _output_path instead.
-            file_path = self._output_path
-            if saved_path and not saved_path.startswith("blob:"):
-                file_path = Path(saved_path)
+            data = None
+            # On Flet Web client-side (Pyodide), stop_recording() returns a browser-local Blob URL.
+            # We fetch its content directly within the browser using JS APIs.
+            if saved_path and saved_path.startswith("blob:"):
+                logger.info(
+                    "Detected browser blob URL: %s. Fetching via JS...", saved_path
+                )
+                try:
+                    from js import fetch, Uint8Array
 
-            logger.info("Attempting to read audio data from: %s", file_path)
-            if file_path and file_path.exists():
-                data = file_path.read_bytes()
-                logger.info("Read %d bytes of audio data", len(data))
+                    response = await fetch(saved_path)
+                    array_buffer = await response.arrayBuffer()
+                    uint8_array = Uint8Array.new(array_buffer)
+                    try:
+                        data = uint8_array.tobytes()
+                    except AttributeError:
+                        data = bytes(uint8_array)
+                    logger.info(
+                        "Successfully fetched %d bytes from browser blob URL", len(data)
+                    )
+                except ImportError:
+                    logger.error(
+                        "js.fetch not available (not running under Pyodide WASM)"
+                    )
+                except Exception as js_err:
+                    logger.error("Failed to fetch browser blob via Pyodide: %s", js_err)
+            else:
+                # Native desktop/mobile flow
+                file_path = self._output_path
+                if saved_path:
+                    file_path = Path(saved_path)
 
+                logger.info(
+                    "Attempting to read audio data from local path: %s", file_path
+                )
+                if file_path and file_path.exists():
+                    data = file_path.read_bytes()
+                    logger.info("Read %d bytes of audio data", len(data))
+
+            if data is not None:
                 # Enforce gateway's 25MB limit
                 if len(data) > MAX_AUDIO_SIZE_BYTES:
                     logger.warning(
@@ -155,7 +191,12 @@ class AudioService:
                         len(data),
                         MAX_AUDIO_SIZE_BYTES,
                     )
-                    file_path.unlink(missing_ok=True)
+                    if not (saved_path and saved_path.startswith("blob:")):
+                        file_path = (
+                            Path(saved_path) if saved_path else self._output_path
+                        )
+                        if file_path and file_path.exists():
+                            file_path.unlink(missing_ok=True)
                     self._page.snack_bar = ft.SnackBar(
                         content=ft.Text(
                             "Voice note too large. Please keep it under 25MB."
@@ -166,10 +207,14 @@ class AudioService:
                     self._page.update()
                     return None
 
-                file_path.unlink(missing_ok=True)
+                # Clean up local file for native platforms
+                if not (saved_path and saved_path.startswith("blob:")):
+                    file_path = Path(saved_path) if saved_path else self._output_path
+                    if file_path and file_path.exists():
+                        file_path.unlink(missing_ok=True)
                 return (data, "audio/wav")
             else:
-                logger.error("Audio file not found at %s", file_path)
+                logger.error("Audio data could not be retrieved")
         except Exception as e:
             logger.error("Failed to stop recording: %s", e)
             self._recording = False

@@ -37,6 +37,19 @@ class AdService:
     BANNER_ID_ANDROID_PROD = ""
     INTERSTITIAL_ID_ANDROID_PROD = ""
 
+    def __init__(self, page: ft.Page):
+        # S7 FIX: Fail-fast if USE_TEST_IDS is off but production IDs are empty
+        if not self.USE_TEST_IDS:
+            assert self.BANNER_ID_ANDROID_PROD, (
+                "BANNER_ID_ANDROID_PROD must be set before production release"
+            )
+            assert self.INTERSTITIAL_ID_ANDROID_PROD, (
+                "INTERSTITIAL_ID_ANDROID_PROD must be set before production release"
+            )
+        self.page = page
+        self.interstitial = None
+        self._on_close: Optional[Callable] = None
+
     @property
     def banner_id(self) -> str:
         if self.USE_TEST_IDS:
@@ -48,11 +61,6 @@ class AdService:
         if self.USE_TEST_IDS:
             return self.INTERSTITIAL_ID_ANDROID_TEST
         return self.INTERSTITIAL_ID_ANDROID_PROD
-
-    def __init__(self, page: ft.Page):
-        self.page = page
-        self.interstitial = None
-        self._on_close: Optional[Callable] = None
 
     def _is_mobile(self) -> bool:
         try:

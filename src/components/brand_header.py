@@ -22,15 +22,17 @@ def build_brand_header(
     ]
 
     if show_tagline:
-        controls.extend([
-            ft.Container(height=tokens.SPACE_SM),
-            ft.Text(
-                "Autonomous Data Intelligence for Everyone",
-                size=tokens.FONT_SM,
-                color=ft.Colors.ON_SURFACE_VARIANT,
-                text_align=ft.TextAlign.CENTER,
-            ),
-        ])
+        controls.extend(
+            [
+                ft.Container(height=tokens.SPACE_SM),
+                ft.Text(
+                    "Autonomous Data Intelligence for Everyone",
+                    size=tokens.FONT_SM,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+            ]
+        )
 
     if spacing_below:
         controls.append(ft.Container(height=tokens.SPACE_XL))

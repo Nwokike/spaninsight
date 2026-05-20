@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
+import json
+from typing import Callable
+
 import flet as ft
 
 from core import theme, tokens
@@ -13,8 +17,8 @@ from components.brand_header import build_brand_header
 
 def build_home_view(
     page: ft.Page,
-    on_import_file: callable,
-    on_navigate: callable,
+    on_import_file: Callable,
+    on_navigate: Callable,
     storage=None,
 ) -> ft.View:
     """Build the Home landing tab."""
@@ -39,14 +43,14 @@ def build_home_view(
                             title="Import Data",
                             subtitle="CSV or Excel",
                             color=theme.PRIMARY,
-                            on_click=on_import_file,
+                            on_click=lambda e: on_import_file(e, autopilot=False),
                         ),
                         _action_card(
                             icon=ft.Icons.ROCKET_LAUNCH_ROUNDED,
                             title="Autopilot",
                             subtitle="AI auto-report",
                             color=theme.ACCENT,
-                            on_click=on_import_file,
+                            on_click=lambda e: on_import_file(e, autopilot=True),
                         ),
                     ],
                     spacing=tokens.SPACE_MD,
@@ -163,10 +167,10 @@ def build_home_view(
                     theme.ACCENT,
                 ),
                 _feature_card(
-                    ft.Icons.PICTURE_AS_PDF_ROUNDED,
+                    ft.Icons.SHARE_ROUNDED,
                     "Export & Share",
-                    "Download your report as PDF or PowerPoint. Or share a "
-                    "public link — anyone can view your insights in a browser.",
+                    "Share a public link to your interactive web report. "
+                    "Anyone can view your insights or export to PDF/PPTX from their browser.",
                     theme.SUCCESS,
                 ),
                 _feature_card(
@@ -199,7 +203,9 @@ def build_home_view(
                 ft.Container(height=tokens.SPACE_SM),
                 _step_row("1", "Import", "Upload a CSV or Excel file (up to 100MB)"),
                 _step_row("2", "Analyze", "AI suggests insights or use Autopilot"),
-                _step_row("3", "Export", "Download PDF, PPTX, or share a public link"),
+                _step_row(
+                    "3", "Share", "Get a public link to your interactive web report"
+                ),
             ],
             spacing=tokens.SPACE_MD,
         ),
@@ -219,7 +225,9 @@ def build_home_view(
                 ft.Column(
                     [
                         ft.Text(
-                            "50 Free Credits Daily", size=tokens.FONT_SM, weight=ft.FontWeight.W_600
+                            "50 Free Credits Daily",
+                            size=tokens.FONT_SM,
+                            weight=ft.FontWeight.W_600,
                         ),
                         ft.Text(
                             "Each analysis costs 1 credit. Invite friends for +10 bonus credits per referral.",
@@ -243,10 +251,168 @@ def build_home_view(
         border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.ACCENT)),
     )
 
+    # ── Recent Analyses ─────────────────────────────────────────────
+    recent_col = ft.Ref[ft.Column]()
+
+    async def load_recent(p: ft.Page):
+        if not storage:
+            return
+        try:
+            recent_str = await storage.get("recent_analyses")
+            recent = json.loads(recent_str) if recent_str else []
+        except Exception:
+            recent = []
+
+        if not recent:
+            if recent_col.current:
+                recent_col.current.controls = [
+                    ft.Text(
+                        "No recent analyses yet. Import a dataset to get started!",
+                        size=tokens.FONT_XS,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        italic=True,
+                    )
+                ]
+                recent_col.current.update()
+            return
+
+        controls = []
+
+        async def on_delete_session(session_to_delete, e):
+            try:
+                recent_str = await storage.get("recent_analyses")
+                cur_recent = json.loads(recent_str) if recent_str else []
+                cur_recent = [
+                    s
+                    for s in cur_recent
+                    if s.get("file_path") != session_to_delete.get("file_path")
+                ]
+                await storage.set("recent_analyses", json.dumps(cur_recent))
+                # Reload list
+                page.run_task(load_recent, page)
+            except Exception:
+                pass
+
+        def make_delete_handler(session_item):
+            return lambda e: page.run_task(on_delete_session, session_item, e)
+
+        def make_restore_handler(session_item):
+            def _restore(e):
+                state.session_to_restore = session_item
+                on_navigate("/analysis")
+
+            return _restore
+
+        for session in recent:
+            time_val = session.get("timestamp", 0)
+            try:
+                dt = datetime.datetime.fromtimestamp(time_val)
+                time_str = dt.strftime("%b %d, %Y %I:%M %p")
+            except Exception:
+                time_str = "Recent"
+
+            controls.append(
+                ft.Container(
+                    content=ft.Row(
+                        controls=[
+                            ft.Icon(
+                                ft.Icons.ANALYTICS_ROUNDED, color=theme.PRIMARY, size=22
+                            ),
+                            ft.Column(
+                                controls=[
+                                    ft.Text(
+                                        session.get("df_name", "Dataset"),
+                                        size=tokens.FONT_SM,
+                                        weight=ft.FontWeight.W_600,
+                                    ),
+                                    ft.Text(
+                                        f"{session.get('df_rows', 0):,} rows | {session.get('df_cols', 0)} cols | {time_str}",
+                                        size=tokens.FONT_XS,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    ),
+                                ],
+                                spacing=2,
+                                expand=True,
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                                icon_color=theme.ERROR,
+                                tooltip="Delete Session",
+                                on_click=make_delete_handler(session),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    padding=12,
+                    border_radius=12,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    on_click=make_restore_handler(session),
+                    ink=True,
+                )
+            )
+
+        if recent_col.current:
+            recent_col.current.controls = controls
+            recent_col.current.update()
+
+    recent_section = ft.Container(
+        content=ft.Column(
+            controls=[
+                ft.Text(
+                    "Recent Analyses",
+                    size=tokens.FONT_MD,
+                    weight=ft.FontWeight.W_600,
+                ),
+                ft.Container(height=tokens.SPACE_SM),
+                ft.Column(
+                    ref=recent_col,
+                    spacing=8,
+                    controls=[ft.ProgressRing(width=20, height=20, stroke_width=2)],
+                ),
+            ],
+            spacing=0,
+        ),
+        padding=ft.Padding(
+            left=tokens.SPACE_LG,
+            right=tokens.SPACE_LG,
+            top=0,
+            bottom=tokens.SPACE_LG,
+        ),
+    )
+
+    # ── Offline warning banner ──────────────────────────────────────
+    offline_banner = ft.Container(
+        content=ft.Row(
+            controls=[
+                ft.Icon(
+                    ft.Icons.WIFI_OFF_ROUNDED,
+                    size=tokens.ICON_SM,
+                    color=theme.WARNING,
+                ),
+                ft.Text(
+                    "Gateway offline — using local analytical fallbacks",
+                    size=tokens.FONT_XS,
+                    weight=ft.FontWeight.W_500,
+                ),
+            ],
+            spacing=tokens.SPACE_SM,
+            alignment=ft.MainAxisAlignment.CENTER,
+        ),
+        padding=10,
+        bgcolor=ft.Colors.with_opacity(0.1, theme.WARNING),
+        border=ft.Border(
+            bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.2, theme.WARNING))
+        ),
+        visible=not state.gateway_online,
+    )
+
     content = ft.Column(
         controls=[
+            offline_banner,
             hero,
             quick_actions,
+            recent_section,
             privacy_banner,
             features,
             how_it_works,
@@ -299,6 +465,7 @@ def build_home_view(
         )
         p.update()
 
+    page.run_task(load_recent, page)
     return ft.View(route="/home", appbar=appbar, controls=[content], padding=0)
 
 

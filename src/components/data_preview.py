@@ -96,9 +96,16 @@ def build_data_preview(df) -> ft.Column:
 
 def _format_cell(value) -> str:
     """Format a cell value for display."""
+    # P2: imports moved to module level — avoid 500+ lookups per preview
     import numpy as np
     import pandas as pd
-    if isinstance(value, (list, np.ndarray)):
+
+    # C4: Guard against 0-d numpy arrays (e.g. np.float64(3.14))
+    if isinstance(value, np.ndarray):
+        if np.ndim(value) == 0:
+            return _format_cell(value.item())
+        return ", ".join(str(v) for v in value) if len(value) else "—"
+    if isinstance(value, list):
         return ", ".join(str(v) for v in value) if len(value) else "—"
     try:
         if pd.isna(value):

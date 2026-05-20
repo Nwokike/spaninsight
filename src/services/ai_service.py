@@ -41,8 +41,8 @@ _GENERIC_BLOCK_RE = re.compile(r"```\s*(.*?)\s*```", re.DOTALL)
 
 # Timeouts per task type matching the gateway's processing scale
 _TIMEOUTS = {
-    TASK_SUGGEST: 35.0,     # Increased to accommodate richer parallel suggestions
-    TASK_CODE: 60.0,        # Increased for unconstrained reasoning execution
+    TASK_SUGGEST: 35.0,  # Increased to accommodate richer parallel suggestions
+    TASK_CODE: 60.0,  # Increased for unconstrained reasoning execution
     TASK_INTERPRET: 25.0,
     TASK_VISION: 45.0,
     TASK_AUDIO: 30.0,
@@ -101,7 +101,11 @@ async def analyze_image(image_bytes: bytes, mime_type: str) -> str:
         data = await _call_gateway_raw(payload, timeout=40.0)
         content = _extract_content(data)
         if content:
-            logger.info("Spaninsight Eye: described %d bytes image → %d chars", len(image_bytes), len(content))
+            logger.info(
+                "Spaninsight Eye: described %d bytes image → %d chars",
+                len(image_bytes),
+                len(content),
+            )
             return content
         return "[Image analysis failed — no description returned]"
     except Exception as e:
@@ -137,7 +141,11 @@ async def transcribe_audio(audio_bytes: bytes, mime_type: str) -> str:
             transcript = _extract_content(data)
 
         if transcript:
-            logger.info("Spaninsight Voice: transcribed %d bytes audio → '%s'", len(audio_bytes), transcript[:80])
+            logger.info(
+                "Spaninsight Voice: transcribed %d bytes audio → '%s'",
+                len(audio_bytes),
+                transcript[:80],
+            )
             return transcript
         return "[Transcription returned empty result]"
 
@@ -149,13 +157,47 @@ async def transcribe_audio(audio_bytes: bytes, mime_type: str) -> str:
 # ── Standard AI Endpoints ───────────────────────────────────────────
 
 
+def _build_mcp_prompt_segment() -> str:
+    """Build a system prompt segment describing connected and enabled MCP servers and tools."""
+    from core.state import state
+
+    if not state.mcp_servers:
+        return ""
+
+    has_active = False
+    segment = "\n\nAvailable remote Model Context Protocol (MCP) servers and tools:\n"
+    segment += "You can invoke these tools in your python code using `mcp.call_tool(server_name, tool_name, arguments)`.\n"
+    segment += "Always check that the server name and tool name match exactly. The `arguments` must be a dictionary matching the tool's parameter schema.\n"
+    for srv in state.mcp_servers:
+        if not srv.get("enabled", True):
+            continue
+
+        enabled_tools = [t for t in srv.get("tools", []) if t.get("enabled", True)]
+        if not enabled_tools:
+            continue
+
+        has_active = True
+        segment += f"- Server '{srv['name']}':\n"
+        for tool in enabled_tools:
+            desc = tool.get("description", "").replace("\n", " ")
+            segment += f"  * Tool '{tool['name']}': {desc}\n"
+            if "inputSchema" in tool:
+                props = tool["inputSchema"].get("properties", {})
+                segment += f"    Parameters: {json.dumps(props, default=str)}\n"
+
+    if not has_active:
+        return ""
+    return segment
+
+
 async def describe_dataset(schema_json: dict) -> str:
     """Block 0 describe: AI reads the schema and describes the dataset."""
     system_prompt = (
         "You are an expert data science director. Given a comprehensive dataset schema "
         "with structural details and distribution statistics, provide a professional, "
-        "thorough overview detailing what the data signifies, what fields are highly notable, "
-        "and the macro domains it represents. Do NOT use markdown. Write as clear, cohesive prose."
+        "highly concise overview of what the data signifies and the macro domains it represents. "
+        "Do NOT use any markdown (no bold, no italics, no bullet points, no headers). "
+        "Write strictly as clear, plain-text prose, limited to at most 2 to 3 sentences."
     )
     messages = [
         {"role": "system", "content": system_prompt},
@@ -181,8 +223,9 @@ async def describe_result(
     system_prompt = (
         "You are an expert data analyst. Describe what this specific data analysis "
         "execution result establishes. Interpret anomalies, specific distributions, exact "
-        "numerical indices, and structural trends present in the text output/logs. "
-        "Do NOT use markdown. Provide plain text analytical findings."
+        "numerical indices, and structural trends. "
+        "Do NOT use any markdown (no bold, no italics, no bullet points, no headers). "
+        "Write strictly as clear, plain-text analytical findings, limited to at most 2 to 3 sentences."
     )
     context = (
         f"Dataset: {initial_description}\n\n"
@@ -220,7 +263,7 @@ async def suggest(
         "Return exclusively a valid, raw JSON array of objects with zero conversational wrappers. "
         "Each object must contain EXACTLY these keys:\n"
         '- "label": concise descriptive title (max 5 words)\n'
-        '- "icon": one relevant emoji\n'
+        '- "icon": "emoji" (always double-quoted emoji character)\n'
         '- "prompt": full structural instruction used to generate the required pandas/matplotlib execution block\n'
         "Do not include code fences, preamble, or conversational notes outside the JSON array."
     )
@@ -241,25 +284,41 @@ async def suggest(
         data = await _call_gateway(TASK_SUGGEST, messages)
         content = _extract_content(data)
         cleaned = _extract_block_by_pattern(content, is_json=True)
+        # Robustly auto-quote unquoted emojis for the "icon" key if the AI forgot quotes
+        cleaned = re.sub(r'"icon"\s*:\s*([^"\s,{}]+)', r'"icon": "\1"', cleaned)
         suggestions = json.loads(cleaned)
         if isinstance(suggestions, list):
             return suggestions  # No artificial slice applied
         return []
     except Exception as e:
-        logger.error("Suggest failed: %s. Raw text was: %s", e, content if 'content' in locals() else '')
+        logger.error(
+            "Suggest failed: %s. Raw text was: %s",
+            e,
+            content if "content" in locals() else "",
+        )
         return fallback_suggestions()
 
 
 async def generate_code(prompt: str, schema_json: dict) -> str:
     """Send prompt to code route using full uncut dataset schema statistics."""
     # NO SLICING/SLIMMING SCHEMA: Send full schema for perfect reasoning precision
+    mcp_segment = _build_mcp_prompt_segment()
     system_prompt = (
         "You are an expert Python core data engineer. Generate optimal, safe pandas and matplotlib "
         "code blocks to analyze the loaded DataFrame `df` according to the user's explicit request.\n\n"
+        "CRITICAL — ONLY these 3 libraries are available:\n"
+        "  1. pandas (import as pd)\n"
+        "  2. numpy  (import as np)\n"
+        "  3. matplotlib.pyplot (import as plt)\n\n"
+        "STRICTLY FORBIDDEN — do NOT import or use ANY of these (they will cause execution failure):\n"
+        "  seaborn, sns, scipy, sklearn, statsmodels, plotly, pingouin, lifelines, any other library.\n"
+        "  If you need heatmap → use plt.imshow() or plt.matshow() with pandas/numpy.\n"
+        "  If you need regression → use np.polyfit() or np.linalg.lstsq().\n"
+        "  If you need PCA → use np.linalg.eigh() on the covariance matrix.\n"
+        "  If you need statistical tests → use numpy (np.mean, np.std, np.corrcoef, etc.).\n\n"
         "Execution Framework Rules:\n"
         "- The DataFrame is pre-loaded as global variable `df`. Do NOT mock, download, or re-read data files.\n"
-        "- Available libraries: pandas (as pd), numpy (as np), matplotlib.pyplot (as plt)\n"
-        "- Do NOT use seaborn (sns), plotly, or any other external libraries. Stick exclusively to matplotlib.\n"
+        "- For statistical calculations (e.g. regressions, curve fitting, trend lines, statistical indices, correlations), write them using numpy (e.g. np.polyfit, np.cov, np.corrcoef) or pandas (e.g. df.corr, df.describe, df.cov). This ensures 100% Android mobile compatibility.\n"
         "- For plotting, format with clean parameters and always call plt.tight_layout() before completion.\n"
         "- For plotting, always check data dimensions before passing labels.\n"
         "- If you generate labels for boxplots, ensure the length of 'labels' exactly matches the number of columns plotted.\n"
@@ -268,7 +327,8 @@ async def generate_code(prompt: str, schema_json: dict) -> str:
         "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
         "- Do NOT invoke interactive methods like plt.show() or object inspectors.\n"
         "- Do NOT engage in file system operations or network activities.\n"
-        "- Return only functional Python code. No introductory remarks, conversational wrappers, or markdown text.\n\n"
+        "- Return only functional Python code. No introductory remarks, conversational wrappers, or markdown text."
+        f"{mcp_segment}\n\n"
         f"Complete Dataset Metric Schema:\n{json.dumps(schema_json, default=str)}"
     )
 
@@ -282,11 +342,138 @@ async def generate_code(prompt: str, schema_json: dict) -> str:
         content = _extract_content(data)
         code = _extract_block_by_pattern(content, is_json=False)
         if not code.strip():
-            logger.error("Code generation returned empty payload. Raw content context: %s", str(data)[:250])
+            logger.error(
+                "Code generation returned empty payload. Raw content context: %s",
+                str(data)[:250],
+            )
         return code
     except Exception as e:
         logger.error("Code generation failed: %s", e)
         return ""
+
+
+async def generate_corrected_code(
+    prompt: str,
+    bad_code: str,
+    error_message: str,
+    schema_json: dict,
+) -> str:
+    """Send failing code and traceback to the gateway to generate corrected, safe Python code."""
+    mcp_segment = _build_mcp_prompt_segment()
+    system_prompt = (
+        "You are an expert Python data debugging engineer. You will be given the original "
+        "user prompt, the failing Python code block, the exact execution traceback/error, "
+        "and the dataset schema. Your task is to identify and correct the error in the Python code.\n\n"
+        "Execution Framework Rules:\n"
+        "- The DataFrame is pre-loaded as global variable `df`. Do NOT mock, download, or re-read data files.\n"
+        "- Available libraries: pandas (as pd), numpy (as np), matplotlib.pyplot (as plt)\n"
+        "- Do NOT use scipy, seaborn (sns), plotly, or any other external libraries. Stick exclusively to pandas, numpy, and matplotlib.\n"
+        "- For statistical calculations (e.g. regressions, curve fitting, trend lines, statistical indices, correlations), write them using numpy (e.g. np.polyfit, np.cov, np.corrcoef) or pandas (e.g. df.corr, df.describe, df.cov). This ensures 100% Android mobile compatibility.\n"
+        "- For plotting, format with clean parameters and always call plt.tight_layout() before completion.\n"
+        "- For plotting, check data dimensions before passing labels (e.g. tick_labels or labels).\n"
+        "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
+        "- Ensure your generated code parses correctly, has valid indentation, handles NaNs appropriately, and fully complies with sandbox AST whitelisting rules.\n"
+        "- Return only functional Python code. No introductory remarks, conversational wrappers, or markdown text."
+        f"{mcp_segment}\n\n"
+        f"Complete Dataset Metric Schema:\n{json.dumps(schema_json, default=str)}"
+    )
+
+    user_content = (
+        f"Original Request: {prompt}\n\n"
+        f"Failing Python Code:\n```python\n{bad_code}\n```\n\n"
+        f"Execution Traceback/Error:\n{error_message}\n\n"
+        "Please debug the code, fix the issue completely, and return ONLY the corrected, whitelisted, executable python block."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    try:
+        data = await _call_gateway(TASK_CODE, messages)
+        content = _extract_content(data)
+        code = _extract_block_by_pattern(content, is_json=False)
+        if not code.strip():
+            logger.error("Corrected code generation returned empty payload.")
+        return code
+    except Exception as e:
+        logger.error("Corrected code generation failed: %s", e)
+        return ""
+
+
+async def plan_next_step(
+    schema_json: dict,
+    initial_description: str,
+    analysis_history: list[dict],
+) -> dict:
+    """Autopilot planner: given all previous analysis results, decide the next step.
+
+    Returns:
+        {"prompt": "...", "is_complete": False, "reason": "..."}
+        or {"prompt": "", "is_complete": True, "reason": "Analysis is comprehensive."}
+    """
+    mcp_segment = _build_mcp_prompt_segment()
+
+    history_summary = ""
+    for i, entry in enumerate(analysis_history):
+        status = "SUCCESS" if entry.get("success") else "FAILED"
+        history_summary += (
+            f"\n--- Step {i + 1} [{status}] ---\n"
+            f"Prompt: {entry.get('prompt', '')}\n"
+            f"Code: {entry.get('code', '')[:300]}\n"
+            f"Result: {str(entry.get('result', ''))[:200]}\n"
+            f"Insight: {entry.get('description', '')[:200]}\n"
+        )
+        if entry.get("error"):
+            history_summary += f"Error: {entry.get('error')[:200]}\n"
+
+    system_prompt = (
+        "You are an autonomous data analysis agent. Your job is to decide the NEXT analysis step "
+        "or determine that analysis is COMPLETE.\n\n"
+        "Review the dataset schema and ALL previous analysis results. Then decide:\n"
+        "1. If the analysis is already comprehensive (covered distributions, correlations, "
+        "anomalies, key patterns, missing data, categorical breakdowns), return is_complete=true.\n"
+        "2. Otherwise, return the NEXT specific analysis prompt to execute.\n\n"
+        "Rules:\n"
+        "- Do NOT repeat any previous analysis step.\n"
+        "- Prioritize high-value analyses: correlations, distributions, outliers, trends, "
+        "categorical breakdowns, missing data patterns, statistical summaries.\n"
+        "- Be specific: the prompt must be a full instruction for pandas/matplotlib code generation.\n"
+        f"{mcp_segment}\n"
+        "Return ONLY a valid JSON object with these keys:\n"
+        '- "prompt": the next analysis instruction (empty string if complete)\n'
+        '- "is_complete": boolean\n'
+        '- "reason": brief explanation of your decision\n'
+        "No markdown, no code fences, no conversational text."
+    )
+
+    user_content = (
+        f"Dataset Schema:\n{json.dumps(schema_json, default=str)}\n\n"
+        f"Dataset Overview: {initial_description}\n\n"
+        f"Analysis History (all previous steps):\n{history_summary}"
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    try:
+        data = await _call_gateway(TASK_CODE, messages)
+        content = _extract_content(data)
+        cleaned = _extract_block_by_pattern(content, is_json=True)
+        result = json.loads(cleaned)
+        if isinstance(result, dict) and "prompt" in result and "is_complete" in result:
+            return result
+        return {
+            "prompt": "",
+            "is_complete": True,
+            "reason": "Planner returned invalid format.",
+        }
+    except Exception as e:
+        logger.error("Plan next step failed: %s", e)
+        return {"prompt": "", "is_complete": True, "reason": f"Planner error: {e}"}
 
 
 async def interpret(result_data: dict) -> str:
@@ -295,7 +482,8 @@ async def interpret(result_data: dict) -> str:
         "You are a stellar data presentation assistant. Given computed numerical statistics "
         "and stdout print records, write a direct, highly cohesive interpretation. "
         "State patterns explicitly, quote exact figures, and highlight discoveries. "
-        "Do NOT use markdown text attributes. Plain text only."
+        "Do NOT use any markdown (no bold, no italics, no bullet points, no headers). "
+        "Write strictly as plain text, limited to at most 2 to 3 sentences."
     )
 
     messages = [
@@ -418,11 +606,11 @@ def _strip_thinking(text: str) -> str:
 
 def _extract_block_by_pattern(text: str, is_json: bool = False) -> str:
     """Uses advanced Regex pattern matching to pull code arrays safely.
-    
+
     This replaces brittle index slicing and stops chat text wrappers from causing JSON parsing crashes.
     """
     cleaned = _strip_thinking(text)
-    
+
     if is_json:
         # Look for target JSON block explicitly
         match = _JSON_BLOCK_RE.search(cleaned)
@@ -433,19 +621,19 @@ def _extract_block_by_pattern(text: str, is_json: bool = False) -> str:
         match = _PYTHON_BLOCK_RE.search(cleaned)
         if match:
             return match.group(1).strip()
-            
+
     # Fallback to any generic backtick structure if targeted filters miss
     generic_match = _GENERIC_BLOCK_RE.search(cleaned)
     if generic_match:
         return generic_match.group(1).strip()
-        
+
     # Final defense: return raw content stripped of block boundaries
     for trim_target in ["```python", "```json", "```"]:
         if cleaned.lower().startswith(trim_target):
-            cleaned = cleaned[len(trim_target):]
+            cleaned = cleaned[len(trim_target) :]
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3]
-        
+
     return cleaned.strip()
 
 

@@ -103,7 +103,7 @@ def section_header(title: str) -> ft.Container:
 def setting_tile(
     icon: str,
     title: str,
-    subtitle: str = "",
+    subtitle: str | ft.Control = "",
     trailing: ft.Control | None = None,
     on_click=None,
 ) -> ft.Container:
@@ -115,7 +115,9 @@ def setting_tile(
                 ft.Text(title, size=tokens.FONT_MD, weight=ft.FontWeight.W_500),
                 *(
                     [
-                        ft.Text(
+                        subtitle
+                        if isinstance(subtitle, ft.Control)
+                        else ft.Text(
                             subtitle,
                             size=tokens.FONT_XS,
                             color=ft.Colors.ON_SURFACE_VARIANT,

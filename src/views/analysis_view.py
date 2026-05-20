@@ -73,6 +73,7 @@ def build_analysis_view(
         try:
             df = file_service.load_dataframe(file.path)
             state.set_dataframe(df, file.name)
+            state.current_file_path = file.path
             state.current_df_summary = file_service.get_data_summary(df)
 
             # Create Block 0 placeholder
@@ -93,12 +94,18 @@ def build_analysis_view(
                 try:
                     success, _ = await credit_service.spend(COST_SUGGEST)
                     if not success:
-                        block0["description"] = "Dataset loaded. AI description unavailable (no credits)."
+                        block0["description"] = (
+                            "Dataset loaded. AI description unavailable (no credits)."
+                        )
                         block0["suggestions"] = ai_service.fallback_suggestions()
                     else:
-                        desc_task = ai_service.describe_dataset(state.current_df_summary)
+                        desc_task = ai_service.describe_dataset(
+                            state.current_df_summary
+                        )
                         suggest_task = ai_service.suggest(state.current_df_summary)
-                        description, suggestions = await asyncio.gather(desc_task, suggest_task)
+                        description, suggestions = await asyncio.gather(
+                            desc_task, suggest_task
+                        )
                         block0["description"] = description
                         block0["suggestions"] = suggestions
                         state.suggestions = suggestions
@@ -106,7 +113,7 @@ def build_analysis_view(
                     state.credits_remaining = await credit_service.get_balance()
                     _rebuild(page)
 
-                    if autopilot_enabled.current and autopilot_enabled.current.value:
+                    if state.autopilot_enabled:
                         await run_autopilot()
 
                 except Exception as e:
@@ -156,26 +163,56 @@ def build_analysis_view(
 
                 # Reserve credits BEFORE execution
                 if not is_autopilot:
-                    reserved = await credit_service.reserve(COST_SUGGEST)
-                    if not reserved:
+                    tx_id = await credit_service.reserve(COST_SUGGEST)
+                    if not tx_id:
                         _show_error("Not enough credits.")
                         state.is_analyzing = False
                         _rebuild(page)
                         return
 
-                # 2. Execute locally
-                result = sandbox.execute_code(code, state.current_df)
+                # 2. Execute locally with self-healing (max 2 retries)
+                max_retries = 2
+                retry_count = 0
+                current_code = code
+                result = None
+
+                while retry_count <= max_retries:
+                    result = await sandbox.execute_code_async(
+                        current_code, state.current_df
+                    )
+                    if result["success"]:
+                        break
+
+                    # Self-heal: AI sees the error and generates corrected code
+                    retry_count += 1
+                    if retry_count <= max_retries:
+                        logger.info(
+                            "Execution failed (attempt %d/%d), AI self-healing: %s",
+                            retry_count,
+                            max_retries,
+                            result["error"][:120],
+                        )
+                        corrected = await ai_service.generate_corrected_code(
+                            prompt,
+                            current_code,
+                            result["error"],
+                            state.current_df_summary,
+                        )
+                        if corrected:
+                            current_code = corrected
+                            continue
+
                 if not result["success"]:
                     if not is_autopilot:
-                        await credit_service.rollback(COST_SUGGEST)
+                        await credit_service.rollback(tx_id)
                     block = {
                         "type": "analysis",
                         "prompt": prompt,
-                        "code": code,
+                        "code": current_code,
                         "figure": None,
                         "stdout": result.get("stdout", ""),
                         "result": "",
-                        "description": f"⚠️ Execution failed: {result['error']}",
+                        "description": f"Execution failed after {max_retries} self-heal attempts: {result['error']}",
                         "suggestions": [],
                         "pinned": False,
                         "failed": True,
@@ -187,12 +224,12 @@ def build_analysis_view(
 
                 # 3. Create block immediately on success
                 if not is_autopilot:
-                    await credit_service.commit(COST_SUGGEST)
+                    await credit_service.commit(tx_id)
 
                 block = {
                     "type": "analysis",
                     "prompt": prompt,
-                    "code": code,
+                    "code": current_code,
                     "figure": result["figure"],
                     "stdout": result.get("stdout", ""),
                     "result": result.get("result", ""),
@@ -223,25 +260,30 @@ def build_analysis_view(
                             latest_result=res_data,
                         )
 
-                        description, suggestions = await asyncio.gather(desc_task, suggest_task)
+                        description, suggestions = await asyncio.gather(
+                            desc_task, suggest_task
+                        )
                         b["description"] = description
                         b["suggestions"] = suggestions
                         state.suggestions = suggestions
 
                         if is_autopilot:
                             from core.utils import figure_to_png_bytes
+
                             figure_png = None
                             if b["figure"]:
                                 try:
                                     figure_png = figure_to_png_bytes(b["figure"])
                                 except Exception:
                                     pass
-                            state.charts.append({
-                                "prompt": b["prompt"],
-                                "figure": b["figure"],
-                                "figure_png": figure_png,
-                                "description": description,
-                            })
+                            state.charts.append(
+                                {
+                                    "prompt": b["prompt"],
+                                    "figure": b["figure"],
+                                    "figure_png": figure_png,
+                                    "description": description,
+                                }
+                            )
 
                         _rebuild(page)
                     except Exception as e:
@@ -266,7 +308,7 @@ def build_analysis_view(
             return
 
         block = blocks[block_index]
-        result = sandbox.execute_code(new_code, state.current_df)
+        result = await sandbox.execute_code_async(new_code, state.current_df)
 
         block["code"] = new_code
         if result["success"]:
@@ -277,15 +319,27 @@ def build_analysis_view(
             block["failed"] = False
             _show_success("✅ Code re-executed successfully!")
         else:
-            block["description"] = f"⚠️ Execution failed: {result['error']}"
+            block["description"] = f"Execution failed: {result['error']}"
             block["failed"] = True
             _show_error(f"Execution Error: {result['error']}")
 
         _rebuild(page)
 
     async def run_autopilot():
+        """ReAct-style autonomous analysis agent loop.
+
+        Learns from nanobot pattern:
+        1. PLAN: AI decides next step based on full analysis history
+        2. EXECUTE: generate code → sandbox → self-heal on error
+        3. REFLECT: AI evaluates if analysis is comprehensive
+        4. TERMINATE: max iterations, AI says complete, credits exhausted, or user cancels
+        """
+        MAX_ITERATIONS = 8
+        COST_PER_STEP = 2
+
         if not state.suggestions:
             return
+
         success, _ = await credit_service.spend(COST_AUTOPILOT)
         if not success:
             _show_error("Not enough credits for Autopilot.")
@@ -293,11 +347,193 @@ def build_analysis_view(
 
         state.is_analyzing = True
         state.charts.clear()
+        state.autopilot_cancelled = False
+        state.autopilot_progress = "Initializing agent loop..."
         _rebuild(page)
 
+        analysis_history = []
+        iteration = 0
+
         try:
-            for sug in state.suggestions:
-                await on_suggestion_selected(sug["prompt"], is_autopilot=True)
+            while iteration < MAX_ITERATIONS:
+                if state.autopilot_cancelled:
+                    state.autopilot_progress = "Cancelled by user."
+                    _show_error("Autopilot cancelled.")
+                    break
+
+                iteration += 1
+                state.autopilot_progress = (
+                    f"Step {iteration}/{MAX_ITERATIONS}: Planning..."
+                )
+                _rebuild(page)
+
+                block0_desc = blocks[0]["description"] if blocks else ""
+
+                plan = await ai_service.plan_next_step(
+                    state.current_df_summary,
+                    block0_desc,
+                    analysis_history,
+                )
+
+                if plan.get("is_complete"):
+                    state.autopilot_progress = f"Analysis complete after {iteration - 1} steps. {plan.get('reason', '')}"
+                    logger.info(
+                        "Autopilot complete at step %d: %s",
+                        iteration - 1,
+                        plan.get("reason", ""),
+                    )
+                    break
+
+                next_prompt = plan.get("prompt", "").strip()
+                if not next_prompt:
+                    state.autopilot_progress = (
+                        f"Agent decided analysis is complete. {plan.get('reason', '')}"
+                    )
+                    break
+
+                state.autopilot_progress = f"Step {iteration}/{MAX_ITERATIONS}: {plan.get('label', next_prompt[:60])}"
+                _rebuild(page)
+
+                credits_ok, _ = await credit_service.check_balance(COST_PER_STEP)
+                if not credits_ok:
+                    state.autopilot_progress = "Credits exhausted."
+                    _show_error("Not enough credits to continue autopilot.")
+                    break
+
+                tx_id = await credit_service.reserve(COST_PER_STEP)
+
+                max_retries = 2
+                retry_count = 0
+                current_code = await ai_service.generate_code(
+                    next_prompt, state.current_df_summary
+                )
+                result = None
+
+                while retry_count <= max_retries and current_code:
+                    result = await sandbox.execute_code_async(
+                        current_code, state.current_df
+                    )
+                    if result["success"]:
+                        break
+
+                    retry_count += 1
+                    if retry_count <= max_retries:
+                        current_code = await ai_service.generate_corrected_code(
+                            next_prompt,
+                            current_code,
+                            result["error"],
+                            state.current_df_summary,
+                        )
+
+                if not result or not result["success"]:
+                    # E2: Rollback reserved credits on failure
+                    if tx_id:
+                        await credit_service.rollback(tx_id)
+                    analysis_history.append(
+                        {
+                            "prompt": next_prompt,
+                            "code": current_code or "",
+                            "result": "",
+                            "description": "",
+                            "success": False,
+                            "error": result.get("error", "No code generated")
+                            if result
+                            else "No code generated",
+                        }
+                    )
+                    block = {
+                        "type": "analysis",
+                        "prompt": next_prompt,
+                        "code": current_code or "",
+                        "figure": None,
+                        "stdout": result.get("stdout", "") if result else "",
+                        "result": "",
+                        "description": f"Autopilot failed after {max_retries} retries: {result.get('error', '') if result else 'No code generated'}",
+                        "suggestions": [],
+                        "pinned": True,
+                        "failed": True,
+                    }
+                    blocks.append(block)
+                    _rebuild(page)
+                    continue
+
+                if tx_id:
+                    await credit_service.commit(tx_id)
+
+                block = {
+                    "type": "analysis",
+                    "prompt": next_prompt,
+                    "code": current_code,
+                    "figure": result["figure"],
+                    "stdout": result.get("stdout", ""),
+                    "result": result.get("result", ""),
+                    "description": "Generating insight...",
+                    "suggestions": [],
+                    "pinned": True,
+                    "failed": False,
+                }
+                blocks.append(block)
+                _rebuild(page)
+
+                from core.utils import figure_to_png_bytes
+
+                figure_png = None
+                if result["figure"]:
+                    try:
+                        figure_png = figure_to_png_bytes(result["figure"])
+                    except Exception:
+                        pass
+
+                state.charts.append(
+                    {
+                        "prompt": next_prompt,
+                        "figure": result["figure"],
+                        "figure_png": figure_png,
+                        "description": "",
+                    }
+                )
+
+                analysis_history.append(
+                    {
+                        "prompt": next_prompt,
+                        "code": current_code,
+                        "result": str(result.get("result", "")),
+                        "description": "",
+                        "success": True,
+                        "error": None,
+                    }
+                )
+
+                async def load_block_ai(b, hist_entry):
+                    try:
+                        res_data = {
+                            "prompt": b["prompt"],
+                            "code": b["code"],
+                            "stdout": b["stdout"],
+                            "result": str(b["result"]),
+                        }
+                        desc_task = ai_service.describe_result(block0_desc, res_data)
+                        suggest_task = ai_service.suggest(
+                            state.current_df_summary,
+                            initial_description=block0_desc,
+                            latest_result=res_data,
+                        )
+                        description, suggestions = await asyncio.gather(
+                            desc_task, suggest_task
+                        )
+                        b["description"] = description
+                        b["suggestions"] = suggestions
+                        state.suggestions = suggestions
+                        hist_entry["description"] = description
+                        state.charts[-1]["description"] = description
+                        _rebuild(page)
+                    except Exception as e:
+                        logger.error("Autopilot block AI failed: %s", e)
+
+                page.run_task(load_block_ai, block, analysis_history[-1])
+
+            state.autopilot_progress = f"Agent loop finished ({iteration} steps)."
+
         except Exception as e:
             _show_error(f"Autopilot interrupted: {e}")
         finally:
@@ -307,7 +543,6 @@ def build_analysis_view(
             except Exception:
                 pass
             _rebuild(page)
-            page.go("/report")
 
     async def on_custom_prompt(e):
         if not custom_prompt_field.current:
@@ -357,12 +592,17 @@ def build_analysis_view(
         if result:
             audio_bytes, mime_type = result
             transcript = await ai_service.transcribe_audio(audio_bytes, mime_type)
-            if transcript and not transcript.startswith("[") and custom_prompt_field.current:
+            if (
+                transcript
+                and not transcript.startswith("[")
+                and custom_prompt_field.current
+            ):
                 custom_prompt_field.current.value = transcript
                 page.update()
 
     def on_clear_data(e):
         import matplotlib.pyplot as plt
+
         plt.close("all")
         state.clear_data()
         blocks.clear()
@@ -380,6 +620,7 @@ def build_analysis_view(
 
         block["pinned"] = True
         from core.utils import figure_to_png_bytes
+
         figure = block.get("figure")
         figure_png = None
         if figure:
@@ -387,12 +628,14 @@ def build_analysis_view(
                 figure_png = figure_to_png_bytes(figure)
             except Exception:
                 pass
-        state.charts.append({
-            "prompt": block.get("prompt", "Data Overview"),
-            "figure": figure,
-            "figure_png": figure_png,
-            "description": block.get("description", ""),
-        })
+        state.charts.append(
+            {
+                "prompt": block.get("prompt", "Data Overview"),
+                "figure": figure,
+                "figure_png": figure_png,
+                "description": block.get("description", ""),
+            }
+        )
         page.snack_bar = ft.SnackBar(ft.Text("📌 Pinned to report!"), duration=2000)
         page.snack_bar.open = True
         _rebuild(page)
@@ -400,7 +643,9 @@ def build_analysis_view(
     # ── UI Construction Helpers ────────────────────────────────────────
 
     def _show_error(msg: str):
-        page.snack_bar = ft.SnackBar(ft.Text(msg, color=ft.Colors.WHITE), bgcolor=theme.ERROR, duration=4000)
+        page.snack_bar = ft.SnackBar(
+            ft.Text(msg, color=ft.Colors.WHITE), bgcolor=theme.ERROR, duration=4000
+        )
         page.snack_bar.open = True
         page.update()
 
@@ -415,6 +660,7 @@ def build_analysis_view(
             return None
         try:
             import flet_charts as fch
+
             return ft.Container(
                 # FIX 1: Passed as a keyword argument (figure=figure) instead of positional!
                 content=fch.MatplotlibChart(figure=figure, expand=True),
@@ -430,13 +676,15 @@ def build_analysis_view(
         output_text = str(result_val) if result_val is not None else ""
         if not output_text or output_text.strip() == "None":
             output_text = str(stdout_val) if stdout_val is not None else ""
-        
+
         if not output_text or not output_text.strip():
             return None
-            
+
         return ft.Container(
             # FIX 2: Added text block for standard output like df.head()
-            content=ft.Text(output_text, size=12, font_family="RobotoMono", color="#E0E0E0"),
+            content=ft.Text(
+                output_text, size=12, font_family="RobotoMono", color="#E0E0E0"
+            ),
             padding=10,
             bgcolor="#0D0D1A",
             border_radius=8,
@@ -452,37 +700,78 @@ def build_analysis_view(
                 page.run_task(on_rerun_code, block_index, new_code)
 
         return ft.Container(
-            content=ft.Column([
-                ft.Container(
-                    content=ft.Row([
-                        ft.Row([
-                            ft.Container(width=8, height=8, border_radius=4, bgcolor="#FF5F57"),
-                            ft.Container(width=8, height=8, border_radius=4, bgcolor="#FEBC2E"),
-                            ft.Container(width=8, height=8, border_radius=4, bgcolor="#28C840"),
-                        ], spacing=4),
-                        ft.Text("analysis.py", size=10, color="#888888"),
-                        ft.TextButton(
-                            "▶ Run", icon=ft.Icons.PLAY_ARROW_ROUNDED,
-                            style=ft.ButtonStyle(color="#28C840"),
-                            on_click=_on_run,
-                        ) if block_index >= 0 else ft.Container(),
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    padding=ft.Padding(10, 6, 10, 6),
-                    bgcolor="#1A1A2E",
-                    border_radius=ft.BorderRadius(top_left=8, top_right=8, bottom_left=0, bottom_right=0),
-                ),
-                ft.Container(
-                    content=ft.TextField(
-                        ref=code_field, value=code, multiline=True,
-                        min_lines=3, max_lines=20, text_size=11,
-                        text_style=ft.TextStyle(font_family="RobotoMono", color="#E0E0E0"),
-                        border_color=ft.Colors.TRANSPARENT, bgcolor=ft.Colors.TRANSPARENT,
-                        cursor_color="#28C840", filled=False,
+            content=ft.Column(
+                [
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Row(
+                                    [
+                                        ft.Container(
+                                            width=8,
+                                            height=8,
+                                            border_radius=4,
+                                            bgcolor="#FF5F57",
+                                        ),
+                                        ft.Container(
+                                            width=8,
+                                            height=8,
+                                            border_radius=4,
+                                            bgcolor="#FEBC2E",
+                                        ),
+                                        ft.Container(
+                                            width=8,
+                                            height=8,
+                                            border_radius=4,
+                                            bgcolor="#28C840",
+                                        ),
+                                    ],
+                                    spacing=4,
+                                ),
+                                ft.Text("analysis.py", size=10, color="#888888"),
+                                ft.TextButton(
+                                    "▶ Run",
+                                    icon=ft.Icons.PLAY_ARROW_ROUNDED,
+                                    style=ft.ButtonStyle(color="#28C840"),
+                                    on_click=_on_run,
+                                )
+                                if block_index >= 0
+                                else ft.Container(),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        padding=ft.Padding(10, 6, 10, 6),
+                        bgcolor="#1A1A2E",
+                        border_radius=ft.BorderRadius(
+                            top_left=8, top_right=8, bottom_left=0, bottom_right=0
+                        ),
                     ),
-                    padding=0, bgcolor="#0D0D1A",
-                    border_radius=ft.BorderRadius(top_left=0, top_right=0, bottom_left=8, bottom_right=8),
-                ),
-            ], spacing=0),
+                    ft.Container(
+                        content=ft.TextField(
+                            ref=code_field,
+                            value=code,
+                            multiline=True,
+                            min_lines=3,
+                            max_lines=20,
+                            text_size=11,
+                            text_style=ft.TextStyle(
+                                font_family="RobotoMono", color="#E0E0E0"
+                            ),
+                            border_color=ft.Colors.TRANSPARENT,
+                            bgcolor=ft.Colors.TRANSPARENT,
+                            cursor_color="#28C840",
+                            filled=False,
+                        ),
+                        padding=ft.Padding(12, 6, 12, 12),
+                        bgcolor="#0D0D1A",
+                        border_radius=ft.BorderRadius(
+                            top_left=0, top_right=0, bottom_left=8, bottom_right=8
+                        ),
+                    ),
+                ],
+                spacing=0,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            ),
             margin=ft.Margin(0, 4, 0, 8),
         )
 
@@ -494,17 +783,38 @@ def build_analysis_view(
 
         # 1. Header
         if is_initial:
-            controls.append(ft.Row([
-                ft.Icon(ft.Icons.DATASET_ROUNDED, size=16, color=theme.ACCENT),
-                ft.Text("Dataset Overview", weight="bold"),
-            ], spacing=8))
+            controls.append(
+                ft.Row(
+                    [
+                        ft.Icon(ft.Icons.DATASET_ROUNDED, size=16, color=theme.ACCENT),
+                        ft.Text("Dataset Overview", weight="bold"),
+                    ],
+                    spacing=8,
+                )
+            )
         else:
             header_color = theme.ERROR if is_failed else theme.ACCENT
-            controls.append(ft.Row([
-                ft.Icon(ft.Icons.ERROR_OUTLINE_ROUNDED if is_failed else ft.Icons.AUTO_AWESOME_ROUNDED,
-                        size=14, color=header_color),
-                ft.Text(block["prompt"], weight="bold", expand=True, max_lines=2, overflow="ellipsis"),
-            ], spacing=8))
+            controls.append(
+                ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.ERROR_OUTLINE_ROUNDED
+                            if is_failed
+                            else ft.Icons.AUTO_AWESOME_ROUNDED,
+                            size=14,
+                            color=header_color,
+                        ),
+                        ft.Text(
+                            block["prompt"],
+                            weight="bold",
+                            expand=True,
+                            max_lines=2,
+                            overflow="ellipsis",
+                        ),
+                    ],
+                    spacing=8,
+                )
+            )
 
         # 2. Results Pipeline (Chart or Text)
         if not is_initial:
@@ -515,125 +825,265 @@ def build_analysis_view(
                 if chart_ui:
                     controls.append(chart_ui)
                     has_chart = True
-            
+
             # Fallback to Text Output if no chart was rendered
             if not has_chart:
-                text_ui = _build_text_output_container(block.get("result"), block.get("stdout"))
+                text_ui = _build_text_output_container(
+                    block.get("result"), block.get("stdout")
+                )
                 if text_ui:
                     controls.append(text_ui)
 
         # 3. Description (AI Insight)
         desc = block.get("description", "")
-        controls.append(ft.Container(
-            content=ft.Row([
-                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=16, color=theme.ACCENT),
-                ft.Text(desc, size=tokens.FONT_SM, color=ft.Colors.ON_SURFACE_VARIANT, expand=True),
-            ], vertical_alignment="start"),
-            padding=12, bgcolor=ft.Colors.with_opacity(0.05, theme.ACCENT), border_radius=8,
-        ))
+        controls.append(
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(
+                            ft.Icons.LIGHTBULB_OUTLINE_ROUNDED,
+                            size=16,
+                            color=theme.ACCENT,
+                        ),
+                        ft.Text(
+                            desc,
+                            size=tokens.FONT_SM,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            expand=True,
+                        ),
+                    ],
+                    vertical_alignment="start",
+                ),
+                padding=12,
+                bgcolor=ft.Colors.with_opacity(0.05, theme.ACCENT),
+                border_radius=8,
+            )
+        )
 
         # 4. Code viewer (expandable)
         code = block.get("code", "")
         if code:
             adv = ft.Ref[ft.Container]()
+
             def toggle(e, ref=adv):
                 ref.current.visible = not ref.current.visible
                 page.update()
 
-            controls.append(ft.Container(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Text("View Code", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                ], alignment="center", spacing=4),
-                on_click=toggle, ink=True, padding=ft.Padding(0, 4, 0, 0), alignment=ft.Alignment.CENTER,
-            ))
-            controls.append(ft.Container(ref=adv, content=_build_terminal(code, index), visible=False))
+            controls.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED,
+                                size=20,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                            ft.Text(
+                                "View Code", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+                            ),
+                        ],
+                        alignment="center",
+                        spacing=4,
+                    ),
+                    on_click=toggle,
+                    ink=True,
+                    padding=ft.Padding(0, 4, 0, 0),
+                    alignment=ft.Alignment.CENTER,
+                )
+            )
+            controls.append(
+                ft.Container(
+                    ref=adv, content=_build_terminal(code, index), visible=False
+                )
+            )
 
         # 5. Actions (Pin / Retry)
         if not is_initial:
             action_row = []
             if is_failed:
-                action_row.append(ft.TextButton(
-                    "Retry with AI", icon=ft.Icons.REFRESH_ROUNDED,
-                    on_click=lambda e, p=block["prompt"]: page.run_task(on_suggestion_selected, p),
-                    style=ft.ButtonStyle(color=theme.WARNING),
-                ))
+                action_row.append(
+                    ft.TextButton(
+                        "Retry with AI",
+                        icon=ft.Icons.REFRESH_ROUNDED,
+                        on_click=lambda e, p=block["prompt"]: page.run_task(
+                            on_suggestion_selected, p
+                        ),
+                        style=ft.ButtonStyle(color=theme.WARNING),
+                    )
+                )
             is_pinned = block.get("pinned", False)
             if not is_failed:
-                action_row.append(ft.TextButton(
-                    "Pinned" if is_pinned else "Pin to Report",
-                    icon=ft.Icons.PUSH_PIN_ROUNDED if is_pinned else ft.Icons.PUSH_PIN_OUTLINED,
-                    on_click=lambda e, idx=index: on_pin_block(idx),
-                    disabled=is_pinned,
-                    style=ft.ButtonStyle(color=theme.SUCCESS if is_pinned else theme.PRIMARY),
-                ))
+                action_row.append(
+                    ft.TextButton(
+                        "Pinned" if is_pinned else "Pin to Report",
+                        icon=ft.Icons.PUSH_PIN_ROUNDED
+                        if is_pinned
+                        else ft.Icons.PUSH_PIN_OUTLINED,
+                        on_click=lambda e, idx=index: on_pin_block(idx),
+                        disabled=is_pinned,
+                        style=ft.ButtonStyle(
+                            color=theme.SUCCESS if is_pinned else theme.PRIMARY
+                        ),
+                    )
+                )
             controls.append(ft.Row(action_row, alignment=ft.MainAxisAlignment.END))
 
         # 6. Suggestions (Chips)
         sug = block.get("suggestions", [])
         if sug:
-            controls.append(ft.Divider(height=1, thickness=0.5, color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)))
-            controls.append(build_suggestion_chips(
-                sug, lambda p: page.run_task(on_suggestion_selected, p), state.is_analyzing
-            ))
+            controls.append(
+                ft.Divider(
+                    height=1,
+                    thickness=0.5,
+                    color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+                )
+            )
+            controls.append(
+                build_suggestion_chips(
+                    sug,
+                    lambda p: page.run_task(on_suggestion_selected, p),
+                    state.is_analyzing,
+                )
+            )
 
         return ft.Container(
             content=ft.Column(controls, spacing=10),
-            padding=16, margin=ft.Margin(tokens.SPACE_LG, 8, tokens.SPACE_LG, 8),
-            border_radius=16, bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+            padding=16,
+            margin=ft.Margin(tokens.SPACE_LG, 8, tokens.SPACE_LG, 8),
+            border_radius=16,
+            bgcolor=theme.GLASS_BG,
+            border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
         )
 
     # ── Main Content Column Builder ──────────────────────────────────
+
+    def on_autopilot_toggle(e):
+        state.autopilot_enabled = e.control.value
 
     def _build_content() -> list[ft.Control]:
         res = []
         if state.current_df is None:
             # Welcome & File Import Screen
             if state.is_loading:
-                res.append(ft.Container(
-                    content=ft.Column([
-                        ft.Container(height=150),
-                        ft.ProgressRing(width=40, height=40, stroke_width=3),
-                        ft.Text("Loading data...", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ], horizontal_alignment="center", spacing=16),
-                    expand=True, alignment=ft.Alignment.CENTER,
-                ))
+                res.append(
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Container(height=150),
+                                ft.ProgressRing(width=40, height=40, stroke_width=3),
+                                ft.Text(
+                                    "Loading data...",
+                                    size=14,
+                                    color=ft.Colors.ON_SURFACE_VARIANT,
+                                ),
+                            ],
+                            horizontal_alignment="center",
+                            spacing=16,
+                        ),
+                        expand=True,
+                        alignment=ft.Alignment.CENTER,
+                    )
+                )
             else:
-                res.append(ft.Container(
-                    content=ft.Column([
-                        build_brand_header(show_tagline=True, spacing_below=True),
-                        build_file_import_card(on_pick_file, False),
-                        ft.Container(height=20),
-                        ft.Row([
-                            ft.Icon(ft.Icons.ROCKET_LAUNCH_ROUNDED, color=theme.ACCENT),
-                            ft.Text("Autopilot Mode", weight="w500"),
-                            ft.Switch(ref=autopilot_enabled, value=True, active_color=theme.PRIMARY),
-                        ], alignment="center", spacing=10),
-                    ], horizontal_alignment="center"), padding=20,
-                ))
+                res.append(
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                build_brand_header(
+                                    show_tagline=True, spacing_below=True
+                                ),
+                                build_file_import_card(on_pick_file, False),
+                                ft.Container(height=20),
+                                ft.Row(
+                                    [
+                                        ft.Icon(
+                                            ft.Icons.ROCKET_LAUNCH_ROUNDED,
+                                            color=theme.ACCENT,
+                                        ),
+                                        ft.Text("Autopilot Mode", weight="w500"),
+                                        ft.Switch(
+                                            ref=autopilot_enabled,
+                                            value=state.autopilot_enabled,
+                                            active_color=theme.PRIMARY,
+                                            on_change=on_autopilot_toggle,
+                                        ),
+                                    ],
+                                    alignment="center",
+                                    spacing=10,
+                                ),
+                            ],
+                            horizontal_alignment="center",
+                        ),
+                        padding=20,
+                    )
+                )
         else:
             # 1. Active File Info
-            res.append(ft.Container(
-                content=ft.Row([
-                    ft.Icon(ft.Icons.DESCRIPTION_ROUNDED, color=theme.ACCENT),
-                    ft.Column([
-                        ft.Text(state.current_df_name, weight="bold", size=16),
-                        ft.Text(f"{state.current_df_rows:,} rows | {len(state.current_df_columns)} cols",
-                                size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ], spacing=2, expand=True),
-                    ft.IconButton(ft.Icons.CLOSE_ROUNDED, on_click=on_clear_data),
-                ]), padding=ft.Padding(20, 10, 20, 10),
-            ))
+            res.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.DESCRIPTION_ROUNDED, color=theme.ACCENT),
+                            ft.Column(
+                                [
+                                    ft.Text(
+                                        state.current_df_name, weight="bold", size=16
+                                    ),
+                                    ft.Text(
+                                        f"{state.current_df_rows:,} rows | {len(state.current_df_columns)} cols",
+                                        size=12,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    ),
+                                ],
+                                spacing=2,
+                                expand=True,
+                            ),
+                            ft.IconButton(
+                                ft.Icons.CLOSE_ROUNDED, on_click=on_clear_data
+                            ),
+                        ]
+                    ),
+                    padding=ft.Padding(20, 10, 20, 10),
+                )
+            )
 
             # 2. Stats Deck
-            res.append(ft.Container(ft.Row([
-                build_stat_card("Rows", f"{state.current_df_rows:,}", ft.Icons.TABLE_ROWS_ROUNDED, theme.ACCENT),
-                build_stat_card("Cols", str(len(state.current_df_columns)), ft.Icons.VIEW_COLUMN_ROUNDED, theme.PRIMARY),
-                build_stat_card("Credits", str(state.credits_remaining), ft.Icons.BOLT_ROUNDED, theme.SUCCESS),
-            ], spacing=10), padding=ft.Padding(20, 0, 20, 10)))
+            res.append(
+                ft.Container(
+                    ft.Row(
+                        [
+                            build_stat_card(
+                                "Rows",
+                                f"{state.current_df_rows:,}",
+                                ft.Icons.TABLE_ROWS_ROUNDED,
+                                theme.ACCENT,
+                            ),
+                            build_stat_card(
+                                "Cols",
+                                str(len(state.current_df_columns)),
+                                ft.Icons.VIEW_COLUMN_ROUNDED,
+                                theme.PRIMARY,
+                            ),
+                            build_stat_card(
+                                "Credits",
+                                str(state.credits_remaining),
+                                ft.Icons.BOLT_ROUNDED,
+                                theme.SUCCESS,
+                            ),
+                        ],
+                        spacing=10,
+                    ),
+                    padding=ft.Padding(20, 0, 20, 10),
+                )
+            )
 
             # 3. Table Preview Component
-            res.append(ft.Container(build_data_preview(state.current_df), padding=ft.Padding(20, 0, 20, 10)))
+            res.append(
+                ft.Container(
+                    build_data_preview(state.current_df),
+                    padding=ft.Padding(20, 0, 20, 10),
+                )
+            )
 
             # 4. Render All Analysis Blocks
             for i, b in enumerate(blocks):
@@ -641,38 +1091,78 @@ def build_analysis_view(
 
             # FIX 3: 5. Loading Indicator moved to the BOTTOM
             if state.is_analyzing:
-                res.append(ft.Container(
-                    content=ft.Row([
-                        ft.ProgressRing(width=16, height=16),
-                        ft.Text("AI thinking...", size=13),
-                    ], alignment="center", spacing=10),
-                    padding=ft.Padding(0, 16, 0, 16),
-                ))
+                loading_controls = [
+                    ft.ProgressRing(width=16, height=16),
+                    ft.Text(
+                        state.autopilot_progress or "AI thinking...",
+                        size=13,
+                        expand=True,
+                    ),
+                ]
+                if state.autopilot_progress:
+                    loading_controls.append(
+                        ft.TextButton(
+                            "Stop",
+                            icon=ft.Icons.STOP_ROUNDED,
+                            icon_color=theme.ERROR,
+                            on_click=lambda e: (
+                                setattr(state, "autopilot_cancelled", True)
+                                or _rebuild(page)
+                            ),
+                        )
+                    )
+                res.append(
+                    ft.Container(
+                        content=ft.Row(
+                            loading_controls, alignment="center", spacing=10
+                        ),
+                        padding=ft.Padding(0, 16, 0, 16),
+                    )
+                )
 
             # 6. User Prompt Input
             if not state.is_analyzing:
-                res.append(ft.Container(
-                    content=ft.Row([
-                        ft.TextField(
-                            ref=custom_prompt_field,
-                            hint_text="Describe an analysis or tap mic...",
-                            expand=True, border_radius=12,
-                            on_submit=lambda e: page.run_task(on_custom_prompt, e),
-                            disabled=is_recording["value"],
+                res.append(
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.TextField(
+                                    ref=custom_prompt_field,
+                                    hint_text="Describe an analysis or tap mic...",
+                                    expand=True,
+                                    border_radius=12,
+                                    on_submit=lambda e: page.run_task(
+                                        on_custom_prompt, e
+                                    ),
+                                    disabled=is_recording["value"],
+                                ),
+                                ft.IconButton(
+                                    ft.Icons.STOP_ROUNDED
+                                    if is_recording["value"]
+                                    else ft.Icons.MIC_ROUNDED,
+                                    icon_color=theme.ERROR
+                                    if is_recording["value"]
+                                    else ft.Colors.ON_SURFACE_VARIANT,
+                                    tooltip="Stop"
+                                    if is_recording["value"]
+                                    else "Voice",
+                                    on_click=lambda e: page.run_task(
+                                        on_voice_toggle, e
+                                    ),
+                                ),
+                                ft.IconButton(
+                                    ft.Icons.SEND_ROUNDED,
+                                    icon_color=theme.PRIMARY,
+                                    on_click=lambda e: page.run_task(
+                                        on_custom_prompt, e
+                                    ),
+                                    disabled=is_recording["value"],
+                                ),
+                            ]
                         ),
-                        ft.IconButton(
-                            ft.Icons.STOP_ROUNDED if is_recording["value"] else ft.Icons.MIC_ROUNDED,
-                            icon_color=theme.ERROR if is_recording["value"] else ft.Colors.ON_SURFACE_VARIANT,
-                            tooltip="Stop" if is_recording["value"] else "Voice",
-                            on_click=lambda e: page.run_task(on_voice_toggle, e),
-                        ),
-                        ft.IconButton(
-                            ft.Icons.SEND_ROUNDED, icon_color=theme.PRIMARY,
-                            on_click=lambda e: page.run_task(on_custom_prompt, e),
-                            disabled=is_recording["value"],
-                        ),
-                    ]), padding=ft.Padding(20, 10, 10, 10),
-                ))
+                        padding=ft.Padding(20, 10, 10, 10),
+                    )
+                )
 
             # Footer buffer
             res.append(ft.Container(height=100))
@@ -683,11 +1173,13 @@ def build_analysis_view(
         """Rebuild view and automatically scroll to the newest block."""
         if content_column.current:
             content_column.current.controls = _build_content()
+
             async def do_scroll():
                 try:
                     await content_column.current.scroll_to(offset=-1, duration=500)
                 except Exception:
                     pass
+
             p.run_task(do_scroll)
             p.update()
 
@@ -696,12 +1188,39 @@ def build_analysis_view(
         state.trigger_file_picker = False
         file_picker_svc.pick_data_file()
 
+    # Restore session from home "Recent Analyses"
+    if state.session_to_restore:
+        session = state.session_to_restore
+        state.session_to_restore = None
+        file_path = session.get("file_path", "")
+        if file_path and state.current_df is None:
+            page.run_task(
+                _process_file,
+                type(
+                    "File",
+                    (),
+                    {"path": file_path, "name": session.get("df_name", "Dataset")},
+                )(),
+            )
+
     return ft.View(
         route="/analysis",
         appbar=ft.AppBar(
             title=ft.Text("Analysis Engine", weight="bold"),
-            actions=[ft.Container(build_credit_badge(state.credits_remaining), margin=ft.Margin(0, 0, 20, 0))],
+            actions=[
+                ft.Container(
+                    build_credit_badge(state.credits_remaining),
+                    margin=ft.Margin(0, 0, 20, 0),
+                )
+            ],
         ),
-        controls=[ft.Column(ref=content_column, controls=_build_content(), scroll="auto", expand=True)],
+        controls=[
+            ft.Column(
+                ref=content_column,
+                controls=_build_content(),
+                scroll="auto",
+                expand=True,
+            )
+        ],
         padding=0,
     )

@@ -10,9 +10,12 @@ import logging
 import os
 from pathlib import Path
 
-import pandas as pd
-
 from core.constants import ALLOWED_EXTENSIONS, MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,8 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
     """
     validate_file(file_path)
 
+    import pandas as pd
+
     path = Path(file_path)
     ext = path.suffix.lower()
 
@@ -79,6 +84,9 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
                 # fallback: try reading as normal JSON array
                 df = pd.read_json(file_path)
         elif ext == ".xlsx":
+            # B1: Lazy import — openpyxl only loaded when .xlsx is detected
+            import openpyxl  # noqa: F401
+
             df = pd.read_excel(file_path, engine="openpyxl")
         else:
             raise FileValidationError(f"Unsupported format: {ext}")
@@ -110,6 +118,8 @@ def get_data_summary(df: pd.DataFrame) -> dict:
     describe, nunique, null counts, and top values.
     Truncates long strings and limits column counts to keep payload safe.
     """
+    import pandas as pd
+
     # 1. Shape and basics
     summary = {
         "shape": {"rows": len(df), "columns": len(df.columns)},
@@ -121,7 +131,14 @@ def get_data_summary(df: pd.DataFrame) -> dict:
     # Limit to first 25 columns to avoid massive payloads for wide datasets
     target_cols = df.columns[:25]
     for col in target_cols:
-        series = df[col].apply(lambda x: ", ".join(x) if isinstance(x, (list, tuple)) else x)
+        # P2 FIX: Only apply list-join transformation to object-dtype columns
+        is_object = df[col].dtype == "object"
+        if is_object:
+            series = df[col].apply(
+                lambda x: ", ".join(x) if isinstance(x, (list, tuple)) else x
+            )
+        else:
+            series = df[col]
         col_info = {
             "name": col,
             "dtype": str(df[col].dtype),
@@ -145,10 +162,11 @@ def get_data_summary(df: pd.DataFrame) -> dict:
 
     # 3. Head and tail (Truncated strings)
     def _safe_df_dict(sub_df):
-        # Truncate any cell that is a string and > 100 chars
-        sub_df = sub_df.copy()
-        for col in sub_df.columns:
-            if sub_df[col].dtype == "object":
+        # P3 FIX: Only copy and truncate object-dtype columns, skip numerics
+        obj_cols = [c for c in sub_df.columns if sub_df[c].dtype == "object"]
+        if obj_cols:
+            sub_df = sub_df.copy()
+            for col in obj_cols:
                 sub_df[col] = sub_df[col].apply(
                     lambda x: str(x)[:100] + "..." if len(str(x)) > 100 else x
                 )
@@ -160,14 +178,8 @@ def get_data_summary(df: pd.DataFrame) -> dict:
     except Exception:
         summary["head_5_rows"] = "unavailable"
 
-    # 4. Describe overall (if not too wide)
-    if len(df.columns) <= 15:
-        try:
-            desc = df.describe(include="all").to_dict()
-            # Handled NaN by str() if needed
-            summary["pandas_describe"] = desc
-        except Exception:
-            pass
+    # P3: Removed redundant df.describe(include='all') — the AI already gets
+    # head_5_rows, tail_3_rows, and per-column stats. Saves O(n×m) on large datasets.
 
     return summary
 

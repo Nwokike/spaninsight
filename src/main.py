@@ -36,6 +36,52 @@ logger = logging.getLogger("spaninsight")
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+# Monkeypatch Matplotlib WebAgg backend to prevent KeyError on unmount
+try:
+    import matplotlib.backends.backend_webagg_core as webagg
+
+    for cls_name in ["FigureManager", "FigureManagerWebAgg"]:
+        if hasattr(webagg, cls_name):
+            cls = getattr(webagg, cls_name)
+            if hasattr(cls, "remove_web_socket"):
+                original_remove = cls.remove_web_socket
+
+                def make_safe_remove(orig):
+                    def safe_remove(self, web_socket):
+                        try:
+                            self.web_sockets.discard(web_socket)
+                        except Exception:
+                            try:
+                                orig(self, web_socket)
+                            except KeyError:
+                                pass
+
+                    return safe_remove
+
+                cls.remove_web_socket = make_safe_remove(original_remove)
+except Exception as monkey_err:
+    logger.warning(
+        "Failed to monkeypatch matplotlib FigureManager remove_web_socket: %s",
+        monkey_err,
+    )
+
+# Monkeypatch FigureManagerBase to stub WebAgg methods that flet_charts expects.
+# The Agg backend (used in sandbox) uses FigureManagerBase directly, which lacks
+# add_web_socket/remove_web_socket/handle_json — flet_charts.MatplotlibChart calls these.
+try:
+    import matplotlib.backend_bases as _mb
+
+    if not hasattr(_mb.FigureManagerBase, "add_web_socket"):
+        _mb.FigureManagerBase.add_web_socket = lambda self, ws: None
+    if not hasattr(_mb.FigureManagerBase, "remove_web_socket"):
+        _mb.FigureManagerBase.remove_web_socket = lambda self, ws: None
+    if not hasattr(_mb.FigureManagerBase, "handle_json"):
+        _mb.FigureManagerBase.handle_json = lambda self, msg: None
+except Exception as agg_err:
+    logger.warning(
+        "Failed to monkeypatch FigureManagerBase for flet_charts: %s", agg_err
+    )
+
 
 async def main(page: ft.Page):
     """Main Flet application entry point."""
@@ -55,18 +101,16 @@ async def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     state.theme_mode = page.theme_mode
 
-    # Desktop window sizing — mobile-friendly defaults but resizable
-    page.window.width = 420
-    page.window.height = 820
+    # Desktop window sizing — beautiful responsive defaults
     page.window.min_width = 360
     page.window.min_height = 600
-    page.window.max_width = 480  # Keep mobile-like proportions on desktop
 
     page.padding = 0
     page.spacing = 0
 
     # ── Asset Validation ────────────────────────────────────────────
     import os
+
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
     for asset in ("icon.png", "logo.png"):
         if not os.path.exists(os.path.join(assets_dir, asset)):
@@ -99,7 +143,14 @@ async def main(page: ft.Page):
             pass
         try:
             from services.api_client import close_client
+
             await close_client()
+        except Exception:
+            pass
+        try:
+            from services.mcp_client import mcp_manager
+
+            await mcp_manager.close_all()
         except Exception:
             pass
 
@@ -133,6 +184,21 @@ async def main(page: ft.Page):
     # Initialize credits (daily reset)
     state.credits_remaining = await credit_service.initialize()
 
+    # Load MCP Servers
+    from core.constants import STORAGE_MCP_SERVERS
+
+    try:
+        mcp_servers_json = await storage.get(STORAGE_MCP_SERVERS)
+        if mcp_servers_json:
+            import json
+
+            state.mcp_servers = json.loads(mcp_servers_json)
+        else:
+            state.mcp_servers = []
+    except Exception as e:
+        logger.warning("MCP servers load failed: %s", e)
+        state.mcp_servers = []
+
     # Preload interstitial ad
     page.run_task(ad_service.preload_interstitial)
 
@@ -145,7 +211,12 @@ async def main(page: ft.Page):
             logger.warning("Gateway offline — AI features will use fallbacks")
         # P9: Version check
         try:
-            from core.constants import API_BASE_URL, APP_CLIENT_ID, USER_AGENT, APP_VERSION
+            from core.constants import (
+                API_BASE_URL,
+                APP_CLIENT_ID,
+                USER_AGENT,
+                APP_VERSION,
+            )
             from core.utils import parse_version
             from services.api_client import get_client
 
@@ -216,17 +287,58 @@ async def main(page: ft.Page):
         page.route = route
         await route_change()
 
-    def on_import_file(e):
+    async def _save_recent_analysis():
+        """Persist current analysis session to recent_analyses storage."""
+        if not storage or not state.current_df_name:
+            return
+        try:
+            recent_str = await storage.get("recent_analyses")
+            recent = json.loads(recent_str) if recent_str else []
+
+            # Remove duplicate if same file was analyzed before
+            recent = [
+                s for s in recent if s.get("file_path") != state.current_file_path
+            ]
+
+            import datetime
+
+            recent.insert(
+                0,
+                {
+                    "file_path": state.current_file_path,
+                    "df_name": state.current_df_name,
+                    "df_rows": state.current_df_rows,
+                    "df_cols": len(state.current_df_columns)
+                    if state.current_df_columns
+                    else 0,
+                    "timestamp": datetime.datetime.now().timestamp(),
+                    "chart_count": len(state.charts),
+                },
+            )
+
+            # Keep only last 10
+            recent = recent[:10]
+            await storage.set("recent_analyses", json.dumps(recent))
+        except Exception as e:
+            logger.warning("Failed to save recent analysis: %s", e)
+
+    def on_import_file(e, autopilot: bool = False):
         """Trigger file import — switch to analysis tab."""
         nav_bar.selected_index = 1
         state.current_tab = 1
         state.trigger_file_picker = True
+        state.autopilot_enabled = autopilot
         page.run_task(navigate, "/analysis")
 
     def on_nav_change(e):
         """Handle NavigationBar tab change."""
         index = e.control.selected_index
+        old_tab = state.current_tab
         state.current_tab = index
+
+        if old_tab == 1 and index != 1 and state.current_df is not None:
+            page.run_task(_save_recent_analysis)
+
         page.run_task(navigate, TAB_ROUTES[index])
 
     nav_bar.on_change = on_nav_change
@@ -299,6 +411,19 @@ async def main(page: ft.Page):
             view = build_splash_view()
             page.views.append(view)
 
+        elif route == "/onboarding":
+            from views.onboarding_view import build_onboarding_view
+
+            def _on_onboarding_done():
+                page.run_task(navigate, "/home")
+
+            view = build_onboarding_view(
+                page=page,
+                on_done=_on_onboarding_done,
+                storage=storage,
+            )
+            page.views.append(view)
+
         else:
             from views.home_view import build_home_view
 
@@ -322,16 +447,35 @@ async def main(page: ft.Page):
         if page.views:
             top = page.views[-1]
             page.route = top.route
+            try:
+                nav_bar.selected_index = TAB_ROUTES.index(page.route)
+            except ValueError:
+                pass
         page.update()
 
     # ── Register Handlers ──────────────────────────────────
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    # ── Splash → Home ────────────────────────────────────────
+    # ── Splash → Home/Onboarding ─────────────────────────────
+    # U1 FIX: Event-driven splash — dismiss when initialization is complete
+    # rather than a fixed 2-second delay
+    splash_start = asyncio.get_event_loop().time()
+
     async def splash_complete():
-        await asyncio.sleep(2)
-        await navigate("/home")
+        # Ensure splash is shown for at least 1.5s (avoid flicker)
+        elapsed = asyncio.get_event_loop().time() - splash_start
+        remaining = max(0, 1.5 - elapsed)
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+
+        from core.constants import STORAGE_ONBOARDING_DONE
+
+        onboarding_done = await storage.get(STORAGE_ONBOARDING_DONE)
+        if onboarding_done == "true":
+            await navigate("/home")
+        else:
+            await navigate("/onboarding")
 
     await navigate("/splash")
     page.run_task(splash_complete)

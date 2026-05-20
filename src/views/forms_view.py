@@ -33,6 +33,15 @@ def build_forms_view(page: ft.Page) -> ft.View:
     recording_timer = ft.Ref[ft.Text]()
     editor_recording_timer = ft.Ref[ft.Text]()
 
+    # C1/P1 FIX: Incremental UI refs
+    dashboard_container_ref = ft.Ref[ft.Container]()
+    editor_container_ref = ft.Ref[ft.Container]()
+    detail_container_ref = ft.Ref[ft.Container]()
+    user_forms_column_ref = ft.Ref[ft.Column]()
+    dashboard_progress_bar_ref = ft.Ref[ft.ProgressBar]()
+    dashboard_voice_button_ref = ft.Ref[ft.IconButton]()
+    dashboard_send_button_ref = ft.Ref[ft.IconButton]()
+
     user_forms: list[dict] = []
     is_loading = {"value": False}
     is_creating = {"value": False}
@@ -164,9 +173,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
             _rebuild()
         else:
             started = await audio_svc.start_recording(
-                on_auto_stop=lambda res: page.run_task(
-                    _handle_editor_auto_stop, res
-                )
+                on_auto_stop=lambda res: page.run_task(_handle_editor_auto_stop, res)
             )
             if started:
                 editor_recording["value"] = True
@@ -180,7 +187,9 @@ def build_forms_view(page: ft.Page) -> ft.View:
             if editor_recording["value"]:
                 editor_recording_time["value"] += 1
                 if editor_recording_timer.current:
-                    editor_recording_timer.current.value = f"00:{editor_recording_time['value']:02d} / 01:00"
+                    editor_recording_timer.current.value = (
+                        f"00:{editor_recording_time['value']:02d} / 01:00"
+                    )
                     page.update(editor_recording_timer.current)
 
     async def _handle_editor_auto_stop(result):
@@ -275,7 +284,9 @@ def build_forms_view(page: ft.Page) -> ft.View:
             if is_recording["value"]:
                 recording_time["value"] += 1
                 if recording_timer.current:
-                    recording_timer.current.value = f"00:{recording_time['value']:02d} / 01:00"
+                    recording_timer.current.value = (
+                        f"00:{recording_time['value']:02d} / 01:00"
+                    )
                     page.update(recording_timer.current)
 
     async def _handle_auto_stop(result):
@@ -296,7 +307,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
 
     async def on_view_form(form: dict):
         active_form["data"] = form
-        resp_data = await forms_service.get_responses(form["id"])
+        resp_data = await forms_service.get_responses(form["id"], state.user_uuid)
         active_form["data"]["_responses"] = resp_data.get("responses", [])
         active_form["data"]["_count"] = resp_data.get("count", 0)
         _rebuild()
@@ -313,7 +324,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
         page.update()
 
     async def on_renew_form(form_id: str):
-        new_exp = await forms_service.renew_form(form_id)
+        new_exp = await forms_service.renew_form(form_id, state.user_uuid)
         if new_exp:
             page.snack_bar = ft.SnackBar(
                 ft.Text(f"Extended to {new_exp[:10]}"), duration=3000
@@ -324,7 +335,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
             _show_error("Failed to renew.")
 
     async def on_delete_form(form_id: str):
-        success = await forms_service.delete_form(form_id)
+        success = await forms_service.delete_form(form_id, state.user_uuid)
         if success:
             active_form["data"] = None
             page.snack_bar = ft.SnackBar(ft.Text("Form deleted."), duration=2000)
@@ -350,7 +361,12 @@ def build_forms_view(page: ft.Page) -> ft.View:
             if result:
                 csv_bytes_local = csv_bytes
                 try:
-                    await asyncio.to_thread(lambda: open(result, "wb").write(csv_bytes_local))
+
+                    def _write_csv():
+                        with open(result, "wb") as f:
+                            f.write(csv_bytes_local)
+
+                    await asyncio.to_thread(_write_csv)
                     page.snack_bar = ft.SnackBar(ft.Text("Saved!"), duration=3000)
                     page.snack_bar.open = True
                     page.update()
@@ -686,206 +702,294 @@ def build_forms_view(page: ft.Page) -> ft.View:
         controls.append(ft.Container(height=100))
         return controls
 
-    # ── Build Content ────────────────────────────────────────────
+    # ── Dashboard Layout ──────────────────────────────────────────
 
-    def _build_content() -> list[ft.Control]:
-        # State 2: Editor mode
-        if editor_active["value"]:
-            return build_form_editor(
-                schema=draft_schema,
-                title=draft_title["value"],
-                description=draft_desc["value"],
-                on_schema_changed=_rebuild,
-                on_title_changed=lambda v: (draft_title.__setitem__("value", v),),
-                on_desc_changed=lambda v: (draft_desc.__setitem__("value", v),),
-                on_publish=lambda: page.run_task(on_publish),
-                on_cancel=on_cancel_editor,
-                on_ai_edit=lambda action, text="": page.run_task(
-                    on_ai_edit, action, text
-                ),
-                on_voice_toggle=lambda e: page.run_task(on_editor_voice_toggle, e),
-                is_publishing=is_publishing["value"],
-                is_recording=editor_recording["value"],
-                is_transcribing=editor_transcribing["value"],
-                is_ai_editing=is_ai_editing["value"],
-                recording_time=editor_recording_time["value"],
-                ai_prompt_text=ai_edit_text["value"],
-            )
-
-        # State 3: Form detail
-        if active_form["data"]:
-            return _build_form_detail(active_form["data"])
-
-        # State 1: Create + list
-        controls = []
-        controls.append(build_brand_header(show_tagline=True, spacing_below=True))
-        controls.append(
-            ft.Container(
-                content=ft.Column(
-                    [
-                        ft.Text("Create a Survey", weight="bold", size=16),
-                        ft.Text(
-                            "Describe your questionnaire — AI generates it, you edit before publishing.",
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
-                        ft.Container(height=8),
-                        ft.Row(
-                            [
-                                ft.TextField(
-                                    ref=form_prompt_field,
-                                    value=prompt_text["value"],
-                                    hint_text="e.g. 'A survey about student study habits...'",
-                                    expand=True,
-                                    border_radius=12,
-                                    max_lines=3,
-                                    min_lines=1,
-                                    on_change=lambda e: prompt_text.__setitem__(
-                                        "value", e.control.value
-                                    ),
-                                    on_submit=lambda e: page.run_task(
-                                        on_create_form, e
-                                    ),
-                                    disabled=is_creating["value"]
-                                    or is_recording["value"],
-                                ),
-                                ft.Row(
-                                    [
-                                    ft.Text(
-                                        ref=recording_timer,
-                                        value=f"00:{recording_time['value']:02d} / 01:00",
-                                            size=11,
-                                            color=theme.ERROR,
-                                            weight="bold",
-                                            visible=is_recording["value"],
-                                        ),
-                                        ft.IconButton(
-                                            ft.Icons.STOP_ROUNDED
-                                            if is_recording["value"]
-                                            else ft.Icons.MIC_ROUNDED,
-                                            icon_color=theme.ERROR
-                                            if is_recording["value"]
-                                            else theme.ACCENT,
-                                            tooltip="Stop"
-                                            if is_recording["value"]
-                                            else "Voice",
-                                            on_click=lambda e: page.run_task(
-                                                on_voice_toggle, e
-                                            ),
-                                            disabled=is_creating["value"],
-                                        ),
-                                    ],
-                                    spacing=2,
-                                    vertical_alignment="center",
-                                ),
-                                ft.IconButton(
-                                    ft.Icons.SEND_ROUNDED,
-                                    icon_color=theme.PRIMARY,
-                                    on_click=lambda e: page.run_task(on_create_form, e),
-                                    disabled=is_creating["value"]
-                                    or is_recording["value"],
-                                ),
-                            ],
-                            spacing=4,
-                            vertical_alignment="center",
-                        ),
-                        ft.ProgressBar(
-                            visible=is_creating["value"] or is_transcribing["value"]
-                        ),
-                        ft.Row(
-                            [
-                                ft.ProgressRing(width=16, height=16, stroke_width=2),
-                                ft.Text(
-                                    "Transcribing your voice...",
-                                    size=12,
-                                    color=theme.ACCENT,
-                                ),
-                            ],
-                            spacing=8,
-                            alignment="center",
-                            visible=is_transcribing["value"],
-                        ),
-                    ],
-                    spacing=4,
-                ),
-                padding=20,
-                margin=ft.Margin(20, 10, 20, 10),
-                border_radius=16,
-                bgcolor=theme.GLASS_BG,
-                border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
-            )
-        )
-
-        controls.append(
-            ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Text("Your Forms", weight="bold", size=16),
-                        ft.TextButton(
-                            "Refresh",
-                            icon=ft.Icons.REFRESH_ROUNDED,
-                            on_click=lambda e: page.run_task(load_forms),
-                        ),
-                    ],
-                    alignment="spaceBetween",
-                ),
-                padding=ft.Padding(20, 16, 20, 4),
-            )
-        )
-
-        if is_loading["value"]:
-            controls.append(
-                ft.Container(
-                    content=ft.Row(
-                        [
-                            ft.ProgressRing(width=16, height=16),
-                            ft.Text("Loading forms..."),
-                        ],
-                        spacing=10,
-                        alignment="center",
-                    ),
-                    padding=20,
-                )
-            )
-        elif not user_forms:
-            controls.append(
+    def _build_dashboard_layout() -> ft.Column:
+        return ft.Column(
+            [
+                build_brand_header(show_tagline=True, spacing_below=True),
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Icon(
-                                ft.Icons.DYNAMIC_FORM_ROUNDED,
-                                size=48,
-                                color=ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE),
-                            ),
+                            ft.Text("Create a Survey", weight="bold", size=16),
                             ft.Text(
-                                "No forms yet",
+                                "Describe your questionnaire — AI generates it, you edit before publishing.",
+                                size=12,
                                 color=ft.Colors.ON_SURFACE_VARIANT,
-                                size=13,
                             ),
-                            ft.Text(
-                                "Create your first survey above!",
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                size=11,
+                            ft.Container(height=8),
+                            ft.Row(
+                                [
+                                    ft.TextField(
+                                        ref=form_prompt_field,
+                                        value=prompt_text["value"],
+                                        hint_text="e.g. 'A survey about student study habits...'",
+                                        expand=True,
+                                        border_radius=12,
+                                        max_lines=3,
+                                        min_lines=1,
+                                        on_change=lambda e: prompt_text.__setitem__(
+                                            "value", e.control.value
+                                        ),
+                                        on_submit=lambda e: page.run_task(
+                                            on_create_form, e
+                                        ),
+                                        disabled=is_creating["value"]
+                                        or is_recording["value"],
+                                    ),
+                                    ft.Row(
+                                        [
+                                            ft.Text(
+                                                ref=recording_timer,
+                                                value=f"00:{recording_time['value']:02d} / 01:00",
+                                                size=11,
+                                                color=theme.ERROR,
+                                                weight="bold",
+                                                visible=is_recording["value"],
+                                            ),
+                                            ft.IconButton(
+                                                ref=dashboard_voice_button_ref,
+                                                icon=ft.Icons.STOP_ROUNDED
+                                                if is_recording["value"]
+                                                else ft.Icons.MIC_ROUNDED,
+                                                icon_color=theme.ERROR
+                                                if is_recording["value"]
+                                                else theme.ACCENT,
+                                                tooltip="Stop"
+                                                if is_recording["value"]
+                                                else "Voice",
+                                                on_click=lambda e: page.run_task(
+                                                    on_voice_toggle, e
+                                                ),
+                                                disabled=is_creating["value"],
+                                            ),
+                                        ],
+                                        spacing=2,
+                                        vertical_alignment="center",
+                                    ),
+                                    ft.IconButton(
+                                        ref=dashboard_send_button_ref,
+                                        icon=ft.Icons.SEND_ROUNDED,
+                                        icon_color=theme.PRIMARY,
+                                        on_click=lambda e: page.run_task(
+                                            on_create_form, e
+                                        ),
+                                        disabled=is_creating["value"]
+                                        or is_recording["value"],
+                                    ),
+                                ],
+                                spacing=4,
+                                vertical_alignment="center",
+                            ),
+                            ft.ProgressBar(
+                                ref=dashboard_progress_bar_ref,
+                                visible=is_creating["value"]
+                                or is_transcribing["value"],
+                            ),
+                            ft.Row(
+                                [
+                                    ft.ProgressRing(
+                                        width=16, height=16, stroke_width=2
+                                    ),
+                                    ft.Text(
+                                        "Transcribing your voice...",
+                                        size=12,
+                                        color=theme.ACCENT,
+                                    ),
+                                ],
+                                spacing=8,
+                                alignment="center",
+                                visible=is_transcribing["value"],
                             ),
                         ],
-                        horizontal_alignment="center",
-                        spacing=8,
+                        spacing=4,
                     ),
-                    padding=40,
-                    alignment=ft.Alignment.CENTER,
-                )
-            )
-        else:
-            for form in user_forms:
-                controls.append(_build_form_card(form))
-
-        controls.append(ft.Container(height=100))
-        return controls
+                    padding=20,
+                    margin=ft.Margin(20, 10, 20, 10),
+                    border_radius=16,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                ),
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Text("Your Forms", weight="bold", size=16),
+                            ft.TextButton(
+                                "Refresh",
+                                icon=ft.Icons.REFRESH_ROUNDED,
+                                on_click=lambda e: page.run_task(load_forms),
+                            ),
+                        ],
+                        alignment="spaceBetween",
+                    ),
+                    padding=ft.Padding(20, 16, 20, 4),
+                ),
+                ft.Column(ref=user_forms_column_ref, controls=[]),
+                ft.Container(height=100),
+            ]
+        )
 
     def _rebuild():
-        if content_column.current:
-            content_column.current.controls = _build_content()
-            page.update()
+        if not content_column.current:
+            return
+
+        # 1. Determine active state
+        show_editor = editor_active["value"]
+        show_detail = active_form["data"] is not None
+        show_dashboard = not show_editor and not show_detail
+
+        # Toggle visibilities of containers
+        for ref, vis in [
+            (dashboard_container_ref, show_dashboard),
+            (editor_container_ref, show_editor),
+            (detail_container_ref, show_detail),
+        ]:
+            if ref.current and ref.current.visible != vis:
+                ref.current.visible = vis
+                ref.current.update()
+
+        # 2. Update the active view content
+        if show_editor:
+            if editor_container_ref.current:
+                editor_container_ref.current.content = ft.Column(
+                    build_form_editor(
+                        schema=draft_schema,
+                        title=draft_title["value"],
+                        description=draft_desc["value"],
+                        on_schema_changed=_rebuild,
+                        on_title_changed=lambda v: (
+                            draft_title.__setitem__("value", v),
+                        ),
+                        on_desc_changed=lambda v: (draft_desc.__setitem__("value", v),),
+                        on_publish=lambda: page.run_task(on_publish),
+                        on_cancel=on_cancel_editor,
+                        on_ai_edit=lambda action, text="": page.run_task(
+                            on_ai_edit, action, text
+                        ),
+                        on_voice_toggle=lambda e: page.run_task(
+                            on_editor_voice_toggle, e
+                        ),
+                        is_publishing=is_publishing["value"],
+                        is_recording=editor_recording["value"],
+                        is_transcribing=editor_transcribing["value"],
+                        is_ai_editing=is_ai_editing["value"],
+                        recording_time=editor_recording_time["value"],
+                        ai_prompt_text=ai_edit_text["value"],
+                        recording_timer_ref=editor_recording_timer,
+                    )
+                )
+                editor_container_ref.current.update()
+
+        elif show_detail:
+            if detail_container_ref.current:
+                detail_container_ref.current.content = ft.Column(
+                    _build_form_detail(active_form["data"])
+                )
+                detail_container_ref.current.update()
+
+        else:
+            # Dashboard is active
+            if dashboard_container_ref.current:
+                # Initialize layout if empty
+                if not dashboard_container_ref.current.content or not isinstance(
+                    dashboard_container_ref.current.content, ft.Column
+                ):
+                    dashboard_container_ref.current.content = _build_dashboard_layout()
+                    dashboard_container_ref.current.update()
+
+                # A. Update input & loading states in place
+                if form_prompt_field.current:
+                    form_prompt_field.current.disabled = (
+                        is_creating["value"] or is_recording["value"]
+                    )
+                    form_prompt_field.current.update()
+
+                if recording_timer.current:
+                    recording_timer.current.value = (
+                        f"00:{recording_time['value']:02d} / 01:00"
+                    )
+                    recording_timer.current.visible = is_recording["value"]
+                    recording_timer.current.update()
+
+                if dashboard_voice_button_ref.current:
+                    dashboard_voice_button_ref.current.icon = (
+                        ft.Icons.STOP_ROUNDED
+                        if is_recording["value"]
+                        else ft.Icons.MIC_ROUNDED
+                    )
+                    dashboard_voice_button_ref.current.icon_color = (
+                        theme.ERROR if is_recording["value"] else theme.ACCENT
+                    )
+                    dashboard_voice_button_ref.current.tooltip = (
+                        "Stop" if is_recording["value"] else "Voice"
+                    )
+                    dashboard_voice_button_ref.current.disabled = is_creating["value"]
+                    dashboard_voice_button_ref.current.update()
+
+                if dashboard_send_button_ref.current:
+                    dashboard_send_button_ref.current.disabled = (
+                        is_creating["value"] or is_recording["value"]
+                    )
+                    dashboard_send_button_ref.current.update()
+
+                if dashboard_progress_bar_ref.current:
+                    dashboard_progress_bar_ref.current.visible = (
+                        is_creating["value"] or is_transcribing["value"]
+                    )
+                    dashboard_progress_bar_ref.current.update()
+
+                # B. Update forms list column
+                if user_forms_column_ref.current:
+                    if is_loading["value"]:
+                        user_forms_column_ref.current.controls = [
+                            ft.Container(
+                                content=ft.Row(
+                                    [
+                                        ft.ProgressRing(width=16, height=16),
+                                        ft.Text("Loading forms..."),
+                                    ],
+                                    spacing=10,
+                                    alignment="center",
+                                ),
+                                padding=20,
+                            )
+                        ]
+                    elif not user_forms:
+                        user_forms_column_ref.current.controls = [
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Icon(
+                                            ft.Icons.DYNAMIC_FORM_ROUNDED,
+                                            size=48,
+                                            color=ft.Colors.with_opacity(
+                                                0.2, ft.Colors.ON_SURFACE
+                                            ),
+                                        ),
+                                        ft.Text(
+                                            "No forms yet",
+                                            color=ft.Colors.ON_SURFACE_VARIANT,
+                                            size=13,
+                                        ),
+                                        ft.Text(
+                                            "Describe a survey topic above to generate your first form.",
+                                            size=11,
+                                            color=ft.Colors.ON_SURFACE_VARIANT,
+                                            text_align="center",
+                                        ),
+                                    ],
+                                    spacing=8,
+                                    horizontal_alignment="center",
+                                ),
+                                padding=40,
+                                alignment=ft.Alignment.CENTER,
+                            )
+                        ]
+                    else:
+                        user_forms_column_ref.current.controls = [
+                            _build_form_card(form) for form in user_forms
+                        ]
+                    user_forms_column_ref.current.update()
 
     page.run_task(load_forms)
 
@@ -897,7 +1001,19 @@ def build_forms_view(page: ft.Page) -> ft.View:
         controls=[
             ft.Column(
                 ref=content_column,
-                controls=_build_content(),
+                controls=[
+                    ft.Container(
+                        ref=dashboard_container_ref,
+                        visible=True,
+                        content=_build_dashboard_layout(),
+                    ),
+                    ft.Container(
+                        ref=editor_container_ref, visible=False, content=ft.Column([])
+                    ),
+                    ft.Container(
+                        ref=detail_container_ref, visible=False, content=ft.Column([])
+                    ),
+                ],
                 scroll="auto",
                 expand=True,
             )

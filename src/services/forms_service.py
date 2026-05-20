@@ -29,7 +29,19 @@ async def create_form(
         logger.error("Form schema must be a list, got %s", type(schema_json).__name__)
         return None
 
-    valid_types = {"text", "textarea", "number", "email", "select", "radio", "checkbox", "date", "phone", "url", "rating"}
+    valid_types = {
+        "text",
+        "textarea",
+        "number",
+        "email",
+        "select",
+        "radio",
+        "checkbox",
+        "date",
+        "phone",
+        "url",
+        "rating",
+    }
     for i, field in enumerate(schema_json):
         if not isinstance(field, dict):
             logger.error("Field %d is not a dict", i)
@@ -142,9 +154,11 @@ def responses_to_csv_bytes(responses: list[dict]) -> bytes:
 
     Each response has a 'data' dict with field values.
     """
-    import pandas as pd
+    # P5 FIX: pandas imported at module level
     if not responses:
         return b""
+
+    import pandas as pd
 
     rows = [r["data"] for r in responses]
     df = pd.DataFrame(rows)

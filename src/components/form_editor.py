@@ -35,8 +35,21 @@ TYPE_ICONS = {
 HAS_OPTIONS = {"select", "radio", "checkbox"}
 
 
-def new_field(label="New Field", ftype="text"):
-    """Create a blank field dict."""
+def new_field(schema: list[dict], ftype="text") -> dict:
+    """Create a blank field dict with a unique label."""
+    existing_labels = {f["label"].lower() for f in schema}
+    base_label = "New Field"
+    if base_label.lower() not in existing_labels:
+        label = base_label
+    else:
+        counter = 1
+        while True:
+            candidate = f"{base_label} {counter}"
+            if candidate.lower() not in existing_labels:
+                label = candidate
+                break
+            counter += 1
+
     return {
         "name": label.lower().replace(" ", "_"),
         "label": label,
@@ -53,18 +66,30 @@ def build_field_card(
     on_change,
     on_move,
     on_delete,
+    schema: list[dict] | None = None,
 ) -> ft.Container:
     """Render one editable field card."""
 
     def _update(key, val):
         field[key] = val
         if key == "label":
-            field["name"] = val.lower().replace(" ", "_")
-        on_change()
+            base_name = val.lower().replace(" ", "_")
+            name = base_name
+            if schema:
+                existing_names = {
+                    schema[i]["name"] for i in range(len(schema)) if i != index
+                }
+                if name in existing_names:
+                    counter = 1
+                    while f"{base_name}_{counter}" in existing_names:
+                        counter += 1
+                    name = f"{base_name}_{counter}"
+            field["name"] = name
+        if key == "type":
+            on_change()
 
     def _update_options(val: str):
         field["options"] = [o.strip() for o in val.split(",") if o.strip()]
-        on_change()
 
     type_options = [ft.DropdownOption(key=t, text=t.upper()) for t in FIELD_TYPES]
 
@@ -171,6 +196,7 @@ def build_form_editor(
     is_ai_editing: bool = False,
     recording_time: int = 0,
     ai_prompt_text: str = "",
+    recording_timer_ref: ft.Ref[ft.Text] | None = None,
 ) -> list[ft.Control]:
     """Build the full form editor UI. Returns a list of controls."""
     controls = []
@@ -222,7 +248,7 @@ def build_form_editor(
         controls.append(
             ft.Container(
                 content=build_field_card(
-                    field, i, total, on_schema_changed, _move, _delete
+                    field, i, total, on_schema_changed, _move, _delete, schema
                 ),
                 margin=ft.Margin(20, 4, 20, 4),
             )
@@ -234,7 +260,10 @@ def build_form_editor(
             content=ft.OutlinedButton(
                 "+ Add Field",
                 icon=ft.Icons.ADD_ROUNDED,
-                on_click=lambda e: (schema.append(new_field()), on_schema_changed()),
+                on_click=lambda e: (
+                    schema.append(new_field(schema)),
+                    on_schema_changed(),
+                ),
                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
             ),
             padding=ft.Padding(20, 4, 20, 4),
@@ -271,7 +300,8 @@ def build_form_editor(
                             ft.Row(
                                 [
                                     ft.Text(
-                                        f"00:{recording_time:02d} / 01:00",
+                                        ref=recording_timer_ref,
+                                        value=f"00:{recording_time:02d} / 01:00",
                                         size=11,
                                         color=theme.ERROR,
                                         weight="bold",
@@ -357,4 +387,3 @@ def build_form_editor(
 
     controls.append(ft.Container(height=100))
     return controls
-

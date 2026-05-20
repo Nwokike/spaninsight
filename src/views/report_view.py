@@ -1,10 +1,12 @@
-"""Report view — displays pinned charts + descriptions with export and sharing."""
+"""Report view — displays pinned charts + descriptions with sharing.
+
+PDF and PPTX exports are handled by the web dashboard at report.spaninsight.com,
+not in-app. This keeps the Android APK ~20MB smaller.
+"""
 
 from __future__ import annotations
 
-import asyncio
 import base64
-import io
 import logging
 
 import flet as ft
@@ -24,91 +26,28 @@ logger = logging.getLogger(__name__)
 def build_report_view(
     page: ft.Page, on_back=None, ad_service: AdService | None = None
 ) -> ft.View:
-    """Build the report view with export and sharing."""
+    """Build the report view with sharing."""
 
-    # ── Export Handlers ──────────────────────────────────────────────
+    is_sharing = {"value": False}
 
-    async def on_export_pdf(e):
-        if not state.charts:
-            return
-
-        page.snack_bar = ft.SnackBar(ft.Text("Generating PDF..."), duration=2000)
-        page.snack_bar.open = True
-        page.update()
-
-        try:
-            # Show interstitial ad during generation
-            if ad_service:
-                await ad_service.show_interstitial()
-
-            pdf_bytes = _generate_pdf()
-
-            # Flet 0.85.0: FilePicker is a Service, NOT a Control
-            picker = ft.FilePicker()
-            result = await picker.save_file(
-                dialog_title="Save Report PDF",
-                file_name="spaninsight_report.pdf",
-                allowed_extensions=["pdf"],
-            )
-            if result:
-                await asyncio.to_thread(lambda: open(result, "wb").write(pdf_bytes))
-                page.snack_bar = ft.SnackBar(ft.Text("PDF saved!"), duration=3000)
-                page.snack_bar.open = True
-                page.update()
-        except Exception as err:
-            logger.exception("PDF export failed")
-            page.snack_bar = ft.SnackBar(
-                ft.Text(f"PDF export failed: {err}", color=ft.Colors.WHITE),
-                bgcolor=theme.ERROR,
-                duration=4000,
-            )
-            page.snack_bar.open = True
-            page.update()
-
-    async def on_export_pptx(e):
-        if not state.charts:
-            return
-
-        page.snack_bar = ft.SnackBar(ft.Text("Generating PowerPoint..."), duration=2000)
-        page.snack_bar.open = True
-        page.update()
-
-        try:
-            if ad_service:
-                await ad_service.show_interstitial()
-
-            pptx_bytes = _generate_pptx()
-
-            picker = ft.FilePicker()
-            result = await picker.save_file(
-                dialog_title="Save Report PPTX",
-                file_name="spaninsight_report.pptx",
-                allowed_extensions=["pptx"],
-            )
-            if result:
-                await asyncio.to_thread(lambda: open(result, "wb").write(pptx_bytes))
-                page.snack_bar = ft.SnackBar(ft.Text("PPTX saved!"), duration=3000)
-                page.snack_bar.open = True
-                page.update()
-        except Exception as err:
-            logger.exception("PPTX export failed")
-            page.snack_bar = ft.SnackBar(
-                ft.Text(f"PPTX failed: {err}", color=ft.Colors.WHITE),
-                bgcolor=theme.ERROR,
-                duration=4000,
-            )
-            page.snack_bar.open = True
-            page.update()
+    # ── Share Handler ────────────────────────────────────────────────
 
     async def on_share_report(e):
-        if not state.charts:
+        if not state.charts or is_sharing["value"]:
             return
 
-        page.snack_bar = ft.SnackBar(ft.Text("Uploading report..."), duration=2000)
+        is_sharing["value"] = True
+        page.snack_bar = ft.SnackBar(
+            ft.Text("Creating shareable link..."), duration=2000
+        )
         page.snack_bar.open = True
         page.update()
 
         try:
+            # Show interstitial ad during upload
+            if ad_service:
+                await ad_service.show_interstitial()
+
             report_json = _build_report_json()
 
             resp = await request_with_retry(
@@ -125,7 +64,32 @@ def build_report_view(
                 url = data.get("url", "")
                 await page.clipboard.set(url)
                 page.snack_bar = ft.SnackBar(
-                    ft.Text(f"Link copied! {url}"), duration=5000
+                    content=ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.CHECK_CIRCLE_ROUNDED,
+                                color=theme.SUCCESS,
+                                size=20,
+                            ),
+                            ft.Column(
+                                [
+                                    ft.Text(
+                                        "Link copied to clipboard!",
+                                        weight=ft.FontWeight.W_600,
+                                    ),
+                                    ft.Text(
+                                        "Open it in a browser to view, export PDF, or download PPTX.",
+                                        size=12,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    ),
+                                ],
+                                spacing=2,
+                                expand=True,
+                            ),
+                        ],
+                        spacing=12,
+                    ),
+                    duration=6000,
                 )
                 page.snack_bar.open = True
                 page.update()
@@ -145,135 +109,25 @@ def build_report_view(
             )
             page.snack_bar.open = True
             page.update()
+        finally:
+            is_sharing["value"] = False
 
-    # ── Export Generators ────────────────────────────────────────────
-
-    def _figure_to_png_bytes(figure) -> bytes:
-        """Convert a matplotlib figure to PNG bytes and close it."""
-        return figure_to_png_bytes(figure, dpi=150)
+    # ── Helpers ───────────────────────────────────────────────────────
 
     def _get_chart_png_bytes(chart: dict) -> bytes | None:
-        """Get PNG bytes for a chart — prefer cached, convert if needed."""
+        """Get PNG bytes for a chart — prefer cached, fallback to figure."""
         if chart.get("figure_png"):
             return chart["figure_png"]
-        if chart.get("figure"):
-            return _figure_to_png_bytes(chart["figure"])
+        fig = chart.get("figure")
+        if fig is not None:
+            try:
+                fig.get_size_inches()
+                png = figure_to_png_bytes(fig, dpi=150)
+                chart["figure_png"] = png
+                return png
+            except Exception:
+                pass
         return None
-
-    def _generate_pdf() -> bytes:
-        """Generate a PDF report using fpdf2."""
-        from fpdf import FPDF
-
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-
-        # Title page
-        pdf.add_page()
-        pdf.set_font("Helvetica", "B", 24)
-        pdf.cell(0, 40, "Spaninsight Report", new_x="LMARGIN", new_y="NEXT", align="C")
-        pdf.set_font("Helvetica", "", 12)
-        pdf.cell(
-            0,
-            10,
-            f"{len(state.charts)} insights generated",
-            new_x="LMARGIN",
-            new_y="NEXT",
-            align="C",
-        )
-
-        for i, chart in enumerate(state.charts):
-            pdf.add_page()
-            pdf.set_font("Helvetica", "B", 14)
-            pdf.cell(
-                0,
-                10,
-                f"{i + 1}. {chart.get('prompt', 'Analysis')[:80]}",
-                new_x="LMARGIN",
-                new_y="NEXT",
-            )
-            pdf.ln(5)
-
-            # Chart image
-            if chart.get("figure") or chart.get("figure_png"):
-                try:
-                    img_bytes = _get_chart_png_bytes(chart)
-                    if img_bytes:
-                        img_buf = io.BytesIO(img_bytes)
-                        pdf.image(img_buf, x=15, w=180)
-                        pdf.ln(5)
-                except Exception as err:
-                    logger.warning("Could not embed chart %d: %s", i, err)
-
-            # Description
-            desc = chart.get("description", chart.get("insight", ""))
-            if desc:
-                pdf.set_font("Helvetica", "", 11)
-                pdf.multi_cell(0, 6, desc)
-
-        # Footer
-        pdf.add_page()
-        pdf.set_font("Helvetica", "I", 10)
-        pdf.cell(
-            0,
-            10,
-            "Generated by Spaninsight — Privacy-First Data Intelligence",
-            align="C",
-        )
-
-        return pdf.output()
-
-    def _generate_pptx() -> bytes:
-        """Generate a PowerPoint report using python-pptx."""
-        from pptx import Presentation
-        from pptx.util import Inches, Pt
-
-        prs = Presentation()
-        prs.slide_width = Inches(13.333)
-        prs.slide_height = Inches(7.5)
-
-        # Title slide
-        slide = prs.slides.add_slide(prs.slide_layouts[0])
-        slide.shapes.title.text = "Spaninsight Report"
-        slide.placeholders[1].text = f"{len(state.charts)} insights"
-
-        for i, chart in enumerate(state.charts):
-            slide = prs.slides.add_slide(prs.slide_layouts[5])  # Blank
-
-            # Title
-            txBox = slide.shapes.add_textbox(
-                Inches(0.5), Inches(0.3), Inches(12), Inches(0.8)
-            )
-            tf = txBox.text_frame
-            tf.text = chart.get("prompt", f"Analysis {i + 1}")
-            tf.paragraphs[0].font.size = Pt(24)
-            tf.paragraphs[0].font.bold = True
-
-            # Chart
-            if chart.get("figure") or chart.get("figure_png"):
-                try:
-                    img_bytes = _get_chart_png_bytes(chart)
-                    if img_bytes:
-                        img_stream = io.BytesIO(img_bytes)
-                        slide.shapes.add_picture(
-                            img_stream, Inches(1), Inches(1.3), width=Inches(8)
-                        )
-                except Exception:
-                    pass
-
-            # Description
-            desc = chart.get("description", chart.get("insight", ""))
-            if desc:
-                txBox2 = slide.shapes.add_textbox(
-                    Inches(0.5), Inches(5.5), Inches(12), Inches(1.5)
-                )
-                tf2 = txBox2.text_frame
-                tf2.text = desc
-                tf2.paragraphs[0].font.size = Pt(14)
-
-        buf = io.BytesIO()
-        prs.save(buf)
-        buf.seek(0)
-        return buf.read()
 
     def _build_report_json() -> dict:
         """Build JSON for R2 upload (Base64 chart images + descriptions)."""
@@ -298,7 +152,7 @@ def build_report_view(
             "items": items,
         }
 
-    # ── Content ─────────────────────────────────────────────────────
+    # ── Content ──────────────────────────────────────────────────────
 
     if not state.charts:
         content = ft.Column(
@@ -327,9 +181,7 @@ def build_report_view(
                             ft.FilledButton(
                                 "Start Analysis",
                                 icon=ft.Icons.ANALYTICS_ROUNDED,
-                                on_click=lambda _: (
-                                    setattr(page, "route", "/analysis") or page.update()
-                                ),
+                                on_click=lambda _: page.go("/analysis"),
                             ),
                         ],
                         horizontal_alignment="center",
@@ -343,6 +195,13 @@ def build_report_view(
             expand=True,
         )
     else:
+
+        def make_on_change(chart_dict):
+            def _on_change(e):
+                chart_dict["description"] = e.control.value
+
+            return _on_change
+
         report_cards = [
             build_chart_card(
                 index=i + 1,
@@ -350,9 +209,33 @@ def build_report_view(
                 figure=c.get("figure"),
                 insight=c.get("description", c.get("insight", "")),
                 code="",
+                on_change=make_on_change(c),
             )
             for i, c in enumerate(state.charts)
         ]
+
+        # Share info banner
+        share_info = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.INFO_OUTLINE_ROUNDED, size=18, color=theme.PRIMARY
+                    ),
+                    ft.Text(
+                        "Tap Share to get a public link. You can export PDF & PPTX from the web dashboard.",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        expand=True,
+                    ),
+                ],
+                spacing=10,
+            ),
+            padding=ft.Padding(16, 12, 16, 12),
+            margin=ft.Margin(20, 0, 20, 0),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.06, theme.PRIMARY),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.PRIMARY)),
+        )
 
         content = ft.Column(
             [
@@ -365,6 +248,7 @@ def build_report_view(
                     ),
                     padding=ft.Padding(20, 10, 0, 0),
                 ),
+                share_info,
                 ft.Column(controls=report_cards, spacing=16, padding=20),
                 ft.Container(height=80),
             ],
@@ -377,20 +261,8 @@ def build_report_view(
         bgcolor=ft.Colors.TRANSPARENT,
         actions=[
             ft.IconButton(
-                ft.Icons.PICTURE_AS_PDF_ROUNDED,
-                tooltip="Export PDF",
-                on_click=lambda e: page.run_task(on_export_pdf, e),
-                visible=len(state.charts) > 0,
-            ),
-            ft.IconButton(
-                ft.Icons.SLIDESHOW_ROUNDED,
-                tooltip="Export PPTX",
-                on_click=lambda e: page.run_task(on_export_pptx, e),
-                visible=len(state.charts) > 0,
-            ),
-            ft.IconButton(
                 ft.Icons.SHARE_ROUNDED,
-                tooltip="Share Public Link",
+                tooltip="Share — get public link with PDF & PPTX export",
                 on_click=lambda e: page.run_task(on_share_report, e),
                 visible=len(state.charts) > 0,
             ),

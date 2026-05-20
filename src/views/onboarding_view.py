@@ -10,13 +10,15 @@ Dismissed once → STORAGE_ONBOARDING_DONE is set.
 
 from __future__ import annotations
 
+from typing import Callable
+
 import flet as ft
 
 from core import theme
 from core.constants import STORAGE_ONBOARDING_DONE
 
 
-def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.View:
+def build_onboarding_view(page: ft.Page, on_done: Callable, storage=None) -> ft.View:
     """Build the onboarding swipe-through."""
 
     current_page = {"index": 0}
@@ -51,7 +53,7 @@ def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.
             "body": (
                 "One tap — AI analyzes your data from multiple angles, "
                 "generates charts with descriptions, and builds a "
-                "complete PDF or PowerPoint report automatically."
+                "complete shareable web report automatically."
             ),
         },
     ]
@@ -98,6 +100,8 @@ def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.
             )
         return dots
 
+    button_ref = ft.Ref[ft.FilledButton]()
+
     def _update():
         if slide_container.current:
             slide_container.current.content = _build_slide(
@@ -105,6 +109,12 @@ def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.
             )
         if indicator_row.current:
             indicator_row.current.controls = _build_indicators()
+        if button_ref.current:
+            is_last = current_page["index"] == len(slides) - 1
+            button_ref.current.content = "Get Started" if is_last else "Next"
+            button_ref.current.icon = (
+                ft.Icons.CHECK_ROUNDED if is_last else ft.Icons.ARROW_FORWARD_ROUNDED
+            )
         page.update()
 
     def on_next(e):
@@ -113,6 +123,19 @@ def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.
             _update()
         else:
             page.run_task(_finish)
+
+    def on_prev(e=None):
+        if current_page["index"] > 0:
+            current_page["index"] -= 1
+            _update()
+
+    # U2 FIX: Swipe gesture handler for mobile UX
+    def on_swipe(e: ft.DragEndEvent):
+        if e.primary_velocity is not None:
+            if e.primary_velocity < -200:  # Swipe left → next
+                on_next(e)
+            elif e.primary_velocity > 200:  # Swipe right → prev
+                on_prev()
 
     def on_skip(e):
         page.run_task(_finish)
@@ -141,11 +164,15 @@ def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.
                         ],
                         alignment="end",
                     ),
-                    ft.Container(
-                        ref=slide_container,
-                        content=_build_slide(slides[0]),
-                        expand=True,
-                        padding=ft.Padding(32, 0, 32, 0),
+                    # U2 FIX: Wrap slide in GestureDetector for swipe navigation
+                    ft.GestureDetector(
+                        content=ft.Container(
+                            ref=slide_container,
+                            content=_build_slide(slides[0]),
+                            expand=True,
+                            padding=ft.Padding(32, 0, 32, 0),
+                        ),
+                        on_horizontal_drag_end=on_swipe,
                     ),
                     ft.Row(
                         ref=indicator_row,
@@ -157,6 +184,7 @@ def build_onboarding_view(page: ft.Page, on_done: callable, storage=None) -> ft.
                     ft.Container(
                         content=ft.FilledButton(
                             "Get Started" if is_last else "Next",
+                            ref=button_ref,
                             icon=ft.Icons.ARROW_FORWARD_ROUNDED,
                             on_click=on_next,
                             width=200,

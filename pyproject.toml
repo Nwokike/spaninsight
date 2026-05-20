@@ -13,14 +13,18 @@ dependencies = [
     "pandas>=2.0",
     "numpy>=1.26",
     "matplotlib>=3.8",
-    "openpyxl>=3.1",
-    "fpdf2>=2.7",
-    "python-pptx>=0.6.23",
 ]
+
+[project.optional-dependencies]
+pptx = ["python-pptx>=0.6.23"]
+excel = ["openpyxl>=3.1"]
+mcp = ["mcp>=1.27.1"]
+all = ["python-pptx>=0.6.23", "openpyxl>=3.1", "mcp>=1.27.1"]
 
 [dependency-groups]
 dev = [
     "ruff",
+    "pytest>=8.0",
 ]
 
 [tool.flet]
@@ -38,6 +42,7 @@ bundle_id = "com.spaninsight.app"
 usesCleartextTraffic = "false"
 
 [tool.flet.android.meta_data]
+# [COMPLEX / REQUIRED] Replace this test App ID with your REAL AdMob App ID before production
 "com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-3940256099942544~3347511713"
 
 [tool.flet.android.permission]

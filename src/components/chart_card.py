@@ -14,6 +14,7 @@ def build_chart_card(
     figure,
     insight: str,
     code: str = "",
+    on_change: callable = None,
 ) -> ft.Container:
     """Build a single chart card with its AI insight.
 
@@ -23,6 +24,7 @@ def build_chart_card(
         figure: Matplotlib figure object.
         insight: AI-generated interpretation text.
         code: The Python code that generated the chart.
+        on_change: Callback when the insight description is edited.
     """
     # Chart widget
     chart_widget = ft.Container(height=10)  # fallback
@@ -77,11 +79,14 @@ def build_chart_card(
                                 size=tokens.ICON_SM,
                                 color=theme.ACCENT,
                             ),
-                            ft.Text(
-                                insight or "No interpretation available.",
-                                size=tokens.FONT_SM,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ft.TextField(
+                                value=insight or "",
+                                multiline=True,
+                                border=ft.InputBorder.NONE,
+                                content_padding=0,
+                                text_size=13,
                                 expand=True,
+                                on_change=on_change,
                             ),
                         ],
                         spacing=tokens.SPACE_SM,

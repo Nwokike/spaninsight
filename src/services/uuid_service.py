@@ -3,8 +3,9 @@
 Privacy-first: no accounts, no servers. Identity is a UUID4 stored
 locally in StorageService (works on all platforms).
 
-The backup phrase converts the UUID to a human-readable 6-word
-mnemonic so users can recover their identity after reinstall.
+The backup phrase converts the UUID to a human-readable 12-word
+mnemonic using the BIP-39 list so users can recover their identity
+after reinstall with zero collision risk.
 """
 
 from __future__ import annotations
@@ -16,12 +17,15 @@ import flet as ft
 
 from core.constants import STORAGE_UUID, API_BASE_URL
 from services.api_client import request_with_retry
+from services.bip39_words import BIP39_WORDS
 
 logger = logging.getLogger(__name__)
 
-# Word list for mnemonic backup phrase (256 words = 1 byte each, 6 words = 48 bits)
-# We use the first/last 3 segments of the UUID hex to generate 6 words.
-_WORD_LIST = [
+# Main 2048-word BIP-39 English word list for secure 12-word recovery
+_WORD_LIST = BIP39_WORDS
+
+# Old 256-word list preserved for 100% backward-compatible 6-word restores
+_OLD_WORD_LIST = [
     "alpha",
     "atlas",
     "azure",
@@ -292,65 +296,113 @@ class UUIDService:
         """Return existing UUID or generate a new one."""
         existing = await self._storage.get(STORAGE_UUID)
         if existing:
+            # Proactively try to sync in background if not already synced
+            is_synced = await self._storage.get("spaninsight_uuid_synced")
+            if is_synced != "true":
+                import asyncio
+
+                asyncio.create_task(self.sync_pending_uuid())
             return existing
 
         new_uuid = str(uuid.uuid4())
         await self._storage.set(STORAGE_UUID, new_uuid)
+        await self._storage.set("spaninsight_uuid_synced", "false")
         logger.info("Generated new UUID: %s...%s", new_uuid[:8], new_uuid[-4:])
 
         # Store UUID→phrase mapping in D1 for later restore
         phrase = self.uuid_to_phrase(new_uuid)
         try:
-            await request_with_retry(
+            resp = await request_with_retry(
                 "POST",
                 f"{API_BASE_URL}/uuid/store",
                 json={"uuid": new_uuid, "phrase_hash": self._hash_phrase(phrase)},
                 timeout=5.0,
             )
+            if resp.status_code in (200, 201):
+                await self._storage.set("spaninsight_uuid_synced", "true")
+                logger.info("UUID stored remotely in D1.")
         except Exception as e:
             logger.warning("Could not store UUID mapping remotely: %s", e)
 
         return new_uuid
+
+    async def sync_pending_uuid(self) -> bool:
+        """Attempt to sync an unsynced local UUID to the gateway D1 database."""
+        user_uuid = await self.get_uuid()
+        if not user_uuid:
+            return False
+
+        is_synced = await self._storage.get("spaninsight_uuid_synced")
+        if is_synced == "true":
+            return True
+
+        phrase = self.uuid_to_phrase(user_uuid)
+        try:
+            resp = await request_with_retry(
+                "POST",
+                f"{API_BASE_URL}/uuid/store",
+                json={"uuid": user_uuid, "phrase_hash": self._hash_phrase(phrase)},
+                timeout=5.0,
+            )
+            if resp.status_code in (200, 201):
+                await self._storage.set("spaninsight_uuid_synced", "true")
+                logger.info("UUID stored remotely in D1 during background sync.")
+                return True
+        except Exception as e:
+            logger.warning("Background UUID sync failed: %s", e)
+        return False
+
+    async def is_synced(self) -> bool:
+        """Check if the current UUID has been successfully synced to the gateway D1."""
+        user_uuid = await self.get_uuid()
+        if not user_uuid:
+            return True
+        val = await self._storage.get("spaninsight_uuid_synced")
+        return val == "true"
 
     async def get_uuid(self) -> str | None:
         """Return stored UUID or None."""
         return await self._storage.get(STORAGE_UUID)
 
     def uuid_to_phrase(self, user_uuid: str) -> str:
-        """Convert a UUID string to a 6-word backup phrase."""
-        hex_str = user_uuid.replace("-", "")
+        """Convert a 128-bit UUID integer to a 12-word secure mnemonic using standard BIP-39 words."""
+        try:
+            u_int = uuid.UUID(user_uuid).int
+        except Exception as e:
+            logger.error("Invalid UUID format: %s", e)
+            return ""
+
         words = []
-        # Take 6 groups of 2 hex chars (1 byte each) from spread positions
-        indices = [0, 4, 8, 16, 24, 28]
-        for i in indices:
-            byte_val = int(hex_str[i : i + 2], 16)
-            words.append(_WORD_LIST[byte_val])
+        temp_val = u_int
+        for _ in range(12):
+            idx = temp_val % 2048
+            words.append(_WORD_LIST[idx])
+            temp_val //= 2048
         return " ".join(words)
 
     def _phrase_to_uuid(self, phrase: str) -> str | None:
-        """Validate a 6-word phrase. Returns phrase if valid, None otherwise."""
-        words = phrase.split()
-        if len(words) != 6:
-            return None
-
-        # Validate all words exist in our word list
-        for w in words:
-            if w not in _WORD_LIST:
-                return None
-
-        return phrase  # Return the phrase; actual D1 lookup happens in restore_uuid
+        """Validate a 6-word or 12-word phrase. Returns the phrase if valid, None otherwise."""
+        words = phrase.strip().lower().split()
+        if len(words) == 6:
+            # Backward compatible 6-word phrase
+            for w in words:
+                if w not in _OLD_WORD_LIST:
+                    return None
+            return phrase
+        elif len(words) == 12:
+            # Standard 12-word BIP-39 phrase
+            for w in words:
+                if w not in _WORD_LIST:
+                    return None
+            return phrase
+        return None
 
     async def restore_uuid(self, backup_phrase: str) -> bool:
         """Restore UUID from a backup phrase by querying D1."""
         phrase = backup_phrase.strip().lower()
-        words = phrase.split()
-        if len(words) != 6:
+        validated = self._phrase_to_uuid(phrase)
+        if not validated:
             return False
-
-        # Validate all words exist
-        for w in words:
-            if w not in _WORD_LIST:
-                return False
 
         try:
             phrase_hash = self._hash_phrase(phrase)

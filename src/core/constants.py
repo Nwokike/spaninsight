@@ -90,11 +90,9 @@ BLOCKED_TERMS = [
     ".__reduce_ex__",
     ".__getattribute__",
     "object()",
-    "type(",
-    "hasattr(",
-    "dir(",
-    "vars(",
-    "help(",
+    # CF1: type(), hasattr(), dir() are safe introspection functions
+    # commonly used by AI-generated pandas code. Removed to avoid
+    # false positives. Dangerous access is blocked by the AST checker.
     # Pandas file/network I/O
     "read_pickle",
     "to_pickle",
@@ -130,3 +128,5 @@ STORAGE_CREDITS = "spaninsight_credits"
 STORAGE_BONUS_CREDITS = "spaninsight_bonus_credits"
 STORAGE_LAST_RESET = "spaninsight_last_reset"
 STORAGE_REFERRAL_CODE = "spaninsight_referral_code"
+STORAGE_ONBOARDING_DONE = "spaninsight_onboarding_done"
+STORAGE_MCP_SERVERS = "spaninsight_mcp_servers"

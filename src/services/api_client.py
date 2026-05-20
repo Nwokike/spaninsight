@@ -28,11 +28,14 @@ COMMON_HEADERS = {
 
 # Module-level shared client — initialized lazily
 _client: httpx.AsyncClient | None = None
+_is_shutting_down: bool = False
 
 
 def get_client() -> httpx.AsyncClient:
     """Return the shared async HTTP client (lazy-init, connection-pooled)."""
     global _client
+    if _is_shutting_down:
+        raise httpx.HTTPError("Client is shutting down")
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(
             headers=COMMON_HEADERS,
@@ -42,14 +45,15 @@ def get_client() -> httpx.AsyncClient:
                 max_keepalive_connections=5,
                 keepalive_expiry=30,
             ),
-            http2=False,  # Most CDN edge workers don't benefit from h2
+            http2=False,
         )
     return _client
 
 
 async def close_client() -> None:
     """Gracefully close the shared client (call on app shutdown)."""
-    global _client
+    global _client, _is_shutting_down
+    _is_shutting_down = True
     if _client and not _client.is_closed:
         await _client.aclose()
         _client = None
