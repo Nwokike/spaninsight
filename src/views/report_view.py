@@ -249,7 +249,11 @@ def build_report_view(
                     padding=ft.Padding(20, 10, 0, 0),
                 ),
                 share_info,
-                ft.Column(controls=report_cards, spacing=16, padding=20),
+                # FIX: Wrapped the column inside a container to properly apply the padding safely
+                ft.Container(
+                    content=ft.Column(controls=report_cards, spacing=16),
+                    padding=20
+                ),
                 ft.Container(height=80),
             ],
             scroll="auto",

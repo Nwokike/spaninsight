@@ -12,6 +12,8 @@ Architecture mirrors Akili flet-rewrite (production) patterns:
 from __future__ import annotations
 
 import asyncio
+import datetime  # FIX: Moved to top
+import json      # FIX: Added missing global import to fix save warning
 import logging
 import sys
 
@@ -190,8 +192,6 @@ async def main(page: ft.Page):
     try:
         mcp_servers_json = await storage.get(STORAGE_MCP_SERVERS)
         if mcp_servers_json:
-            import json
-
             state.mcp_servers = json.loads(mcp_servers_json)
         else:
             state.mcp_servers = []
@@ -299,8 +299,6 @@ async def main(page: ft.Page):
             recent = [
                 s for s in recent if s.get("file_path") != state.current_file_path
             ]
-
-            import datetime
 
             recent.insert(
                 0,

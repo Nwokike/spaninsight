@@ -113,7 +113,7 @@ def build_analysis_view(
                     state.credits_remaining = await credit_service.get_balance()
                     _rebuild(page)
 
-                    if state.autopilot_enabled:
+                    if getattr(state, "autopilot_enabled", False):
                         await run_autopilot()
 
                 except Exception as e:
@@ -162,6 +162,7 @@ def build_analysis_view(
                     return
 
                 # Reserve credits BEFORE execution
+                tx_id = None
                 if not is_autopilot:
                     tx_id = await credit_service.reserve(COST_SUGGEST)
                     if not tx_id:
@@ -201,18 +202,20 @@ def build_analysis_view(
                         if corrected:
                             current_code = corrected
                             continue
+                        else:
+                            break  # Avoid infinite loop if AI fails to correct
 
-                if not result["success"]:
-                    if not is_autopilot:
+                if not result or not result["success"]:
+                    if not is_autopilot and tx_id:
                         await credit_service.rollback(tx_id)
                     block = {
                         "type": "analysis",
                         "prompt": prompt,
                         "code": current_code,
                         "figure": None,
-                        "stdout": result.get("stdout", ""),
+                        "stdout": result.get("stdout", "") if result else "",
                         "result": "",
-                        "description": f"Execution failed after {max_retries} self-heal attempts: {result['error']}",
+                        "description": f"Execution failed after {max_retries} self-heal attempts: {result.get('error', 'Unknown Error') if result else 'Code Generation Error'}",
                         "suggestions": [],
                         "pinned": False,
                         "failed": True,
@@ -223,7 +226,7 @@ def build_analysis_view(
                     return
 
                 # 3. Create block immediately on success
-                if not is_autopilot:
+                if not is_autopilot and tx_id:
                     await credit_service.commit(tx_id)
 
                 block = {
@@ -326,14 +329,7 @@ def build_analysis_view(
         _rebuild(page)
 
     async def run_autopilot():
-        """ReAct-style autonomous analysis agent loop.
-
-        Learns from nanobot pattern:
-        1. PLAN: AI decides next step based on full analysis history
-        2. EXECUTE: generate code → sandbox → self-heal on error
-        3. REFLECT: AI evaluates if analysis is comprehensive
-        4. TERMINATE: max iterations, AI says complete, credits exhausted, or user cancels
-        """
+        """ReAct-style autonomous analysis agent loop."""
         MAX_ITERATIONS = 8
         COST_PER_STEP = 2
 
@@ -356,7 +352,7 @@ def build_analysis_view(
 
         try:
             while iteration < MAX_ITERATIONS:
-                if state.autopilot_cancelled:
+                if getattr(state, "autopilot_cancelled", False):
                     state.autopilot_progress = "Cancelled by user."
                     _show_error("Autopilot cancelled.")
                     break
@@ -424,6 +420,8 @@ def build_analysis_view(
                             result["error"],
                             state.current_df_summary,
                         )
+                        if not current_code:
+                            break # Break out if AI fails to supply corrected code
 
                 if not result or not result["success"]:
                     # E2: Rollback reserved credits on failure
@@ -662,7 +660,6 @@ def build_analysis_view(
             import flet_charts as fch
 
             return ft.Container(
-                # FIX 1: Passed as a keyword argument (figure=figure) instead of positional!
                 content=fch.MatplotlibChart(figure=figure, expand=True),
                 height=280,
             )
@@ -672,16 +669,33 @@ def build_analysis_view(
 
     def _build_text_output_container(result_val, stdout_val) -> ft.Container | None:
         """Helper to render textual/dataframe results when no chart is present."""
-        # Clean up output
+        import pandas as pd
+
+        # NATIVE PANDAS UPGRADE: Route DataFrames into beautiful native tables
+        if isinstance(result_val, pd.DataFrame):
+            if not result_val.empty:
+                return ft.Container(
+                    content=build_data_preview(result_val),
+                    padding=ft.Padding(0, 10, 0, 10),
+                )
+            result_val = "Empty DataFrame"
+        elif isinstance(result_val, pd.Series):
+            if not result_val.empty:
+                return ft.Container(
+                    content=build_data_preview(result_val.to_frame()),
+                    padding=ft.Padding(0, 10, 0, 10),
+                )
+            result_val = "Empty Series"
+
+        # Clean up fallback string output
         output_text = str(result_val) if result_val is not None else ""
         if not output_text or output_text.strip() == "None":
             output_text = str(stdout_val) if stdout_val is not None else ""
 
-        if not output_text or not output_text.strip():
+        if not output_text or not output_text.strip() or output_text.strip() == "None":
             return None
 
         return ft.Container(
-            # FIX 2: Added text block for standard output like df.head()
             content=ft.Text(
                 output_text, size=12, font_family="RobotoMono", color="#E0E0E0"
             ),
@@ -1003,7 +1017,7 @@ def build_analysis_view(
                                         ft.Text("Autopilot Mode", weight="w500"),
                                         ft.Switch(
                                             ref=autopilot_enabled,
-                                            value=state.autopilot_enabled,
+                                            value=getattr(state, "autopilot_enabled", True),
                                             active_color=theme.PRIMARY,
                                             on_change=on_autopilot_toggle,
                                         ),
@@ -1089,17 +1103,18 @@ def build_analysis_view(
             for i, b in enumerate(blocks):
                 res.append(_build_block_card(b, i))
 
-            # FIX 3: 5. Loading Indicator moved to the BOTTOM
+            # 5. Loading Indicator moved to the BOTTOM
             if state.is_analyzing:
+                progress_text = getattr(state, "autopilot_progress", "") or "AI thinking..."
                 loading_controls = [
                     ft.ProgressRing(width=16, height=16),
                     ft.Text(
-                        state.autopilot_progress or "AI thinking...",
+                        progress_text,
                         size=13,
                         expand=True,
                     ),
                 ]
-                if state.autopilot_progress:
+                if getattr(state, "autopilot_progress", ""):
                     loading_controls.append(
                         ft.TextButton(
                             "Stop",
@@ -1184,12 +1199,12 @@ def build_analysis_view(
             p.update()
 
     # Initial check if navigating via file picker trigger
-    if state.trigger_file_picker:
+    if getattr(state, "trigger_file_picker", False):
         state.trigger_file_picker = False
         file_picker_svc.pick_data_file()
 
     # Restore session from home "Recent Analyses"
-    if state.session_to_restore:
+    if getattr(state, "session_to_restore", None):
         session = state.session_to_restore
         state.session_to_restore = None
         file_path = session.get("file_path", "")

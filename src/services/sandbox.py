@@ -9,7 +9,6 @@ Security hardening (AST Rewrite):
 - Explicitly blocked destructive pandas file I/O methods (to_csv, read_parquet, etc.).
 - Cross-platform timeout via threading (works on Windows/Android).
 - Shallow DataFrame copy to prevent OOM on large files.
-- FIX: Force Agg backend before any matplotlib import to prevent GUI backend errors.
 """
 
 from __future__ import annotations
@@ -31,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 class SandboxError(Exception):
     """Raised when code fails validation or execution."""
-
     pass
 
 
@@ -43,153 +41,44 @@ class ASTSecurityChecker(ast.NodeVisitor):
         self.reason = ""
 
         self.allowed_node_names = {
-            "Module",
-            "Expr",
-            "Assign",
-            "AnnAssign",
-            "AugAssign",
-            "Name",
-            "Load",
-            "Store",
-            "Del",
-            "Constant",
-            "Call",
-            "Attribute",
-            "Subscript",
-            "Slice",
-            "Index",
-            "ExtSlice",
-            "List",
-            "Tuple",
-            "Dict",
-            "Set",
-            "BinOp",
-            "UnaryOp",
-            "BoolOp",
-            "Compare",
-            "Add",
-            "Sub",
-            "Mult",
-            "Div",
-            "FloorDiv",
-            "Mod",
-            "Pow",
-            "LShift",
-            "RShift",
-            "BitOr",
-            "BitXor",
-            "BitAnd",
-            "MatMult",
-            "And",
-            "Or",
-            "Not",
-            "Invert",
-            "UAdd",
-            "USub",
-            "Eq",
-            "NotEq",
-            "Lt",
-            "LtE",
-            "Gt",
-            "GtE",
-            "Is",
-            "IsNot",
-            "In",
-            "NotIn",
-            "If",
-            "For",
-            "While",
-            "Break",
-            "Continue",
-            "Pass",
-            "ListComp",
-            "DictComp",
-            "SetComp",
-            "GeneratorExp",
-            "comprehension",
-            "IfExp",
-            "FormattedValue",
-            "JoinedStr",
-            "Import",
-            "ImportFrom",
-            "alias",
-            "keyword",
-            "FunctionDef",
-            "arguments",
-            "arg",
-            "Return",
-            "Lambda",
-            # S2: Support try/except, with, raise, starred unpacking
-            "Starred",
-            "Try",
-            "ExceptHandler",
-            "With",
-            "withitem",
-            "Raise",
+            "Module", "Expr", "Assign", "AnnAssign", "AugAssign",
+            "Name", "Load", "Store", "Del", "Constant",
+            "Call", "Attribute", "Subscript", "Slice", "Index", "ExtSlice",
+            "List", "Tuple", "Dict", "Set",
+            "BinOp", "UnaryOp", "BoolOp", "Compare",
+            "Add", "Sub", "Mult", "Div", "FloorDiv", "Mod", "Pow",
+            "LShift", "RShift", "BitOr", "BitXor", "BitAnd", "MatMult",
+            "And", "Or", "Not", "Invert", "UAdd", "USub",
+            "Eq", "NotEq", "Lt", "LtE", "Gt", "GtE", "Is", "IsNot", "In", "NotIn",
+            "If", "For", "While", "Break", "Continue", "Pass",
+            "ListComp", "DictComp", "SetComp", "GeneratorExp", "comprehension",
+            "IfExp", "FormattedValue", "JoinedStr",
+            "Import", "ImportFrom", "alias", "keyword",
+            "FunctionDef", "arguments", "arg", "Return", "Lambda",
+            # Support try/except, with, raise, starred unpacking
+            "Starred", "Try", "ExceptHandler", "With", "withitem", "Raise",
         }
 
         self.allowed_imports = {"pandas", "numpy", "matplotlib", "math", "datetime"}
 
         self.blocked_imports = {
-            "seaborn",
-            "sns",
-            "scipy",
-            "sklearn",
-            "statsmodels",
-            "plotly",
-            "pingouin",
-            "lifelines",
-            "tensorflow",
-            "torch",
+            "seaborn", "sns", "scipy", "sklearn", "statsmodels",
+            "plotly", "pingouin", "lifelines", "tensorflow", "torch",
         }
 
-        # S4: Removed "read" and "write" — they block legitimate pandas ops
-        # like df.columns.str methods. open() is already blocked in blocked_builtins.
+        # FIX: Removed 'show' from blocked attributes. We will mock it safely instead.
         self.blocked_attributes = {
-            "to_csv",
-            "to_pickle",
-            "to_sql",
-            "to_excel",
-            "to_json",
-            "to_html",
-            "to_feather",
-            "to_parquet",
-            "read_csv",
-            "read_pickle",
-            "read_sql",
-            "read_excel",
-            "read_json",
-            "read_html",
-            "read_feather",
-            "read_parquet",
-            "system",
-            "popen",
-            "subprocess",
-            "os",
-            "sys",
-            "eval",
-            "exec",
-            "open",
-            "show",
+            "to_csv", "to_pickle", "to_sql", "to_excel", "to_json",
+            "to_html", "to_feather", "to_parquet",
+            "read_csv", "read_pickle", "read_sql", "read_excel", "read_json",
+            "read_html", "read_feather", "read_parquet",
+            "system", "popen", "subprocess", "os", "sys", "eval", "exec", "open",
             "savefig",
         }
 
         self.blocked_builtins = {
-            "eval",
-            "exec",
-            "open",
-            "compile",
-            "globals",
-            "locals",
-            "vars",
-            "dir",
-            "getattr",
-            "setattr",
-            "hasattr",
-            "delattr",
-            "type",
-            "memoryview",
-            "__import__",
+            "eval", "exec", "open", "compile", "globals", "locals", "vars", "dir",
+            "getattr", "setattr", "hasattr", "delattr", "type", "memoryview", "__import__",
         }
 
     def _flag_error(self, message: str):
@@ -208,9 +97,7 @@ class ASTSecurityChecker(ast.NodeVisitor):
         for alias in node.names:
             base_module = alias.name.split(".")[0]
             if base_module in self.blocked_imports:
-                self._flag_error(
-                    f"Importing '{alias.name}' is not available. Use only pandas, numpy, and matplotlib."
-                )
+                self._flag_error(f"Importing '{alias.name}' is not available. Use only pandas, numpy, and matplotlib.")
             elif base_module not in self.allowed_imports:
                 self._flag_error(f"Importing '{alias.name}' is prohibited.")
         self.generic_visit(node)
@@ -219,22 +106,16 @@ class ASTSecurityChecker(ast.NodeVisitor):
         if node.module:
             base_module = node.module.split(".")[0]
             if base_module in self.blocked_imports:
-                self._flag_error(
-                    f"Importing from '{node.module}' is not available. Use only pandas, numpy, and matplotlib."
-                )
+                self._flag_error(f"Importing from '{node.module}' is not available. Use only pandas, numpy, and matplotlib.")
             elif base_module not in self.allowed_imports:
                 self._flag_error(f"Importing from '{node.module}' is prohibited.")
         self.generic_visit(node)
 
     def visit_Attribute(self, node):
         if node.attr.startswith("__"):
-            self._flag_error(
-                f"Access to internal/magic attribute '{node.attr}' is strictly blocked."
-            )
+            self._flag_error(f"Access to internal/magic attribute '{node.attr}' is strictly blocked.")
         elif node.attr in self.blocked_attributes:
-            self._flag_error(
-                f"Operation '{node.attr}' is not permitted in the sandbox."
-            )
+            self._flag_error(f"Operation '{node.attr}' is not permitted in the sandbox.")
         self.generic_visit(node)
 
     def visit_Name(self, node):
@@ -275,12 +156,11 @@ def _capture_stdout():
 
 class _TimeoutError(Exception):
     """Raised when sandbox code exceeds the time limit."""
-
     pass
 
 
 def _safe_import(name, *args, **kwargs):
-    """S1: Restricted import that only allows whitelisted modules."""
+    """Restricted import that only allows whitelisted modules."""
     allowed = {"pandas", "numpy", "matplotlib", "math", "datetime"}
     base = name.split(".")[0]
     if base not in allowed:
@@ -294,31 +174,15 @@ def _exec_with_timeout(code: str, namespace: dict, timeout_sec: int) -> None:
 
     def _target():
         try:
-            # S1: Use _safe_import instead of raw __import__
             exec(code, {"__builtins__": {"__import__": _safe_import}}, namespace)
         except Exception as e:
             exc_info[0] = e
-        finally:
-            # C1: Clean up leaked matplotlib figures from this thread
-            try:
-                import matplotlib.pyplot as _plt
-
-                _plt.close("all")
-            except Exception:
-                pass
 
     thread = threading.Thread(target=_target, daemon=True)
     thread.start()
     thread.join(timeout=timeout_sec)
 
     if thread.is_alive():
-        # C1: Try to close any figures from the zombie thread
-        try:
-            import matplotlib.pyplot as _plt
-
-            _plt.close("all")
-        except Exception:
-            pass
         raise _TimeoutError(f"Code execution exceeded {timeout_sec}s time limit.")
 
     if exc_info[0] is not None:
@@ -330,11 +194,6 @@ def execute_code(
     df: Any,
 ) -> dict:
     """Execute validated Python code in a restricted namespace."""
-    # Force headless Agg backend BEFORE any matplotlib import
-    import matplotlib
-
-    matplotlib.use("Agg")
-
     try:
         import flet_charts  # noqa: F401
     except ImportError:
@@ -343,6 +202,9 @@ def execute_code(
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
+
+    # FIX: Safely mock plt.show() so it doesn't open GUI windows or trigger AST blocks
+    plt.show = lambda *args, **kwargs: None
 
     # 1. AST Validation
     is_safe, reason = validate_code(code)
@@ -362,31 +224,12 @@ def execute_code(
         "np": np,
         "plt": plt,
         "result": None,
-        "len": len,
-        "range": range,
-        "int": int,
-        "float": float,
-        "str": str,
-        "list": list,
-        "dict": dict,
-        "tuple": tuple,
-        "set": set,
-        "sorted": sorted,
-        "round": round,
-        "abs": abs,
-        "min": min,
-        "max": max,
-        "sum": sum,
-        "zip": zip,
-        "enumerate": enumerate,
-        "print": print,
-        "True": True,
-        "False": False,
-        "None": None,
-        "bool": bool,
-        "map": map,
-        "filter": filter,
-        "isinstance": isinstance,
+        "len": len, "range": range, "int": int, "float": float, "str": str,
+        "list": list, "dict": dict, "tuple": tuple, "set": set,
+        "sorted": sorted, "round": round, "abs": abs, "min": min, "max": max,
+        "sum": sum, "zip": zip, "enumerate": enumerate, "print": print,
+        "True": True, "False": False, "None": None, "bool": bool,
+        "map": map, "filter": filter, "isinstance": isinstance,
     }
 
     plt.close("all")
