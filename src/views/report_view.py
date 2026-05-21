@@ -143,7 +143,7 @@ def build_report_view(
 
     def _build_dashboard_content() -> list[ft.Control]:
         controls = []
-        controls.append(build_brand_header(show_tagline=False, spacing_below=False))
+        controls.append(build_brand_header(show_tagline=True, spacing_below=True))
 
         # Header
         controls.append(

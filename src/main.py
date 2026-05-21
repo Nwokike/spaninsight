@@ -361,10 +361,13 @@ async def main(page: ft.Page):
 
         elif route == "/analysis":
             from views.analysis import build_analysis_view
+            from services.report_service import ReportService
 
+            report_service = ReportService(storage)
             view = build_analysis_view(
                 page=page,
                 credit_service=credit_service,
+                report_service=report_service,
             )
             page.views.append(view)
             nav_bar.selected_index = 2

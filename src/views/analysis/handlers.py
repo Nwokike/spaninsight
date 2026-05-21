@@ -294,7 +294,7 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                 except Exception as e:
                     logger.error("Block AI load failed: %s", e)
 
-            view_state.page.run_task(load_block_ai, block)
+            await load_block_ai(block)
 
         except Exception as err:
             show_error(view_state, f"Analysis failed: {err}")
@@ -543,7 +543,7 @@ async def run_autopilot(view_state: AnalysisState):
                 except Exception as e:
                     logger.error("Autopilot block AI failed: %s", e)
 
-            view_state.page.run_task(load_block_ai, block, analysis_history[-1])
+            await load_block_ai(block, analysis_history[-1])
 
         state.autopilot_progress = f"Agent loop finished ({iteration} steps)."
 
@@ -676,18 +676,13 @@ def on_pin_block(view_state: AnalysisState, index: int):
     )
 
     async def _pin_to_report(report_id=None):
-        from services.report_service import ReportService
-        from services.storage_service import StorageService
-
-        storage = None
-        for attr in ["_storage", "storage"]:
-            if hasattr(view_state.page, attr):
-                storage = getattr(view_state.page, attr)
-                break
-        if storage is None:
-            storage = StorageService(view_state.page)
-
-        svc = ReportService(storage)
+        if not view_state.report_service:
+            view_state.page.snack_bar = ft.SnackBar(ft.Text("Report service unavailable"), duration=2000)
+            view_state.page.snack_bar.open = True
+            view_state.page.update()
+            return
+        
+        svc = view_state.report_service
 
         if report_id:
             await svc.add_block_to_report(report_id, report_block)
@@ -707,11 +702,11 @@ def on_pin_block(view_state: AnalysisState, index: int):
         view_state.rebuild()
 
     async def _show_picker():
-        from services.report_service import ReportService
-        from services.storage_service import StorageService
-
-        storage = StorageService(view_state.page)
-        svc = ReportService(storage)
+        if not view_state.report_service:
+            await _pin_to_report(None)
+            return
+            
+        svc = view_state.report_service
         reports = await svc.list_reports()
 
         if not reports:

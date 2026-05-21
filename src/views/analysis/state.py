@@ -5,9 +5,10 @@ from services.file_picker_service import FilePickerService
 from services.audio_service import AudioService
 
 class AnalysisState:
-    def __init__(self, page: ft.Page, credit_service):
+    def __init__(self, page: ft.Page, credit_service, report_service=None):
         self.page = page
         self.credit_service = credit_service
+        self.report_service = report_service
         
         self.content_column = ft.Ref[ft.Column]()
         self.custom_prompt_field = ft.Ref[ft.TextField]()

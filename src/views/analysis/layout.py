@@ -16,8 +16,8 @@ from views.analysis.handlers import (
 )
 from views.analysis.ui_components import build_block_card
 
-def build_analysis_view(page: ft.Page, credit_service) -> ft.View:
-    view_state = AnalysisState(page, credit_service)
+def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> ft.View:
+    view_state = AnalysisState(page, credit_service, report_service)
     
     if not hasattr(state, "analysis_blocks"):
         state.analysis_blocks = []
@@ -221,15 +221,19 @@ def build_analysis_view(page: ft.Page, credit_service) -> ft.View:
         return res
 
     def _rebuild():
-        if view_state.content_column.current:
-            view_state.content_column.current.controls = _build_content()
-            async def do_scroll():
-                try:
-                    await view_state.content_column.current.scroll_to(offset=-1, duration=500)
-                except Exception:
-                    pass
-            page.run_task(do_scroll)
-            page.update()
+        try:
+            if view_state.content_column.current and view_state.page.route == "/analysis":
+                view_state.content_column.current.controls = _build_content()
+                async def do_scroll():
+                    try:
+                        if view_state.content_column.current:
+                            await view_state.content_column.current.scroll_to(offset=-1, duration=500)
+                    except Exception:
+                        pass
+                page.run_task(do_scroll)
+                page.update()
+        except Exception:
+            pass
 
     view_state.rebuild_fn = _rebuild
 
