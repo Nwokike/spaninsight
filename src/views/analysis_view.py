@@ -29,6 +29,7 @@ from services import ai_service, file_service, sandbox
 from services.file_service import FileValidationError
 from services.file_picker_service import FilePickerService
 from services.audio_service import AudioService
+from core.utils import figure_to_png_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,30 @@ def build_analysis_view(
     autopilot_enabled = ft.Ref[ft.Switch]()
 
     # ── Block storage ────────────────────────────────────────────────
-    blocks: list[dict] = []
+    # Read from global state so history doesn't disappear on tab switch!
+    if not hasattr(state, "analysis_blocks"):
+        state.analysis_blocks = []
+
     is_recording = {"value": False}
+    is_transcribing = {"value": False}
+    recording_time = {"value": 0}
+    recording_timer = ft.Ref[ft.Text]()
+    loading_file_name = {"value": ""}
+    loading_file_size = {"value": 0}
     _analysis_lock = asyncio.Lock()  # Prevent concurrent analysis races
+
+    def _build_analysis_context() -> str:
+        """Build compact context: first block desc + last 2 analysis block summaries."""
+        blocks = state.analysis_blocks
+        if not blocks:
+            return ""
+        parts = []
+        if blocks[0].get("description"):
+            parts.append(f"Dataset: {blocks[0]['description']}")
+        recent = [b for b in blocks[1:] if b.get("type") == "analysis"][-2:]
+        for b in recent:
+            parts.append(f"Done: {b.get('prompt', '')} → {b.get('description', '')}")
+        return "\n".join(parts)
 
     # ── File Picker ──────────────────────────────────────────────────
     def _on_file_result(file):
@@ -68,24 +90,48 @@ def build_analysis_view(
             return
 
         state.is_loading = True
-        _rebuild(page)
+        # Track file info for loading message
+        import os
 
         try:
-            df = file_service.load_dataframe(file.path)
+            fsize = os.path.getsize(file.path)
+        except OSError:
+            fsize = 0
+        loading_file_name["value"] = file.name
+        loading_file_size["value"] = fsize
+        _rebuild(page)
+
+        # Give the UI a frame to render the loading spinner before locking the thread
+        await asyncio.sleep(0.1)
+
+        try:
+            # Push heavy Pandas CSV parsing to a background thread so UI doesn't freeze
+            df = await asyncio.to_thread(file_service.load_dataframe, file.path)
             state.set_dataframe(df, file.name)
             state.current_file_path = file.path
-            state.current_df_summary = file_service.get_data_summary(df)
+
+            # Push heavy schema extraction to background thread
+            state.current_df_summary = await asyncio.to_thread(
+                file_service.get_data_summary, df
+            )
+
+            # Build describe DataFrame for Block 0 visual display
+            try:
+                describe_data = df.describe(include="all").round(2).fillna("")
+            except Exception:
+                describe_data = None
 
             # Create Block 0 placeholder
             block0 = {
                 "type": "initial",
                 "code": "",
+                "describe_data": describe_data,
                 "description": "Analyzing dataset schema...",
                 "suggestions": [],
                 "pinned": False,
             }
-            blocks.clear()
-            blocks.append(block0)
+            state.analysis_blocks.clear()
+            state.analysis_blocks.append(block0)
             state.is_loading = False
             _rebuild(page)
 
@@ -99,14 +145,18 @@ def build_analysis_view(
                         )
                         block0["suggestions"] = ai_service.fallback_suggestions()
                     else:
-                        desc_task = ai_service.describe_dataset(
-                            state.current_df_summary
+                        desc_task = asyncio.create_task(
+                            ai_service.describe_dataset(state.current_df_summary)
                         )
-                        suggest_task = ai_service.suggest(state.current_df_summary)
-                        description, suggestions = await asyncio.gather(
-                            desc_task, suggest_task
+                        suggest_task = asyncio.create_task(
+                            ai_service.suggest(state.current_df_summary)
                         )
+
+                        description = await desc_task
                         block0["description"] = description
+                        _rebuild(page)
+
+                        suggestions = await suggest_task
                         block0["suggestions"] = suggestions
                         state.suggestions = suggestions
 
@@ -154,7 +204,10 @@ def build_analysis_view(
 
             try:
                 # 1. Generate code FIRST (before spending credits)
-                code = await ai_service.generate_code(prompt, state.current_df_summary)
+                ctx = _build_analysis_context()
+                code = await ai_service.generate_code(
+                    prompt, state.current_df_summary, analysis_context=ctx
+                )
                 if not code:
                     _show_error("AI failed to generate code. Try a different prompt.")
                     state.is_analyzing = False
@@ -220,7 +273,7 @@ def build_analysis_view(
                         "pinned": False,
                         "failed": True,
                     }
-                    blocks.append(block)
+                    state.analysis_blocks.append(block)
                     state.is_analyzing = False
                     _rebuild(page)
                     return
@@ -229,11 +282,19 @@ def build_analysis_view(
                 if not is_autopilot and tx_id:
                     await credit_service.commit(tx_id)
 
+                figure_png = None
+                if result.get("figure"):
+                    try:
+                        figure_png = figure_to_png_bytes(result["figure"])
+                    except Exception:
+                        pass
+
                 block = {
                     "type": "analysis",
                     "prompt": prompt,
                     "code": current_code,
                     "figure": result["figure"],
+                    "figure_png": figure_png,
                     "stdout": result.get("stdout", ""),
                     "result": result.get("result", ""),
                     "description": "Generating insight...",
@@ -241,14 +302,18 @@ def build_analysis_view(
                     "pinned": is_autopilot,
                     "failed": False,
                 }
-                blocks.append(block)
+                state.analysis_blocks.append(block)
                 state.is_analyzing = False
                 _rebuild(page)
 
                 # 4. Background tasks: Interpret insight & Get next suggestions
                 async def load_block_ai(b):
                     try:
-                        block0_desc = blocks[0]["description"] if blocks else ""
+                        block0_desc = (
+                            state.analysis_blocks[0]["description"]
+                            if state.analysis_blocks
+                            else ""
+                        )
                         res_data = {
                             "prompt": b["prompt"],
                             "code": b["code"],
@@ -256,34 +321,32 @@ def build_analysis_view(
                             "result": str(b["result"]),
                         }
 
-                        desc_task = ai_service.describe_result(block0_desc, res_data)
-                        suggest_task = ai_service.suggest(
-                            state.current_df_summary,
-                            initial_description=block0_desc,
-                            latest_result=res_data,
+                        desc_task = asyncio.create_task(
+                            ai_service.describe_result(block0_desc, res_data)
+                        )
+                        ctx = _build_analysis_context()
+                        suggest_task = asyncio.create_task(
+                            ai_service.suggest(
+                                state.current_df_summary,
+                                initial_description=block0_desc,
+                                analysis_context=ctx,
+                            )
                         )
 
-                        description, suggestions = await asyncio.gather(
-                            desc_task, suggest_task
-                        )
+                        description = await desc_task
                         b["description"] = description
+                        _rebuild(page)
+
+                        suggestions = await suggest_task
                         b["suggestions"] = suggestions
                         state.suggestions = suggestions
 
                         if is_autopilot:
-                            from core.utils import figure_to_png_bytes
-
-                            figure_png = None
-                            if b["figure"]:
-                                try:
-                                    figure_png = figure_to_png_bytes(b["figure"])
-                                except Exception:
-                                    pass
                             state.charts.append(
                                 {
                                     "prompt": b["prompt"],
                                     "figure": b["figure"],
-                                    "figure_png": figure_png,
+                                    "figure_png": b.get("figure_png"),
                                     "description": description,
                                 }
                             )
@@ -307,15 +370,21 @@ def build_analysis_view(
 
     async def on_rerun_code(block_index: int, new_code: str):
         """Re-run edited code for an existing block."""
-        if block_index < 0 or block_index >= len(blocks):
+        if block_index < 0 or block_index >= len(state.analysis_blocks):
             return
 
-        block = blocks[block_index]
+        block = state.analysis_blocks[block_index]
         result = await sandbox.execute_code_async(new_code, state.current_df)
 
         block["code"] = new_code
         if result["success"]:
             block["figure"] = result["figure"]
+            try:
+                block["figure_png"] = (
+                    figure_to_png_bytes(result["figure"]) if result["figure"] else None
+                )
+            except Exception:
+                pass
             block["stdout"] = result.get("stdout", "")
             block["result"] = result.get("result", "")
             block["description"] = "Code re-executed successfully."
@@ -363,7 +432,11 @@ def build_analysis_view(
                 )
                 _rebuild(page)
 
-                block0_desc = blocks[0]["description"] if blocks else ""
+                block0_desc = (
+                    state.analysis_blocks[0]["description"]
+                    if state.analysis_blocks
+                    else ""
+                )
 
                 plan = await ai_service.plan_next_step(
                     state.current_df_summary,
@@ -421,10 +494,9 @@ def build_analysis_view(
                             state.current_df_summary,
                         )
                         if not current_code:
-                            break # Break out if AI fails to supply corrected code
+                            break  # Break out if AI fails to supply corrected code
 
                 if not result or not result["success"]:
-                    # E2: Rollback reserved credits on failure
                     if tx_id:
                         await credit_service.rollback(tx_id)
                     analysis_history.append(
@@ -444,6 +516,7 @@ def build_analysis_view(
                         "prompt": next_prompt,
                         "code": current_code or "",
                         "figure": None,
+                        "figure_png": None,
                         "stdout": result.get("stdout", "") if result else "",
                         "result": "",
                         "description": f"Autopilot failed after {max_retries} retries: {result.get('error', '') if result else 'No code generated'}",
@@ -451,18 +524,26 @@ def build_analysis_view(
                         "pinned": True,
                         "failed": True,
                     }
-                    blocks.append(block)
+                    state.analysis_blocks.append(block)
                     _rebuild(page)
                     continue
 
                 if tx_id:
                     await credit_service.commit(tx_id)
 
+                figure_png = None
+                if result.get("figure"):
+                    try:
+                        figure_png = figure_to_png_bytes(result["figure"])
+                    except Exception:
+                        pass
+
                 block = {
                     "type": "analysis",
                     "prompt": next_prompt,
                     "code": current_code,
                     "figure": result["figure"],
+                    "figure_png": figure_png,
                     "stdout": result.get("stdout", ""),
                     "result": result.get("result", ""),
                     "description": "Generating insight...",
@@ -470,17 +551,8 @@ def build_analysis_view(
                     "pinned": True,
                     "failed": False,
                 }
-                blocks.append(block)
+                state.analysis_blocks.append(block)
                 _rebuild(page)
-
-                from core.utils import figure_to_png_bytes
-
-                figure_png = None
-                if result["figure"]:
-                    try:
-                        figure_png = figure_to_png_bytes(result["figure"])
-                    except Exception:
-                        pass
 
                 state.charts.append(
                     {
@@ -510,20 +582,28 @@ def build_analysis_view(
                             "stdout": b["stdout"],
                             "result": str(b["result"]),
                         }
-                        desc_task = ai_service.describe_result(block0_desc, res_data)
-                        suggest_task = ai_service.suggest(
-                            state.current_df_summary,
-                            initial_description=block0_desc,
-                            latest_result=res_data,
+                        desc_task = asyncio.create_task(
+                            ai_service.describe_result(block0_desc, res_data)
                         )
-                        description, suggestions = await asyncio.gather(
-                            desc_task, suggest_task
+                        ctx = _build_analysis_context()
+                        suggest_task = asyncio.create_task(
+                            ai_service.suggest(
+                                state.current_df_summary,
+                                initial_description=block0_desc,
+                                analysis_context=ctx,
+                            )
                         )
+
+                        description = await desc_task
                         b["description"] = description
+                        hist_entry["description"] = description
+                        if state.charts:
+                            state.charts[-1]["description"] = description
+                        _rebuild(page)
+
+                        suggestions = await suggest_task
                         b["suggestions"] = suggestions
                         state.suggestions = suggestions
-                        hist_entry["description"] = description
-                        state.charts[-1]["description"] = description
                         _rebuild(page)
                     except Exception as e:
                         logger.error("Autopilot block AI failed: %s", e)
@@ -559,16 +639,14 @@ def build_analysis_view(
         await on_suggestion_selected(prompt)
 
     async def on_voice_toggle(e):
-        """Toggle voice recording for analysis prompt."""
         if is_recording["value"]:
+            # Stop recording
             result = await audio_svc.stop_recording()
             is_recording["value"] = False
+            is_transcribing["value"] = True
             _rebuild(page)
             if result:
                 audio_bytes, mime_type = result
-                page.snack_bar = ft.SnackBar(ft.Text("Transcribing..."), duration=2000)
-                page.snack_bar.open = True
-                page.update()
                 transcript = await ai_service.transcribe_audio(audio_bytes, mime_type)
                 if transcript and not transcript.startswith("["):
                     if custom_prompt_field.current:
@@ -576,16 +654,34 @@ def build_analysis_view(
                         page.update()
                 else:
                     _show_error("Could not transcribe audio. Try again.")
+            is_transcribing["value"] = False
+            _rebuild(page)
         else:
+            # Start recording
             started = await audio_svc.start_recording(
                 on_auto_stop=lambda res: page.run_task(_handle_auto_stop, res)
             )
             if started:
                 is_recording["value"] = True
+                recording_time["value"] = 0
                 _rebuild(page)
+
+        # Timer loop — runs while recording, ticks every second
+        while is_recording["value"]:
+            await asyncio.sleep(1)
+            if is_recording["value"]:
+                recording_time["value"] += 1
+                if recording_timer.current:
+                    recording_timer.current.value = (
+                        f"00:{recording_time['value']:02d} / 01:00"
+                    )
+                    page.update(recording_timer.current)
+        # Reset timer
+        is_recording["value"] = False
 
     async def _handle_auto_stop(result):
         is_recording["value"] = False
+        is_transcribing["value"] = True
         _rebuild(page)
         if result:
             audio_bytes, mime_type = result
@@ -597,46 +693,152 @@ def build_analysis_view(
             ):
                 custom_prompt_field.current.value = transcript
                 page.update()
+        is_transcribing["value"] = False
+        _rebuild(page)
 
     def on_clear_data(e):
         import matplotlib.pyplot as plt
 
         plt.close("all")
         state.clear_data()
-        blocks.clear()
+        state.analysis_blocks.clear()
         _rebuild(page)
 
     def on_pin_block(index: int):
-        if index < 0 or index >= len(blocks):
+        if index < 0 or index >= len(state.analysis_blocks):
             return
-        block = blocks[index]
+        block = state.analysis_blocks[index]
         if block.get("pinned"):
             page.snack_bar = ft.SnackBar(ft.Text("Already in report."), duration=2000)
             page.snack_bar.open = True
             page.update()
             return
 
-        block["pinned"] = True
+        import base64
         from core.utils import figure_to_png_bytes
 
-        figure = block.get("figure")
-        figure_png = None
-        if figure:
+        # Build the report block
+        png_b64 = ""
+        if block.get("figure_png"):
+            png_b64 = base64.b64encode(block["figure_png"]).decode("utf-8")
+        elif block.get("figure"):
             try:
-                figure_png = figure_to_png_bytes(figure)
+                png_bytes = figure_to_png_bytes(block["figure"], dpi=150)
+                png_b64 = base64.b64encode(png_bytes).decode("utf-8")
             except Exception:
                 pass
+
+        report_block = {
+            "prompt": block.get("prompt", "Data Overview"),
+            "description": block.get("description", ""),
+            "figure_png_b64": png_b64,
+            "block_type": "chart" if png_b64 else "text",
+        }
+
+        # Also keep backward compat with state.charts
+        block["pinned"] = True
         state.charts.append(
             {
                 "prompt": block.get("prompt", "Data Overview"),
-                "figure": figure,
-                "figure_png": figure_png,
+                "figure": block.get("figure"),
+                "figure_png": block.get("figure_png"),
                 "description": block.get("description", ""),
             }
         )
-        page.snack_bar = ft.SnackBar(ft.Text("📌 Pinned to report!"), duration=2000)
-        page.snack_bar.open = True
-        _rebuild(page)
+
+        async def _pin_to_report(report_id=None):
+            from services.report_service import ReportService
+            from services.storage_service import StorageService
+
+            # Find storage from page — use the module-level pattern
+            storage = None
+            for attr in ["_storage", "storage"]:
+                if hasattr(page, attr):
+                    storage = getattr(page, attr)
+                    break
+            if storage is None:
+                # Create fresh StorageService instance
+                storage = StorageService(page)
+
+            svc = ReportService(storage)
+
+            if report_id:
+                await svc.add_block_to_report(report_id, report_block)
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("📌 Added to report!"), duration=2000
+                )
+            else:
+                title = f"{state.current_df_name or 'Analysis'} Report"
+                await svc.create_report(
+                    title, state.current_df_name or "", [report_block]
+                )
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("📌 New report created!"), duration=2000
+                )
+
+            page.snack_bar.open = True
+            _rebuild(page)
+
+        async def _show_picker():
+            from services.report_service import ReportService
+            from services.storage_service import StorageService
+
+            storage = StorageService(page)
+            svc = ReportService(storage)
+            reports = await svc.list_reports()
+
+            if not reports:
+                # No reports exist — auto-create
+                await _pin_to_report(None)
+                return
+
+            # Show picker dialog
+            def _select(rid):
+                page.close(dlg)
+                page.run_task(_pin_to_report, rid)
+
+            def _create_new():
+                page.close(dlg)
+                page.run_task(_pin_to_report, None)
+
+            items = []
+            for r in reports:
+                bc = len(r.get("blocks", []))
+                items.append(
+                    ft.ListTile(
+                        leading=ft.Icon(
+                            ft.Icons.ASSESSMENT_ROUNDED, color=theme.PRIMARY
+                        ),
+                        title=ft.Text(r.get("title", "Untitled"), size=14),
+                        subtitle=ft.Text(
+                            f"{bc} block{'s' if bc != 1 else ''}", size=11
+                        ),
+                        on_click=lambda e, rid=r["id"]: _select(rid),
+                    )
+                )
+
+            items.append(
+                ft.ListTile(
+                    leading=ft.Icon(ft.Icons.ADD_ROUNDED, color=theme.ACCENT),
+                    title=ft.Text(
+                        "Create New Report", size=14, weight="w600", color=theme.ACCENT
+                    ),
+                    on_click=lambda e: _create_new(),
+                )
+            )
+
+            dlg = ft.AlertDialog(
+                title=ft.Text("Pin to Report"),
+                content=ft.Container(
+                    content=ft.Column(items, scroll="auto", spacing=0),
+                    width=350,
+                    height=min(len(items) * 65, 350),
+                ),
+                actions=[ft.TextButton("Cancel", on_click=lambda e: page.close(dlg))],
+            )
+            page.open(dlg)
+
+        page.run_task(_show_picker)
 
     # ── UI Construction Helpers ────────────────────────────────────────
 
@@ -652,14 +854,16 @@ def build_analysis_view(
         page.snack_bar.open = True
         page.update()
 
-    def _build_chart_container(figure) -> ft.Container | None:
-        """Helper to render Matplotlib charts properly."""
+    def _build_chart_container(block: dict) -> ft.Container | None:
+        """Helper to render Matplotlib charts natively using flet_charts."""
+        figure = block.get("figure")
         if not figure:
             return None
         try:
             import flet_charts as fch
 
             return ft.Container(
+                # RESTORED: Using the official interactive flet-charts package
                 content=fch.MatplotlibChart(figure=figure, expand=True),
                 height=280,
             )
@@ -829,13 +1033,185 @@ def build_analysis_view(
                     spacing=8,
                 )
             )
+        # 1b. Block 0 enrichment: show df.describe() + column info
+        if is_initial:
+            describe_data = block.get("describe_data")
+            if describe_data is not None:
+                try:
+                    # Build describe table
+                    desc_cols = [
+                        ft.DataColumn(
+                            ft.Text(
+                                "Stat", size=tokens.FONT_XS, weight=ft.FontWeight.W_600
+                            )
+                        )
+                    ] + [
+                        ft.DataColumn(
+                            ft.Text(
+                                str(c)[:15],
+                                size=tokens.FONT_XS,
+                                weight=ft.FontWeight.W_600,
+                            )
+                        )
+                        for c in describe_data.columns[:20]
+                    ]
+                    desc_rows = []
+                    for stat_name in describe_data.index:
+                        cells = [
+                            ft.DataCell(
+                                ft.Text(
+                                    str(stat_name), size=tokens.FONT_XS, weight="w500"
+                                )
+                            )
+                        ]
+                        for c in describe_data.columns[:20]:
+                            val = describe_data.loc[stat_name, c]
+                            display = str(val) if val != "" else "—"
+                            if len(display) > 12:
+                                display = display[:10] + "…"
+                            cells.append(
+                                ft.DataCell(ft.Text(display, size=tokens.FONT_XS))
+                            )
+                        desc_rows.append(ft.DataRow(cells=cells))
+
+                    controls.append(
+                        ft.Container(
+                            content=ft.Column(
+                                [
+                                    ft.Row(
+                                        [
+                                            ft.Icon(
+                                                ft.Icons.QUERY_STATS_ROUNDED,
+                                                size=14,
+                                                color=theme.PRIMARY,
+                                            ),
+                                            ft.Text(
+                                                "Statistical Summary (df.describe)",
+                                                size=12,
+                                                weight="w600",
+                                            ),
+                                        ],
+                                        spacing=6,
+                                    ),
+                                    ft.Container(
+                                        content=ft.Row(
+                                            [
+                                                ft.DataTable(
+                                                    columns=desc_cols,
+                                                    rows=desc_rows,
+                                                    heading_row_height=34,
+                                                    data_row_max_height=30,
+                                                    column_spacing=12,
+                                                    border=ft.Border.all(
+                                                        1,
+                                                        ft.Colors.with_opacity(
+                                                            0.1, ft.Colors.ON_SURFACE
+                                                        ),
+                                                    ),
+                                                    border_radius=8,
+                                                )
+                                            ],
+                                            scroll=ft.ScrollMode.AUTO,
+                                        ),
+                                        border_radius=8,
+                                    ),
+                                ],
+                                spacing=6,
+                            ),
+                            padding=ft.Padding(0, 8, 0, 8),
+                        )
+                    )
+
+                    # Column info cards (dtype + nulls)
+                    col_chips = []
+                    for c in describe_data.columns[:20]:
+                        dtype_str = (
+                            str(state.current_df[c].dtype)
+                            if state.current_df is not None
+                            and c in state.current_df.columns
+                            else "?"
+                        )
+                        null_ct = (
+                            int(state.current_df[c].isnull().sum())
+                            if state.current_df is not None
+                            and c in state.current_df.columns
+                            else 0
+                        )
+                        null_color = theme.ERROR if null_ct > 0 else theme.SUCCESS
+                        col_chips.append(
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Text(
+                                            str(c)[:18],
+                                            size=11,
+                                            weight="w600",
+                                            max_lines=1,
+                                            overflow="ellipsis",
+                                        ),
+                                        ft.Text(
+                                            dtype_str,
+                                            size=10,
+                                            color=ft.Colors.ON_SURFACE_VARIANT,
+                                        ),
+                                        ft.Text(
+                                            f"{null_ct} null"
+                                            if null_ct > 0
+                                            else "0 null",
+                                            size=10,
+                                            color=null_color,
+                                        ),
+                                    ],
+                                    spacing=2,
+                                    horizontal_alignment="center",
+                                ),
+                                padding=ft.Padding(8, 6, 8, 6),
+                                border_radius=8,
+                                bgcolor=ft.Colors.with_opacity(
+                                    0.05, ft.Colors.ON_SURFACE
+                                ),
+                                width=90,
+                            )
+                        )
+                    if col_chips:
+                        controls.append(
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Row(
+                                            [
+                                                ft.Icon(
+                                                    ft.Icons.VIEW_COLUMN_ROUNDED,
+                                                    size=14,
+                                                    color=theme.ACCENT,
+                                                ),
+                                                ft.Text(
+                                                    "Column Info",
+                                                    size=12,
+                                                    weight="w600",
+                                                ),
+                                            ],
+                                            spacing=6,
+                                        ),
+                                        ft.Container(
+                                            content=ft.Row(col_chips, spacing=6),
+                                            padding=ft.Padding(0, 4, 0, 0),
+                                        ),
+                                    ],
+                                    spacing=6,
+                                ),
+                                padding=ft.Padding(0, 4, 0, 8),
+                            )
+                        )
+                except Exception as ex:
+                    logger.error("Block 0 describe render failed: %s", ex)
 
         # 2. Results Pipeline (Chart or Text)
         if not is_initial:
             has_chart = False
-            # Try to build chart first
+            # Try to build chart first natively with flet-charts
             if block.get("figure"):
-                chart_ui = _build_chart_container(block["figure"])
+                chart_ui = _build_chart_container(block)
                 if chart_ui:
                     controls.append(chart_ui)
                     has_chart = True
@@ -979,18 +1355,47 @@ def build_analysis_view(
         if state.current_df is None:
             # Welcome & File Import Screen
             if state.is_loading:
+                # Build loading message with file info
+                fname = loading_file_name["value"] or "data"
+                fsize = loading_file_size["value"]
+                size_mb = fsize / (1024 * 1024) if fsize else 0
+                load_msg = f"Loading {fname}..."
+                if size_mb > 0:
+                    load_msg = f"Loading {fname} ({size_mb:.1f} MB)..."
+
+                loading_controls = [
+                    ft.Container(height=150),
+                    ft.ProgressRing(width=40, height=40, stroke_width=3),
+                    ft.Text(
+                        load_msg,
+                        size=14,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ]
+                # Warn about large Excel files
+                if size_mb > 5 and fname.lower().endswith(".xlsx"):
+                    loading_controls.append(
+                        ft.Text(
+                            "Large Excel files may take up to 60 seconds",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            italic=True,
+                        )
+                    )
+                elif size_mb > 10:
+                    loading_controls.append(
+                        ft.Text(
+                            "Large files may take a moment to process",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            italic=True,
+                        )
+                    )
+
                 res.append(
                     ft.Container(
                         content=ft.Column(
-                            [
-                                ft.Container(height=150),
-                                ft.ProgressRing(width=40, height=40, stroke_width=3),
-                                ft.Text(
-                                    "Loading data...",
-                                    size=14,
-                                    color=ft.Colors.ON_SURFACE_VARIANT,
-                                ),
-                            ],
+                            loading_controls,
                             horizontal_alignment="center",
                             spacing=16,
                         ),
@@ -1017,7 +1422,9 @@ def build_analysis_view(
                                         ft.Text("Autopilot Mode", weight="w500"),
                                         ft.Switch(
                                             ref=autopilot_enabled,
-                                            value=getattr(state, "autopilot_enabled", True),
+                                            value=getattr(
+                                                state, "autopilot_enabled", True
+                                            ),
                                             active_color=theme.PRIMARY,
                                             on_change=on_autopilot_toggle,
                                         ),
@@ -1099,13 +1506,15 @@ def build_analysis_view(
                 )
             )
 
-            # 4. Render All Analysis Blocks
-            for i, b in enumerate(blocks):
+            # 4. Render All Analysis Blocks from Global State
+            for i, b in enumerate(state.analysis_blocks):
                 res.append(_build_block_card(b, i))
 
             # 5. Loading Indicator moved to the BOTTOM
             if state.is_analyzing:
-                progress_text = getattr(state, "autopilot_progress", "") or "AI thinking..."
+                progress_text = (
+                    getattr(state, "autopilot_progress", "") or "AI thinking..."
+                )
                 loading_controls = [
                     ft.ProgressRing(width=16, height=16),
                     ft.Text(
@@ -1149,21 +1558,43 @@ def build_analysis_view(
                                     on_submit=lambda e: page.run_task(
                                         on_custom_prompt, e
                                     ),
-                                    disabled=is_recording["value"],
+                                    disabled=is_recording["value"]
+                                    or is_transcribing["value"],
                                 ),
-                                ft.IconButton(
-                                    ft.Icons.STOP_ROUNDED
-                                    if is_recording["value"]
-                                    else ft.Icons.MIC_ROUNDED,
-                                    icon_color=theme.ERROR
-                                    if is_recording["value"]
-                                    else ft.Colors.ON_SURFACE_VARIANT,
-                                    tooltip="Stop"
-                                    if is_recording["value"]
-                                    else "Voice",
-                                    on_click=lambda e: page.run_task(
-                                        on_voice_toggle, e
-                                    ),
+                                ft.Row(
+                                    [
+                                        ft.Text(
+                                            ref=recording_timer,
+                                            value=f"00:{recording_time['value']:02d} / 01:00",
+                                            size=12,
+                                            color=theme.ERROR,
+                                            weight="bold",
+                                            visible=is_recording["value"],
+                                        ),
+                                        ft.ProgressRing(
+                                            width=16,
+                                            height=16,
+                                            stroke_width=2,
+                                            visible=is_transcribing["value"],
+                                        ),
+                                        ft.IconButton(
+                                            ft.Icons.STOP_ROUNDED
+                                            if is_recording["value"]
+                                            else ft.Icons.MIC_ROUNDED,
+                                            icon_color=theme.ERROR
+                                            if is_recording["value"]
+                                            else ft.Colors.ON_SURFACE_VARIANT,
+                                            tooltip="Stop"
+                                            if is_recording["value"]
+                                            else "Voice",
+                                            on_click=lambda e: page.run_task(
+                                                on_voice_toggle, e
+                                            ),
+                                            disabled=is_transcribing["value"],
+                                        ),
+                                    ],
+                                    spacing=4,
+                                    vertical_alignment="center",
                                 ),
                                 ft.IconButton(
                                     ft.Icons.SEND_ROUNDED,
@@ -1171,7 +1602,8 @@ def build_analysis_view(
                                     on_click=lambda e: page.run_task(
                                         on_custom_prompt, e
                                     ),
-                                    disabled=is_recording["value"],
+                                    disabled=is_recording["value"]
+                                    or is_transcribing["value"],
                                 ),
                             ]
                         ),

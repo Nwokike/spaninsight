@@ -30,7 +30,7 @@ MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 ALLOWED_EXTENSIONS = {".csv", ".json", ".xlsx"}
 
 # ── Data Display ────────────────────────────────────────────────────
-DATA_PREVIEW_ROWS = 50
+DATA_PREVIEW_ROWS = 20
 
 # ── Audio ───────────────────────────────────────────────────────────
 MAX_VOICE_DURATION_SEC = 60
@@ -129,4 +129,4 @@ STORAGE_BONUS_CREDITS = "spaninsight_bonus_credits"
 STORAGE_LAST_RESET = "spaninsight_last_reset"
 STORAGE_REFERRAL_CODE = "spaninsight_referral_code"
 STORAGE_ONBOARDING_DONE = "spaninsight_onboarding_done"
-STORAGE_MCP_SERVERS = "spaninsight_mcp_servers"
+STORAGE_REPORTS = "spaninsight_reports"

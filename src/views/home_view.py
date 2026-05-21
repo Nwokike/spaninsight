@@ -68,10 +68,9 @@ def build_home_view(
                         _action_card(
                             icon=ft.Icons.ASSESSMENT_ROUNDED,
                             title="Reports",
-                            subtitle=f"{len(state.charts)} charts",
+                            subtitle=f"{len(state.user_reports or [])} report{'s' if len(state.user_reports or []) != 1 else ''}",
                             color=theme.SUCCESS,
-                            on_click=lambda e: on_navigate("/report"),
-                            disabled=len(state.charts) == 0,
+                            on_click=lambda e: on_navigate("/reports"),
                         ),
                     ],
                     spacing=tokens.SPACE_MD,

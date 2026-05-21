@@ -186,19 +186,6 @@ async def main(page: ft.Page):
     # Initialize credits (daily reset)
     state.credits_remaining = await credit_service.initialize()
 
-    # Load MCP Servers
-    from core.constants import STORAGE_MCP_SERVERS
-
-    try:
-        mcp_servers_json = await storage.get(STORAGE_MCP_SERVERS)
-        if mcp_servers_json:
-            state.mcp_servers = json.loads(mcp_servers_json)
-        else:
-            state.mcp_servers = []
-    except Exception as e:
-        logger.warning("MCP servers load failed: %s", e)
-        state.mcp_servers = []
-
     # Preload interstitial ad
     page.run_task(ad_service.preload_interstitial)
 
@@ -253,19 +240,19 @@ async def main(page: ft.Page):
                 label="Home",
             ),
             ft.NavigationBarDestination(
-                icon=ft.Icons.ANALYTICS_OUTLINED,
-                selected_icon=ft.Icons.ANALYTICS_ROUNDED,
-                label="Analysis",
-            ),
-            ft.NavigationBarDestination(
                 icon=ft.Icons.DYNAMIC_FORM_OUTLINED,
                 selected_icon=ft.Icons.DYNAMIC_FORM_ROUNDED,
                 label="Forms",
             ),
             ft.NavigationBarDestination(
+                icon=ft.Icons.ANALYTICS_OUTLINED,
+                selected_icon=ft.Icons.ANALYTICS_ROUNDED,
+                label="Analysis",
+            ),
+            ft.NavigationBarDestination(
                 icon=ft.Icons.ASSESSMENT_OUTLINED,
                 selected_icon=ft.Icons.ASSESSMENT_ROUNDED,
-                label="Report",
+                label="Reports",
             ),
             ft.NavigationBarDestination(
                 icon=ft.Icons.SETTINGS_OUTLINED,
@@ -279,7 +266,7 @@ async def main(page: ft.Page):
     )
 
     # Tab routes mapping
-    TAB_ROUTES = ["/home", "/analysis", "/forms", "/report", "/settings"]
+    TAB_ROUTES = ["/home", "/forms", "/analysis", "/reports", "/settings"]
 
     # ── Navigation Helpers ──────────────────────────────────────────
     async def navigate(route: str):
@@ -310,7 +297,8 @@ async def main(page: ft.Page):
                     if state.current_df_columns
                     else 0,
                     "timestamp": datetime.datetime.now().timestamp(),
-                    "chart_count": len(state.charts),
+                    # FIX: safely check charts to prevent crashing
+                    "chart_count": len(getattr(state, "charts", [])),
                 },
             )
 
@@ -364,6 +352,13 @@ async def main(page: ft.Page):
             page.views.append(view)
             nav_bar.selected_index = 0
 
+        elif route == "/forms":
+            from views.forms_view import build_forms_view
+
+            view = build_forms_view(page=page)
+            page.views.append(view)
+            nav_bar.selected_index = 1
+
         elif route == "/analysis":
             from views.analysis_view import build_analysis_view
 
@@ -372,21 +367,19 @@ async def main(page: ft.Page):
                 credit_service=credit_service,
             )
             page.views.append(view)
-            nav_bar.selected_index = 1
-
-        elif route == "/forms":
-            from views.forms_view import build_forms_view
-
-            view = build_forms_view(page=page)
-            page.views.append(view)
             nav_bar.selected_index = 2
 
-        elif route == "/report":
+        elif route == "/reports" or route == "/report":
             from views.report_view import build_report_view
+            from services.report_service import ReportService
 
+            report_service = ReportService(storage)
             view = build_report_view(
                 page=page,
+                report_service=report_service,
                 ad_service=ad_service,
+                storage=storage,
+                credit_service=credit_service,
             )
             page.views.append(view)
             nav_bar.selected_index = 3

@@ -27,16 +27,14 @@ class AppState:
     current_df: Any = None  # Active pandas DataFrame
     current_df_name: str = ""  # Filename of loaded data
     current_file_path: str = ""  # Path to active CSV/Excel file
-    current_df_columns: list = []  # Column names cache
+    current_df_columns: list[str] = None  # Column names cache
     current_df_rows: int = 0  # Total row count
-    current_df_summary: dict = {}  # df.describe() as dict
+    current_df_summary: dict = None  # df.describe() as dict
 
     # ── Analysis ────────────────────────────────────────────────────
     analysis_blocks: list[dict] = None  # Active interactive blocks in Analysis view
     suggestions: list[dict] = None  # AI suggestion buttons [{label, icon, prompt}]
-    charts: list[dict] = (
-        None  # Generated chart history [{figure, figure_png, code, insight}]
-    )
+    charts: list[dict] = None  # Generated chart history [{figure, figure_png, code, insight}]
     current_code: str = ""  # Last generated code
     current_insight: str = ""  # Last AI interpretation
     is_analyzing: bool = False  # Loading state for AI calls
@@ -47,11 +45,12 @@ class AppState:
     # ── Forms (Phase 3) ────────────────────────────────────────────
     forms: list[dict] = None
 
-    # ── MCP (Phase 6) ──────────────────────────────────────────────
-    mcp_servers: list[dict] = None
+    # ── Reports ─────────────────────────────────────────────────────
+    user_reports: list[dict] = None
+    active_report: dict = None
 
     # ── Navigation ──────────────────────────────────────────────────
-    current_tab: int = 0  # 0=Home, 1=Analysis, 2=Forms, 3=Settings
+    current_tab: int = 0  # 0=Home, 1=Forms, 2=Analysis, 3=Reports, 4=Settings
 
     # ── UI ──────────────────────────────────────────────────────────
     is_loading: bool = False
@@ -61,14 +60,15 @@ class AppState:
     session_to_restore: dict = None
 
     def __init__(self):
+        # OPTIMIZATION: Safely initialize all mutable lists/dicts here, not at class level
         self.suggestions = []
         self.charts = []
         self.forms = []
+        self.user_reports = []
         self.analysis_blocks = []
         self.current_df_columns = []
         self.current_df_summary = {}
         self.session_to_restore = None
-        self.mcp_servers = []
 
     def clear_data(self):
         """Reset all data-related state."""

@@ -6,7 +6,7 @@ Task types: suggest, code, interpret, vision, audio
 
 Uncapped Optimization Rewrite:
 - Eliminated artificial suggestions cap (upgraded from 3 restricted chips to 5-8 comprehensive tracks).
-- Removed token-bloat schema slicing; feeds the complete rich metadata/statistics to the reasoning model.
+- Removed MCP Server bloat to ensure fast execution and avoid Cloudflare 503 timeouts.
 - Upgraded block extractors to use regex patterns to handle noisy formatting gracefully and eliminate JSON exceptions.
 - Completely removed cost-management minimization constraints.
 - Hardened code generation rules to prevent sandbox library violations (Seaborn/Plotly).
@@ -41,11 +41,11 @@ _GENERIC_BLOCK_RE = re.compile(r"```\s*(.*?)\s*```", re.DOTALL)
 
 # Timeouts per task type matching the gateway's processing scale
 _TIMEOUTS = {
-    TASK_SUGGEST: 35.0,  # Increased to accommodate richer parallel suggestions
-    TASK_CODE: 60.0,  # Increased for unconstrained reasoning execution
-    TASK_INTERPRET: 25.0,
-    TASK_VISION: 45.0,
-    TASK_AUDIO: 30.0,
+    TASK_SUGGEST: 25.0,
+    TASK_CODE: 30.0,
+    TASK_INTERPRET: 20.0,
+    TASK_VISION: 30.0,
+    TASK_AUDIO: 20.0,
 }
 
 
@@ -157,39 +157,6 @@ async def transcribe_audio(audio_bytes: bytes, mime_type: str) -> str:
 # ── Standard AI Endpoints ───────────────────────────────────────────
 
 
-def _build_mcp_prompt_segment() -> str:
-    """Build a system prompt segment describing connected and enabled MCP servers and tools."""
-    from core.state import state
-
-    if not state.mcp_servers:
-        return ""
-
-    has_active = False
-    segment = "\n\nAvailable remote Model Context Protocol (MCP) servers and tools:\n"
-    segment += "You can invoke these tools in your python code using `mcp.call_tool(server_name, tool_name, arguments)`.\n"
-    segment += "Always check that the server name and tool name match exactly. The `arguments` must be a dictionary matching the tool's parameter schema.\n"
-    for srv in state.mcp_servers:
-        if not srv.get("enabled", True):
-            continue
-
-        enabled_tools = [t for t in srv.get("tools", []) if t.get("enabled", True)]
-        if not enabled_tools:
-            continue
-
-        has_active = True
-        segment += f"- Server '{srv['name']}':\n"
-        for tool in enabled_tools:
-            desc = tool.get("description", "").replace("\n", " ")
-            segment += f"  * Tool '{tool['name']}': {desc}\n"
-            if "inputSchema" in tool:
-                props = tool["inputSchema"].get("properties", {})
-                segment += f"    Parameters: {json.dumps(props, default=str)}\n"
-
-    if not has_active:
-        return ""
-    return segment
-
-
 async def describe_dataset(schema_json: dict) -> str:
     """Block 0 describe: AI reads the schema and describes the dataset."""
     system_prompt = (
@@ -199,9 +166,12 @@ async def describe_dataset(schema_json: dict) -> str:
         "Do NOT use any markdown (no bold, no italics, no bullet points, no headers). "
         "Write strictly as clear, plain-text prose, limited to at most 2 to 3 sentences."
     )
+    ai_schema = dict(schema_json)
+    ai_schema.pop("head", None)
+    ai_schema.pop("tail", None)
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": json.dumps(schema_json, default=str)},
+        {"role": "user", "content": json.dumps(ai_schema, default=str)},
     ]
     try:
         data = await _call_gateway(TASK_SUGGEST, messages)
@@ -254,6 +224,7 @@ async def suggest(
     schema_json: dict,
     initial_description: str = "",
     latest_result: dict | None = None,
+    analysis_context: str = "",
 ) -> list[dict]:
     """Context-aware suggestions without cost-cutting limits. Returns 5-8 recommendations."""
     system_prompt = (
@@ -267,10 +238,15 @@ async def suggest(
         '- "prompt": full structural instruction used to generate the required pandas/matplotlib execution block\n'
         "Do not include code fences, preamble, or conversational notes outside the JSON array."
     )
-    context_parts = [json.dumps(schema_json, default=str)]
+    ai_schema = dict(schema_json)
+    ai_schema.pop("head", None)
+    ai_schema.pop("tail", None)
+    context_parts = [json.dumps(ai_schema, default=str)]
     if initial_description:
         context_parts.append(f"\nDataset Overview: {initial_description}")
-    if latest_result:
+    if analysis_context:
+        context_parts.append(f"\nAnalysis History (do NOT repeat):\n{analysis_context}")
+    elif latest_result:
         context_parts.append(
             f"\nLast analysis step: {latest_result.get('prompt', '')}"
             f"\nExecution Result: {latest_result.get('result', '')}"
@@ -299,10 +275,14 @@ async def suggest(
         return fallback_suggestions()
 
 
-async def generate_code(prompt: str, schema_json: dict) -> str:
+async def generate_code(
+    prompt: str, schema_json: dict, analysis_context: str = ""
+) -> str:
     """Send prompt to code route using full uncut dataset schema statistics."""
-    # NO SLICING/SLIMMING SCHEMA: Send full schema for perfect reasoning precision
-    mcp_segment = _build_mcp_prompt_segment()
+    context_section = ""
+    if analysis_context:
+        context_section = f"\n\nPrevious Analysis Context (do NOT repeat these):\n{analysis_context}\n"
+
     system_prompt = (
         "You are an expert Python core data engineer. Generate optimal, safe pandas and matplotlib "
         "code blocks to analyze the loaded DataFrame `df` according to the user's explicit request.\n\n"
@@ -329,9 +309,9 @@ async def generate_code(prompt: str, schema_json: dict) -> str:
         "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
         "- Do NOT invoke interactive methods like plt.show() or object inspectors.\n"
         "- Do NOT engage in file system operations or network activities.\n"
-        "- Return only functional Python code. No introductory remarks, conversational wrappers, or markdown text."
-        f"{mcp_segment}\n\n"
+        "- Return only functional Python code. No introductory remarks, conversational wrappers, or markdown text.\n\n"
         f"Complete Dataset Metric Schema:\n{json.dumps(schema_json, default=str)}"
+        f"{context_section}"
     )
 
     messages = [
@@ -361,7 +341,6 @@ async def generate_corrected_code(
     schema_json: dict,
 ) -> str:
     """Send failing code and traceback to the gateway to generate corrected, safe Python code."""
-    mcp_segment = _build_mcp_prompt_segment()
     system_prompt = (
         "You are an expert Python data debugging engineer. You will be given the original "
         "user prompt, the failing Python code block, the exact execution traceback/error, "
@@ -377,8 +356,7 @@ async def generate_corrected_code(
         "- For plotting, check data dimensions before passing labels (e.g. tick_labels or labels).\n"
         "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
         "- Ensure your generated code parses correctly, has valid indentation, handles NaNs appropriately, and fully complies with sandbox AST whitelisting rules.\n"
-        "- Return only functional Python code. No introductory remarks, conversational wrappers, or markdown text."
-        f"{mcp_segment}\n\n"
+        "- Return only functional Python code. No introductory remarks, conversational wrappers, or markdown text.\n\n"
         f"Complete Dataset Metric Schema:\n{json.dumps(schema_json, default=str)}"
     )
 
@@ -417,25 +395,21 @@ async def plan_next_step(
         {"prompt": "...", "is_complete": False, "reason": "..."}
         or {"prompt": "", "is_complete": True, "reason": "Analysis is comprehensive."}
     """
-    mcp_segment = _build_mcp_prompt_segment()
-
-    history_summary = ""
+    # Compact history: list prompts + status only (no full code/results to save tokens)
+    history_lines = []
     for i, entry in enumerate(analysis_history):
-        status = "SUCCESS" if entry.get("success") else "FAILED"
-        history_summary += (
-            f"\n--- Step {i + 1} [{status}] ---\n"
-            f"Prompt: {entry.get('prompt', '')}\n"
-            f"Code: {entry.get('code', '')[:300]}\n"
-            f"Result: {str(entry.get('result', ''))[:200]}\n"
-            f"Insight: {entry.get('description', '')[:200]}\n"
-        )
-        if entry.get("error"):
-            history_summary += f"Error: {entry.get('error')[:200]}\n"
+        status = "✓" if entry.get("success") else "✗"
+        prompt = entry.get("prompt", "")[:80]
+        desc = entry.get("description", "")[:100]
+        history_lines.append(f"  {i + 1}. [{status}] {prompt} → {desc}")
+
+    # Send all step TITLES so planner knows what was done, but no code/result bloat
+    history_summary = "\n".join(history_lines) if history_lines else "No steps yet."
 
     system_prompt = (
         "You are an autonomous data analysis agent. Your job is to decide the NEXT analysis step "
         "or determine that analysis is COMPLETE.\n\n"
-        "Review the dataset schema and ALL previous analysis results. Then decide:\n"
+        "Review the dataset schema and ALL previous analysis titles. Then decide:\n"
         "1. If the analysis is already comprehensive (covered distributions, correlations, "
         "anomalies, key patterns, missing data, categorical breakdowns), return is_complete=true.\n"
         "2. Otherwise, return the NEXT specific analysis prompt to execute.\n\n"
@@ -443,8 +417,7 @@ async def plan_next_step(
         "- Do NOT repeat any previous analysis step.\n"
         "- Prioritize high-value analyses: correlations, distributions, outliers, trends, "
         "categorical breakdowns, missing data patterns, statistical summaries.\n"
-        "- Be specific: the prompt must be a full instruction for pandas/matplotlib code generation.\n"
-        f"{mcp_segment}\n"
+        "- Be specific: the prompt must be a full instruction for pandas/matplotlib code generation.\n\n"
         "Return ONLY a valid JSON object with these keys:\n"
         '- "prompt": the next analysis instruction (empty string if complete)\n'
         '- "is_complete": boolean\n'
@@ -455,7 +428,7 @@ async def plan_next_step(
     user_content = (
         f"Dataset Schema:\n{json.dumps(schema_json, default=str)}\n\n"
         f"Dataset Overview: {initial_description}\n\n"
-        f"Analysis History (all previous steps):\n{history_summary}"
+        f"Completed Steps ({len(analysis_history)} total):\n{history_summary}"
     )
 
     messages = [
@@ -552,6 +525,105 @@ async def generate_form_schema(prompt: str) -> dict | None:
         return json.loads(cleaned)
     except Exception as e:
         logger.error("AI form gen failed: %s", e)
+        return None
+
+
+async def arrange_report(blocks: list[dict], dataset_name: str = "") -> dict | None:
+    """AI auto-arranges report blocks into optimal order with polished descriptions."""
+    system_prompt = (
+        "You are an expert data report editor. Given analysis blocks, arrange them into "
+        "a cohesive professional report.\n\n"
+        "RULES:\n"
+        "- Reorder blocks in logical flow (overview → distributions → correlations → anomalies → conclusions)\n"
+        "- Generate a concise report title and 1-2 sentence description\n"
+        "- Lightly polish each description for clarity. Do NOT change meaning or delete blocks\n"
+        "- Return the SAME number of blocks you received\n\n"
+        "OUTPUT — return ONLY raw JSON, no markdown fences:\n"
+        '{"title":"...", "description":"...", "blocks":[{"prompt":"...", "description":"...", "original_index": 0}]}\n'
+        "original_index = 0-based index in the input list."
+    )
+
+    blocks_summary = [
+        {
+            "index": i,
+            "prompt": b.get("prompt", ""),
+            "description": b.get("description", ""),
+        }
+        for i, b in enumerate(blocks)
+    ]
+    user_content = (
+        f"Dataset: {dataset_name}\n\nBlocks:\n{json.dumps(blocks_summary, default=str)}"
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    try:
+        data = await _call_gateway(TASK_SUGGEST, messages)
+        content = _extract_content(data)
+        cleaned = _extract_block_by_pattern(content, is_json=True)
+        result = json.loads(cleaned)
+        if isinstance(result, dict) and "blocks" in result:
+            logger.info(
+                "AI arranged report: %s (%d blocks)",
+                result.get("title", ""),
+                len(result["blocks"]),
+            )
+            return result
+        return None
+    except Exception as e:
+        logger.error("Arrange report failed: %s", e)
+        return None
+
+
+async def edit_report_with_ai(
+    current_blocks: list[dict],
+    title: str,
+    description: str,
+    user_instruction: str,
+) -> dict | None:
+    """AI edits report based on user instruction (reorder, rephrase, etc.)."""
+    system_prompt = (
+        "You are an expert report editor. Apply the user's edit instruction to the report.\n\n"
+        "RULES:\n"
+        "- You may reorder blocks, edit titles and descriptions\n"
+        "- You MUST NOT delete any blocks — return the same count\n"
+        "- You MUST NOT change underlying data or metrics\n\n"
+        "OUTPUT — return ONLY raw JSON, no markdown fences:\n"
+        '{"title":"...", "description":"...", "blocks":[{"prompt":"...", "description":"...", "original_index": 0}]}\n'
+        "original_index = 0-based index in the INPUT list."
+    )
+
+    blocks_summary = [
+        {
+            "index": i,
+            "prompt": b.get("prompt", ""),
+            "description": b.get("description", ""),
+        }
+        for i, b in enumerate(current_blocks)
+    ]
+    user_content = (
+        f"Report Title: {title}\nDescription: {description}\n\n"
+        f"Blocks:\n{json.dumps(blocks_summary, default=str)}\n\n"
+        f"Edit Instruction: {user_instruction}"
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    try:
+        data = await _call_gateway(TASK_SUGGEST, messages)
+        content = _extract_content(data)
+        cleaned = _extract_block_by_pattern(content, is_json=True)
+        result = json.loads(cleaned)
+        if isinstance(result, dict) and "blocks" in result:
+            logger.info("AI edited report: %d blocks", len(result["blocks"]))
+            return result
+        return None
+    except Exception as e:
+        logger.error("Edit report with AI failed: %s", e)
         return None
 
 

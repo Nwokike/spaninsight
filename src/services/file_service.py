@@ -114,72 +114,40 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
 def get_data_summary(df: pd.DataFrame) -> dict:
     """Generate a comprehensive but token-efficient summary for the AI.
 
-    Includes everything pandas can tell us: shape, dtypes, head, tail,
-    describe, nunique, null counts, and top values.
-    Truncates long strings and limits column counts to keep payload safe.
+    Uses native pandas calls (C-optimized) instead of manual column loops.
+    df.describe(include='all') gives count, mean, std, min, quartiles, max
+    for numeric AND top/freq/unique for categorical — all in one fast call.
     """
-    import pandas as pd
 
-    # 1. Shape and basics
     summary = {
         "shape": {"rows": len(df), "columns": len(df.columns)},
-        "memory_usage_mb": round(df.memory_usage(deep=True).sum() / (1024 * 1024), 2),
+        "columns": {str(c): str(df[c].dtype) for c in df.columns[:30]},
+        "nulls": {str(c): int(df[c].isnull().sum()) for c in df.columns[:30]},
+        "describe": df.describe(include="all").round(2).fillna("").to_dict(),
+        "head": [],
+        "tail": [],
     }
 
-    # 2. Column-level mapping (Dtypes + Nulls + Unique)
-    cols = []
-    # Limit to first 25 columns to avoid massive payloads for wide datasets
-    target_cols = df.columns[:25]
-    for col in target_cols:
-        # P2 FIX: Only apply list-join transformation to object-dtype columns
-        is_object = df[col].dtype == "object"
-        if is_object:
-            series = df[col].apply(
-                lambda x: ", ".join(x) if isinstance(x, (list, tuple)) else x
-            )
-        else:
-            series = df[col]
-        col_info = {
-            "name": col,
-            "dtype": str(df[col].dtype),
-            "nulls": int(df[col].isnull().sum()),
-            "unique": int(series.nunique()),
-        }
-        # Add basic stats for numeric
-        if pd.api.types.is_numeric_dtype(df[col]):
-            d = df[col].describe()
-            col_info["stats"] = {
-                "mean": round(float(d.get("mean", 0)), 2),
-                "min": float(d.get("min", 0)),
-                "max": float(d.get("max", 0)),
-            }
-        else:
-            # Top values for categorical
-            top = series.value_counts().head(3)
-            col_info["top_values"] = {str(k)[:50]: int(v) for k, v in top.items()}
-        cols.append(col_info)
-    summary["columns"] = cols
-
-    # 3. Head and tail (Truncated strings)
-    def _safe_df_dict(sub_df):
-        # P3 FIX: Only copy and truncate object-dtype columns, skip numerics
+    # Safe head + tail — truncate long strings
+    def _safe_rows(sub_df):
         obj_cols = [c for c in sub_df.columns if sub_df[c].dtype == "object"]
         if obj_cols:
             sub_df = sub_df.copy()
             for col in obj_cols:
                 sub_df[col] = sub_df[col].apply(
-                    lambda x: str(x)[:100] + "..." if len(str(x)) > 100 else x
+                    lambda x: (
+                        str(x)[:100] + "..."
+                        if isinstance(x, str) and len(x) > 100
+                        else x
+                    )
                 )
         return sub_df.to_dict(orient="records")
 
     try:
-        summary["head_5_rows"] = _safe_df_dict(df.head(5))
-        summary["tail_3_rows"] = _safe_df_dict(df.tail(3))
+        summary["head"] = _safe_rows(df.head(20))
+        summary["tail"] = _safe_rows(df.tail(20))
     except Exception:
-        summary["head_5_rows"] = "unavailable"
-
-    # P3: Removed redundant df.describe(include='all') — the AI already gets
-    # head_5_rows, tail_3_rows, and per-column stats. Saves O(n×m) on large datasets.
+        summary["head"] = "unavailable"
 
     return summary
 
