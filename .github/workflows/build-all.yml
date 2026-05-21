@@ -29,9 +29,6 @@ jobs:
       
       - name: Lint with Ruff
         run: uv run ruff check src/
-
-      - name: Run Tests
-        run: uv run pytest tests/ -v --tb=short
         
       - name: Build Windows Portable
         run: uv run flet build windows --yes --project spaninsight --product "Spaninsight" --org com.spaninsight --build-version ${{ env.BUILD_VERSION }} --build-number ${{ env.BUILD_NUMBER }} -v

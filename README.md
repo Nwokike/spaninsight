@@ -42,7 +42,7 @@
 | **Automated Analysis** | Intelligent data ingestion (CSV/Excel/JSON) with AI-suggested insights and local code execution. |
 | **Smart Surveys** | Natural language survey generation (Text/Voice) with real-time preview — great for student research and customer feedback. |
 | **Autopilot Engine** | Multi-pass analysis orchestration for comprehensive automated report generation. |
-| **Professional Export** | Render reports to PDF and PowerPoint formats with cloud sharing via secure links. |
+| **Professional Export** | Export reports as PDF and PowerPoint via the web viewer with cloud sharing via secure links. |
 | **Local Security** | Sandbox-restricted Python execution environment ensuring 100% data residency. |
 
 ---
@@ -67,7 +67,6 @@
 | **AI Gateway** | spaninsight cloud (api.spaninsight.com) | Multi-model AI orchestration with automatic failover |
 | **Database** | Cloudflare D1 | Forms, responses, referrals, UUID recovery |
 | **Local Storage** | Secure Storage API | AES-256 encrypted credentials & config |
-| **PDF/PPTX** | fpdf2 & python-pptx | Professional report generation |
 
 ### Visual Flow
 
