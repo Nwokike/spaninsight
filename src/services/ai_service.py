@@ -41,11 +41,11 @@ _GENERIC_BLOCK_RE = re.compile(r"```\s*(.*?)\s*```", re.DOTALL)
 
 # Timeouts per task type matching the gateway's processing scale
 _TIMEOUTS = {
-    TASK_SUGGEST: 25.0,
-    TASK_CODE: 30.0,
-    TASK_INTERPRET: 20.0,
-    TASK_VISION: 30.0,
-    TASK_AUDIO: 20.0,
+    TASK_SUGGEST: 60.0,
+    TASK_CODE: 60.0,
+    TASK_INTERPRET: 60.0,
+    TASK_VISION: 60.0,
+    TASK_AUDIO: 60.0,
 }
 
 
@@ -197,7 +197,7 @@ async def describe_result(
         "Do NOT use any markdown (no bold, no italics, no bullet points, no headers). "
         "Write strictly as clear, plain-text analytical findings, limited to at most 2 to 3 sentences."
     )
-    context = (
+    result_text = (
         f"Dataset: {initial_description}\n\n"
         f"Analysis Prompt: {latest_result.get('prompt', '')}\n"
         f"Executed Code:\n{latest_result.get('code', '')}\n\n"
@@ -206,14 +206,14 @@ async def describe_result(
     )
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": context},
+        {"role": "user", "content": result_text},
     ]
     try:
         data = await _call_gateway(TASK_INTERPRET, messages)
-        desc = _extract_content(data)
-        if desc:
-            logger.info("Block N describe: %s", desc[:80])
-            return desc
+        content = _extract_content(data)
+        if content:
+            logger.info("Block N describe: %s", content[:80])
+            return content.strip()
         return "Analysis completed."
     except Exception as e:
         logger.error("Describe result failed: %s", e)
@@ -286,10 +286,11 @@ async def generate_code(
     system_prompt = (
         "You are an expert Python core data engineer. Generate optimal, safe pandas and matplotlib "
         "code blocks to analyze the loaded DataFrame `df` according to the user's explicit request.\n\n"
-        "CRITICAL — ONLY these 3 libraries are available:\n"
+        "CRITICAL — ONLY these 4 libraries are available:\n"
         "  1. pandas (import as pd)\n"
         "  2. numpy  (import as np)\n"
-        "  3. matplotlib.pyplot (import as plt)\n\n"
+        "  3. matplotlib.pyplot (import as plt)\n"
+        "  4. math\n\n"
         "STRICTLY FORBIDDEN — do NOT import or use ANY of these (they will cause execution failure):\n"
         "  seaborn, sns, scipy, sklearn, statsmodels, plotly, pingouin, lifelines, any other library.\n"
         "  If you need heatmap → use plt.imshow() or plt.matshow() with pandas/numpy.\n"
@@ -299,6 +300,7 @@ async def generate_code(
         "Execution Framework Rules:\n"
         "- The DataFrame is pre-loaded as global variable `df`. Do NOT mock, download, or re-read data files.\n"
         "- Use modern Pandas 2.0+ Copy-on-Write syntax. STRICTLY FORBIDDEN: Do NOT use `inplace=True` or chained assignments (e.g. df['A']['B'] = 1). Use explicit assignment or `df.loc`.\n"
+        "- The environment uses NumPy 2.0+. STRICTLY FORBIDDEN: Do NOT use removed attributes like `np.math` or `np.erf`. For math functions, `import math` and use `math.erf()`. When applying `math` functions to arrays/series, use `.apply()` or list comprehensions, because they only accept scalars.\n"
         "- For statistical calculations (e.g. regressions, curve fitting, trend lines, statistical indices, correlations), write them using numpy (e.g. np.polyfit, np.cov, np.corrcoef) or pandas (e.g. df.corr, df.describe, df.cov). This ensures 100% Android mobile compatibility.\n"
         "- For plotting, ALWAYS create a figure explicitly (e.g., `plt.figure()` or `fig, ax = plt.subplots()`) so the system can capture the chart. Stick exclusively to matplotlib.\n"
         "- For plotting, format with clean parameters and always call plt.tight_layout() before completion.\n"
@@ -347,9 +349,10 @@ async def generate_corrected_code(
         "and the dataset schema. Your task is to identify and correct the error in the Python code.\n\n"
         "Execution Framework Rules:\n"
         "- The DataFrame is pre-loaded as global variable `df`. Do NOT mock, download, or re-read data files.\n"
-        "- Available libraries: pandas (as pd), numpy (as np), matplotlib.pyplot (as plt)\n"
+        "- Available libraries: pandas (as pd), numpy (as np), matplotlib.pyplot (as plt), math\n"
         "- Do NOT use scipy, seaborn (sns), plotly, or any other external libraries. Stick exclusively to pandas, numpy, and matplotlib.\n"
         "- Use modern Pandas 2.0+ Copy-on-Write syntax. STRICTLY FORBIDDEN: Do NOT use `inplace=True` or chained assignments (e.g. df['A']['B'] = 1). Use explicit assignment or `df.loc`.\n"
+        "- The environment uses NumPy 2.0+. STRICTLY FORBIDDEN: Do NOT use removed attributes like `np.math` or `np.erf`. For math functions, `import math` and use `.apply()` on pandas series (since math functions take scalars).\n"
         "- For statistical calculations (e.g. regressions, curve fitting, trend lines, statistical indices, correlations), write them using numpy (e.g. np.polyfit, np.cov, np.corrcoef) or pandas (e.g. df.corr, df.describe, df.cov). This ensures 100% Android mobile compatibility.\n"
         "- For plotting, ALWAYS create a figure explicitly (e.g., `plt.figure()` or `fig, ax = plt.subplots()`) so the system can capture the chart. Stick exclusively to matplotlib.\n"
         "- For plotting, format with clean parameters and always call plt.tight_layout() before completion.\n"

@@ -353,14 +353,14 @@ async def main(page: ft.Page):
             nav_bar.selected_index = 0
 
         elif route == "/forms":
-            from views.forms_view import build_forms_view
+            from views.forms import build_forms_view
 
             view = build_forms_view(page=page)
             page.views.append(view)
             nav_bar.selected_index = 1
 
         elif route == "/analysis":
-            from views.analysis_view import build_analysis_view
+            from views.analysis import build_analysis_view
 
             view = build_analysis_view(
                 page=page,

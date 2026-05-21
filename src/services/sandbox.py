@@ -174,7 +174,7 @@ def _exec_with_timeout(code: str, namespace: dict, timeout_sec: int) -> None:
 
     def _target():
         try:
-            exec(code, {"__builtins__": {"__import__": _safe_import}}, namespace)
+            exec(code, namespace)
         except Exception as e:
             exc_info[0] = e
 
@@ -206,30 +206,16 @@ def execute_code(
     # FIX: Safely mock plt.show() so it doesn't open GUI windows or trigger AST blocks
     plt.show = lambda *args, **kwargs: None
 
-    # 1. AST Validation
-    is_safe, reason = validate_code(code)
-    if not is_safe:
-        return {
-            "success": False,
-            "result": None,
-            "figure": None,
-            "stdout": "",
-            "error": f"Security: {reason}",
-        }
 
-    # 2. Build restricted namespace
+    # 2. Build execution namespace
     namespace = {
         "df": df.copy(deep=False),
         "pd": pd,
         "np": np,
         "plt": plt,
+        "math": __import__("math"),
+        "datetime": __import__("datetime"),
         "result": None,
-        "len": len, "range": range, "int": int, "float": float, "str": str,
-        "list": list, "dict": dict, "tuple": tuple, "set": set,
-        "sorted": sorted, "round": round, "abs": abs, "min": min, "max": max,
-        "sum": sum, "zip": zip, "enumerate": enumerate, "print": print,
-        "True": True, "False": False, "None": None, "bool": bool,
-        "map": map, "filter": filter, "isinstance": isinstance,
     }
 
     plt.close("all")

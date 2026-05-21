@@ -1,0 +1,250 @@
+import json
+import flet as ft
+from core import theme
+
+def build_form_detail(
+    form: dict,
+    on_back_to_list,
+    on_copy_link,
+    on_renew_form,
+    on_download_csv,
+    on_analyze_responses,
+    on_delete_form,
+    page: ft.Page,
+) -> list[ft.Control]:
+    controls = []
+    controls.append(
+        ft.Container(
+            content=ft.Row(
+                [
+                    ft.IconButton(
+                        ft.Icons.ARROW_BACK_ROUNDED, on_click=on_back_to_list
+                    ),
+                    ft.Text(form["title"], weight="bold", size=16, expand=True),
+                ]
+            ),
+            padding=ft.Padding(10, 0, 10, 0),
+        )
+    )
+    resp_count = form.get("_count", form.get("response_count", 0))
+    controls.append(
+        ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.PEOPLE_ROUNDED, size=16, color=theme.ACCENT
+                            ),
+                            ft.Text(f"{resp_count} responses", weight="w500"),
+                        ],
+                        spacing=8,
+                    ),
+                    ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.TIMER_ROUNDED, size=16, color=theme.WARNING
+                            ),
+                            ft.Text(
+                                f"Expires: {form.get('expires_at', '')[:10]}",
+                                size=12,
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                ],
+                spacing=8,
+            ),
+            padding=16,
+            margin=ft.Margin(20, 8, 20, 8),
+            border_radius=12,
+            bgcolor=theme.GLASS_BG,
+            border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+        )
+    )
+
+    # Field preview
+    schema_json = form.get("schema_json", "")
+    fields = []
+    if isinstance(schema_json, str) and schema_json:
+        try:
+            fields = json.loads(schema_json)
+        except Exception:
+            pass
+    elif isinstance(schema_json, list):
+        fields = schema_json
+
+    if fields:
+        from components.form_editor import TYPE_ICONS
+
+        field_controls = []
+        for idx, field in enumerate(fields):
+            label = field.get("label", field.get("name", f"Field {idx + 1}"))
+            ftype = field.get("type", "text")
+            required = field.get("required", False)
+            options = field.get("options", [])
+            field_controls.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(
+                                TYPE_ICONS.get(ftype, ft.Icons.TEXT_FIELDS),
+                                size=16,
+                                color=theme.ACCENT,
+                            ),
+                            ft.Column(
+                                [
+                                    ft.Row(
+                                        [
+                                            ft.Text(
+                                                label,
+                                                size=13,
+                                                weight="w500",
+                                                expand=True,
+                                            ),
+                                            ft.Container(
+                                                content=ft.Text(
+                                                    ftype.upper(),
+                                                    size=9,
+                                                    color=theme.PRIMARY,
+                                                    weight="bold",
+                                                ),
+                                                padding=ft.Padding(6, 2, 6, 2),
+                                                border_radius=4,
+                                                bgcolor=ft.Colors.with_opacity(
+                                                    0.08, theme.PRIMARY
+                                                ),
+                                            ),
+                                            ft.Text(
+                                                "*",
+                                                size=14,
+                                                color=theme.ERROR,
+                                                weight="bold",
+                                            )
+                                            if required
+                                            else ft.Container(),
+                                        ],
+                                        spacing=6,
+                                    ),
+                                    ft.Text(
+                                        ", ".join(options[:5]),
+                                        size=10,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                        max_lines=1,
+                                        overflow="ellipsis",
+                                    )
+                                    if options
+                                    else ft.Container(),
+                                ],
+                                spacing=2,
+                                expand=True,
+                            ),
+                        ],
+                        spacing=10,
+                        vertical_alignment="start",
+                    ),
+                    padding=ft.Padding(12, 8, 12, 8),
+                    border_radius=8,
+                    bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.ON_SURFACE),
+                )
+            )
+        controls.append(
+            ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            f"Form Fields ({len(fields)})", weight="bold", size=13
+                        ),
+                        ft.Column(field_controls, spacing=4),
+                    ],
+                    spacing=8,
+                ),
+                padding=ft.Padding(20, 8, 20, 8),
+            )
+        )
+
+    # Action buttons
+    controls.append(
+        ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.FilledButton(
+                                "Copy Link",
+                                icon=ft.Icons.LINK_ROUNDED,
+                                on_click=lambda e: page.run_task(
+                                    on_copy_link, form["id"]
+                                ),
+                            ),
+                            ft.FilledButton(
+                                "Renew +7d",
+                                icon=ft.Icons.UPDATE_ROUNDED,
+                                on_click=lambda e: page.run_task(
+                                    on_renew_form, form["id"]
+                                ),
+                            ),
+                        ],
+                        spacing=8,
+                        wrap=True,
+                    ),
+                    ft.Row(
+                        [
+                            ft.FilledButton(
+                                "Download CSV",
+                                icon=ft.Icons.DOWNLOAD_ROUNDED,
+                                on_click=lambda e: page.run_task(
+                                    on_download_csv, form
+                                ),
+                            ),
+                            ft.FilledButton(
+                                "Analyze",
+                                icon=ft.Icons.ANALYTICS_ROUNDED,
+                                on_click=lambda e: page.run_task(
+                                    on_analyze_responses, form
+                                ),
+                            ),
+                        ],
+                        spacing=8,
+                        wrap=True,
+                    ),
+                    ft.TextButton(
+                        "Delete Form",
+                        icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                        style=ft.ButtonStyle(color=theme.ERROR),
+                        on_click=lambda e: page.run_task(
+                            on_delete_form, form["id"]
+                        ),
+                    ),
+                ],
+                spacing=8,
+            ),
+            padding=ft.Padding(20, 8, 20, 8),
+        )
+    )
+
+    responses = form.get("_responses", [])
+    if responses:
+        import pandas as pd
+        from components.data_preview import build_data_preview
+
+        rows = [r["data"] for r in responses[:50]]
+        df = pd.DataFrame(rows)
+        controls.append(
+            ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            f"Latest {min(50, len(responses))} Responses",
+                            weight="bold",
+                            size=13,
+                        ),
+                        build_data_preview(df),
+                    ],
+                    spacing=8,
+                ),
+                padding=ft.Padding(20, 8, 20, 8),
+            )
+        )
+    controls.append(ft.Container(height=100))
+    return controls

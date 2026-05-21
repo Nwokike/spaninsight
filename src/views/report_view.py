@@ -18,6 +18,7 @@ from core.state import state
 from core.utils import figure_to_png_bytes
 from components.credit_badge import build_credit_badge
 from components.report_editor import build_report_editor
+from components.brand_header import build_brand_header
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,7 @@ def build_report_view(
 
     def _build_dashboard_content() -> list[ft.Control]:
         controls = []
+        controls.append(build_brand_header(show_tagline=False, spacing_below=False))
 
         # Header
         controls.append(
