@@ -310,6 +310,9 @@ def execute_code(
     df: Any,
 ) -> dict:
     """Execute validated Python code in a restricted namespace."""
+    import matplotlib
+
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
