@@ -1,4 +1,5 @@
 import logging
+import base64
 import flet as ft
 from core import theme, tokens
 from core.state import state
@@ -9,29 +10,29 @@ from views.analysis.handlers import on_rerun_code, on_suggestion_selected, on_pi
 
 logger = logging.getLogger(__name__)
 
+
 def build_chart_container(block: dict) -> ft.Container | None:
-    figure = block.get("figure")
-    if not figure:
+    figure_png = block.get("figure_png")
+    if not figure_png:
         return None
     try:
-        import flet_charts as fch
+        # Convert raw bytes to base64 for the native Flet Image control
+        b64_img = base64.b64encode(figure_png).decode("utf-8")
         return ft.Container(
-            content=fch.MatplotlibChart(figure=figure, expand=True),
+            content=ft.Image(
+                src=b64_img,  # <-- FIXED: Flet now handles base64 directly in the standard 'src' attribute
+                fit="contain",
+            ),
             height=280,
+            alignment=ft.Alignment.CENTER,
         )
     except Exception as e:
-        logger.error("Failed to render chart: %s", e)
+        logger.error("Failed to render chart image: %s", e)
         return None
+
 
 def build_text_output_container(result_val, stdout_val) -> ft.Container | None:
     import pandas as pd
-    import numpy as np
-
-    if isinstance(result_val, (np.ndarray, pd.Index, list)):
-        try:
-            result_val = pd.DataFrame(result_val)
-        except Exception:
-            pass
 
     if isinstance(result_val, pd.DataFrame):
         if not result_val.empty:
@@ -64,7 +65,10 @@ def build_text_output_container(result_val, stdout_val) -> ft.Container | None:
         border_radius=8,
     )
 
-def build_terminal(view_state: AnalysisState, code: str, block_index: int = -1) -> ft.Container:
+
+def build_terminal(
+    view_state: AnalysisState, code: str, block_index: int = -1
+) -> ft.Container:
     code_field = ft.Ref[ft.TextField]()
 
     def _on_run(e):
@@ -80,9 +84,24 @@ def build_terminal(view_state: AnalysisState, code: str, block_index: int = -1) 
                         [
                             ft.Row(
                                 [
-                                    ft.Container(width=8, height=8, border_radius=4, bgcolor="#FF5F57"),
-                                    ft.Container(width=8, height=8, border_radius=4, bgcolor="#FEBC2E"),
-                                    ft.Container(width=8, height=8, border_radius=4, bgcolor="#28C840"),
+                                    ft.Container(
+                                        width=8,
+                                        height=8,
+                                        border_radius=4,
+                                        bgcolor="#FF5F57",
+                                    ),
+                                    ft.Container(
+                                        width=8,
+                                        height=8,
+                                        border_radius=4,
+                                        bgcolor="#FEBC2E",
+                                    ),
+                                    ft.Container(
+                                        width=8,
+                                        height=8,
+                                        border_radius=4,
+                                        bgcolor="#28C840",
+                                    ),
                                 ],
                                 spacing=4,
                             ),
@@ -92,13 +111,17 @@ def build_terminal(view_state: AnalysisState, code: str, block_index: int = -1) 
                                 icon=ft.Icons.PLAY_ARROW_ROUNDED,
                                 style=ft.ButtonStyle(color="#28C840"),
                                 on_click=_on_run,
-                            ) if block_index >= 0 else ft.Container(),
+                            )
+                            if block_index >= 0
+                            else ft.Container(),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     padding=ft.Padding(10, 6, 10, 6),
                     bgcolor="#1A1A2E",
-                    border_radius=ft.BorderRadius(top_left=8, top_right=8, bottom_left=0, bottom_right=0),
+                    border_radius=ft.BorderRadius(
+                        top_left=8, top_right=8, bottom_left=0, bottom_right=0
+                    ),
                 ),
                 ft.Container(
                     content=ft.TextField(
@@ -108,7 +131,9 @@ def build_terminal(view_state: AnalysisState, code: str, block_index: int = -1) 
                         min_lines=3,
                         max_lines=20,
                         text_size=11,
-                        text_style=ft.TextStyle(font_family="RobotoMono", color="#E0E0E0"),
+                        text_style=ft.TextStyle(
+                            font_family="RobotoMono", color="#E0E0E0"
+                        ),
                         border_color=ft.Colors.TRANSPARENT,
                         bgcolor=ft.Colors.TRANSPARENT,
                         cursor_color="#28C840",
@@ -116,7 +141,9 @@ def build_terminal(view_state: AnalysisState, code: str, block_index: int = -1) 
                     ),
                     padding=ft.Padding(12, 6, 12, 12),
                     bgcolor="#0D0D1A",
-                    border_radius=ft.BorderRadius(top_left=0, top_right=0, bottom_left=8, bottom_right=8),
+                    border_radius=ft.BorderRadius(
+                        top_left=0, top_right=0, bottom_left=8, bottom_right=8
+                    ),
                 ),
             ],
             spacing=0,
@@ -125,7 +152,10 @@ def build_terminal(view_state: AnalysisState, code: str, block_index: int = -1) 
         margin=ft.Margin(0, 4, 0, 8),
     )
 
-def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.Container:
+
+def build_block_card(
+    view_state: AnalysisState, block: dict, index: int
+) -> ft.Container:
     is_initial = block["type"] == "initial"
     is_failed = block.get("failed", False)
     controls: list[ft.Control] = []
@@ -146,7 +176,9 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
             ft.Row(
                 [
                     ft.Icon(
-                        ft.Icons.ERROR_OUTLINE_ROUNDED if is_failed else ft.Icons.AUTO_AWESOME_ROUNDED,
+                        ft.Icons.ERROR_OUTLINE_ROUNDED
+                        if is_failed
+                        else ft.Icons.AUTO_AWESOME_ROUNDED,
                         size=14,
                         color=header_color,
                     ),
@@ -167,15 +199,23 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
         if describe_data is not None:
             try:
                 desc_cols = [
-                    ft.DataColumn(ft.Text("Stat", size=tokens.FONT_XS, weight=ft.FontWeight.W_600))
+                    ft.DataColumn(
+                        ft.Text("Stat", size=tokens.FONT_XS, weight=ft.FontWeight.W_600)
+                    )
                 ] + [
-                    ft.DataColumn(ft.Text(str(c)[:15], size=tokens.FONT_XS, weight=ft.FontWeight.W_600))
+                    ft.DataColumn(
+                        ft.Text(
+                            str(c)[:15], size=tokens.FONT_XS, weight=ft.FontWeight.W_600
+                        )
+                    )
                     for c in describe_data.columns[:20]
                 ]
                 desc_rows = []
                 for stat_name in describe_data.index:
                     cells = [
-                        ft.DataCell(ft.Text(str(stat_name), size=tokens.FONT_XS, weight="w500"))
+                        ft.DataCell(
+                            ft.Text(str(stat_name), size=tokens.FONT_XS, weight="w500")
+                        )
                     ]
                     for c in describe_data.columns[:20]:
                         val = describe_data.loc[stat_name, c]
@@ -191,8 +231,16 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
                             [
                                 ft.Row(
                                     [
-                                        ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=14, color=theme.PRIMARY),
-                                        ft.Text("Statistical Summary (df.describe)", size=12, weight="w600"),
+                                        ft.Icon(
+                                            ft.Icons.QUERY_STATS_ROUNDED,
+                                            size=14,
+                                            color=theme.PRIMARY,
+                                        ),
+                                        ft.Text(
+                                            "Statistical Summary (df.describe)",
+                                            size=12,
+                                            weight="w600",
+                                        ),
                                     ],
                                     spacing=6,
                                 ),
@@ -205,7 +253,12 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
                                                 heading_row_height=34,
                                                 data_row_max_height=30,
                                                 column_spacing=12,
-                                                border=ft.Border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)),
+                                                border=ft.Border.all(
+                                                    1,
+                                                    ft.Colors.with_opacity(
+                                                        0.1, ft.Colors.ON_SURFACE
+                                                    ),
+                                                ),
                                                 border_radius=8,
                                             )
                                         ],
@@ -227,15 +280,29 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
                     if state.current_df is not None and c in state.current_df.columns:
                         dtype_str = str(state.current_df[c].dtype)
                         null_ct = int(state.current_df[c].isnull().sum())
-                    
+
                     null_color = theme.ERROR if null_ct > 0 else theme.SUCCESS
                     col_chips.append(
                         ft.Container(
                             content=ft.Column(
                                 [
-                                    ft.Text(str(c)[:18], size=11, weight="w600", max_lines=1, overflow="ellipsis"),
-                                    ft.Text(dtype_str, size=10, color=ft.Colors.ON_SURFACE_VARIANT),
-                                    ft.Text(f"{null_ct} null" if null_ct > 0 else "0 null", size=10, color=null_color),
+                                    ft.Text(
+                                        str(c)[:18],
+                                        size=11,
+                                        weight="w600",
+                                        max_lines=1,
+                                        overflow="ellipsis",
+                                    ),
+                                    ft.Text(
+                                        dtype_str,
+                                        size=10,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    ),
+                                    ft.Text(
+                                        f"{null_ct} null" if null_ct > 0 else "0 null",
+                                        size=10,
+                                        color=null_color,
+                                    ),
                                 ],
                                 spacing=2,
                                 horizontal_alignment="center",
@@ -253,8 +320,14 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
                                 [
                                     ft.Row(
                                         [
-                                            ft.Icon(ft.Icons.VIEW_COLUMN_ROUNDED, size=14, color=theme.ACCENT),
-                                            ft.Text("Column Info", size=12, weight="w600"),
+                                            ft.Icon(
+                                                ft.Icons.VIEW_COLUMN_ROUNDED,
+                                                size=14,
+                                                color=theme.ACCENT,
+                                            ),
+                                            ft.Text(
+                                                "Column Info", size=12, weight="w600"
+                                            ),
                                         ],
                                         spacing=6,
                                     ),
@@ -273,14 +346,16 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
 
     if not is_initial:
         has_chart = False
-        if block.get("figure"):
+        if block.get("figure_png"):
             chart_ui = build_chart_container(block)
             if chart_ui:
                 controls.append(chart_ui)
                 has_chart = True
 
         if not has_chart:
-            text_ui = build_text_output_container(block.get("result"), block.get("stdout"))
+            text_ui = build_text_output_container(
+                block.get("result"), block.get("stdout")
+            )
             if text_ui:
                 controls.append(text_ui)
 
@@ -289,8 +364,15 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
         ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=16, color=theme.ACCENT),
-                    ft.Text(desc, size=tokens.FONT_SM, color=ft.Colors.ON_SURFACE_VARIANT, expand=True),
+                    ft.Icon(
+                        ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=16, color=theme.ACCENT
+                    ),
+                    ft.Text(
+                        desc,
+                        size=tokens.FONT_SM,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        expand=True,
+                    ),
                 ],
                 vertical_alignment="start",
             ),
@@ -312,8 +394,14 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
             ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
-                        ft.Text("View Code", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Icon(
+                            ft.Icons.KEYBOARD_ARROW_DOWN_ROUNDED,
+                            size=20,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Text(
+                            "View Code", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+                        ),
                     ],
                     alignment="center",
                     spacing=4,
@@ -325,7 +413,9 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
             )
         )
         controls.append(
-            ft.Container(ref=adv, content=build_terminal(view_state, code, index), visible=False)
+            ft.Container(
+                ref=adv, content=build_terminal(view_state, code, index), visible=False
+            )
         )
 
     if not is_initial:
@@ -335,7 +425,9 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
                 ft.TextButton(
                     "Retry with AI",
                     icon=ft.Icons.REFRESH_ROUNDED,
-                    on_click=lambda e, p=block["prompt"]: view_state.page.run_task(on_suggestion_selected, view_state, p),
+                    on_click=lambda e, p=block["prompt"]: view_state.page.run_task(
+                        on_suggestion_selected, view_state, p
+                    ),
                     style=ft.ButtonStyle(color=theme.WARNING),
                 )
             )
@@ -344,10 +436,14 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
             action_row.append(
                 ft.TextButton(
                     "Pinned" if is_pinned else "Pin to Report",
-                    icon=ft.Icons.PUSH_PIN_ROUNDED if is_pinned else ft.Icons.PUSH_PIN_OUTLINED,
+                    icon=ft.Icons.PUSH_PIN_ROUNDED
+                    if is_pinned
+                    else ft.Icons.PUSH_PIN_OUTLINED,
                     on_click=lambda e, idx=index: on_pin_block(view_state, idx),
                     disabled=is_pinned,
-                    style=ft.ButtonStyle(color=theme.SUCCESS if is_pinned else theme.PRIMARY),
+                    style=ft.ButtonStyle(
+                        color=theme.SUCCESS if is_pinned else theme.PRIMARY
+                    ),
                 )
             )
         controls.append(ft.Row(action_row, alignment=ft.MainAxisAlignment.END))
@@ -355,12 +451,18 @@ def build_block_card(view_state: AnalysisState, block: dict, index: int) -> ft.C
     sug = block.get("suggestions", [])
     if sug:
         controls.append(
-            ft.Divider(height=1, thickness=0.5, color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE))
+            ft.Divider(
+                height=1,
+                thickness=0.5,
+                color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+            )
         )
         controls.append(
             build_suggestion_chips(
                 sug,
-                lambda p: view_state.page.run_task(on_suggestion_selected, view_state, p),
+                lambda p: view_state.page.run_task(
+                    on_suggestion_selected, view_state, p
+                ),
                 state.is_analyzing,
             )
         )

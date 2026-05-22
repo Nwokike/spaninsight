@@ -3,6 +3,7 @@ from core import theme
 from components.brand_header import build_brand_header
 from .state import FormsState
 
+
 def build_form_card(form: dict, on_view_form, page: ft.Page) -> ft.Container:
     is_expired = False
     try:
@@ -37,9 +38,7 @@ def build_form_card(form: dict, on_view_form, page: ft.Page) -> ft.Container:
                                     ),
                                     padding=ft.Padding(6, 2, 6, 2),
                                     border_radius=4,
-                                    bgcolor=ft.Colors.with_opacity(
-                                        0.1, status_color
-                                    ),
+                                    bgcolor=ft.Colors.with_opacity(0.1, status_color),
                                 ),
                                 ft.Text(
                                     f"{form.get('response_count', 0)} responses",
@@ -69,12 +68,9 @@ def build_form_card(form: dict, on_view_form, page: ft.Page) -> ft.Container:
         ink=True,
     )
 
+
 def build_dashboard_layout(
-    ui_state: FormsState,
-    page: ft.Page,
-    on_create_form,
-    on_voice_toggle,
-    load_forms
+    ui_state: FormsState, page: ft.Page, on_create_form, on_voice_toggle, load_forms
 ) -> ft.Column:
     return ft.Column(
         [
@@ -99,8 +95,10 @@ def build_dashboard_layout(
                                     border_radius=12,
                                     max_lines=3,
                                     min_lines=1,
-                                    on_change=lambda e: ui_state.prompt_text.__setitem__(
-                                        "value", e.control.value
+                                    on_change=lambda e: (
+                                        ui_state.prompt_text.__setitem__(
+                                            "value", e.control.value
+                                        )
                                     ),
                                     on_submit=lambda e: page.run_task(
                                         on_create_form, e
@@ -142,9 +140,7 @@ def build_dashboard_layout(
                                     ref=ui_state.dashboard_send_button_ref,
                                     icon=ft.Icons.SEND_ROUNDED,
                                     icon_color=theme.PRIMARY,
-                                    on_click=lambda e: page.run_task(
-                                        on_create_form, e
-                                    ),
+                                    on_click=lambda e: page.run_task(on_create_form, e),
                                     disabled=ui_state.is_creating["value"]
                                     or ui_state.is_recording["value"],
                                 ),
@@ -159,9 +155,7 @@ def build_dashboard_layout(
                         ),
                         ft.Row(
                             [
-                                ft.ProgressRing(
-                                    width=16, height=16, stroke_width=2
-                                ),
+                                ft.ProgressRing(width=16, height=16, stroke_width=2),
                                 ft.Text(
                                     "Transcribing your voice...",
                                     size=12,

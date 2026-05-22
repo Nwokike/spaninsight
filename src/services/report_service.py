@@ -44,7 +44,9 @@ class ReportService:
         reports.sort(key=lambda r: r.get("updated_at", 0), reverse=True)
         return reports
 
-    async def create_report(self, title: str, dataset_name: str, blocks: list[dict]) -> dict:
+    async def create_report(
+        self, title: str, dataset_name: str, blocks: list[dict]
+    ) -> dict:
         report = {
             "id": self._generate_id(),
             "title": title,
@@ -60,7 +62,9 @@ class ReportService:
         reports = await self._load_all()
         reports.insert(0, report)
         await self._save_all(reports)
-        logger.info("Created report %s: %s (%d blocks)", report["id"], title, len(blocks))
+        logger.info(
+            "Created report %s: %s (%d blocks)", report["id"], title, len(blocks)
+        )
         return report
 
     async def get_report(self, report_id: str) -> dict | None:

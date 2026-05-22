@@ -84,10 +84,10 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
                 # fallback: try reading as normal JSON array
                 df = pd.read_json(file_path)
         elif ext == ".xlsx":
-            # B1: Lazy import — openpyxl only loaded when .xlsx is detected
-            import openpyxl  # noqa: F401
+            # PERFORMANCE FIX: Swap openpyxl for python_calamine (10x faster)
+            import python_calamine  # noqa: F401
 
-            df = pd.read_excel(file_path, engine="openpyxl")
+            df = pd.read_excel(file_path, engine="calamine")
         else:
             raise FileValidationError(f"Unsupported format: {ext}")
 
@@ -114,16 +114,29 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
 def get_data_summary(df: pd.DataFrame) -> dict:
     """Generate a comprehensive but token-efficient summary for the AI.
 
-    Uses native pandas calls (C-optimized) instead of manual column loops.
-    df.describe(include='all') gives count, mean, std, min, quartiles, max
-    for numeric AND top/freq/unique for categorical — all in one fast call.
+    Safely truncates categorical summaries to prevent UI locking on massive UUID/Text columns.
     """
+
+    # PERFORMANCE FIX: Prevent thread freezing on describe(include="all")
+    try:
+        num_desc = df.select_dtypes(include="number").describe().round(2).to_dict()
+        # Cap categorical summarization to first 10 text cols to prevent thread blocking
+        cat_desc = (
+            df.select_dtypes(exclude="number")
+            .iloc[:, :10]
+            .describe()
+            .fillna("")
+            .to_dict()
+        )
+        safe_describe = {**num_desc, **cat_desc}
+    except Exception:
+        safe_describe = {}
 
     summary = {
         "shape": {"rows": len(df), "columns": len(df.columns)},
         "columns": {str(c): str(df[c].dtype) for c in df.columns[:30]},
         "nulls": {str(c): int(df[c].isnull().sum()) for c in df.columns[:30]},
-        "describe": df.describe(include="all").round(2).fillna("").to_dict(),
+        "describe": safe_describe,
         "head": [],
         "tail": [],
     }

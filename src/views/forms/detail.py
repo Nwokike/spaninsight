@@ -2,6 +2,7 @@ import json
 import flet as ft
 from core import theme
 
+
 def build_form_detail(
     form: dict,
     on_back_to_list,
@@ -152,9 +153,7 @@ def build_form_detail(
             ft.Container(
                 content=ft.Column(
                     [
-                        ft.Text(
-                            f"Form Fields ({len(fields)})", weight="bold", size=13
-                        ),
+                        ft.Text(f"Form Fields ({len(fields)})", weight="bold", size=13),
                         ft.Column(field_controls, spacing=4),
                     ],
                     spacing=8,
@@ -193,9 +192,7 @@ def build_form_detail(
                             ft.FilledButton(
                                 "Download CSV",
                                 icon=ft.Icons.DOWNLOAD_ROUNDED,
-                                on_click=lambda e: page.run_task(
-                                    on_download_csv, form
-                                ),
+                                on_click=lambda e: page.run_task(on_download_csv, form),
                             ),
                             ft.FilledButton(
                                 "Analyze",
@@ -212,9 +209,7 @@ def build_form_detail(
                         "Delete Form",
                         icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
                         style=ft.ButtonStyle(color=theme.ERROR),
-                        on_click=lambda e: page.run_task(
-                            on_delete_form, form["id"]
-                        ),
+                        on_click=lambda e: page.run_task(on_delete_form, form["id"]),
                     ),
                 ],
                 spacing=8,

@@ -34,7 +34,9 @@ class AppState:
     # ── Analysis ────────────────────────────────────────────────────
     analysis_blocks: list[dict] = None  # Active interactive blocks in Analysis view
     suggestions: list[dict] = None  # AI suggestion buttons [{label, icon, prompt}]
-    charts: list[dict] = None  # Generated chart history [{figure, figure_png, code, insight}]
+    charts: list[dict] = (
+        None  # Generated chart history [{figure, figure_png, code, insight}]
+    )
     current_code: str = ""  # Last generated code
     current_insight: str = ""  # Last AI interpretation
     is_analyzing: bool = False  # Loading state for AI calls

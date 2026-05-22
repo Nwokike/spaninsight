@@ -16,6 +16,7 @@ from .detail import build_form_detail
 
 logger = logging.getLogger(__name__)
 
+
 def build_forms_view(page: ft.Page) -> ft.View:
     ui_state = FormsState()
     audio_svc = AudioService(page)
@@ -51,7 +52,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 ui_state.is_creating["value"] = False
                 _rebuild()
                 return
-            
+
             ui_state.draft_schema.clear()
             ui_state.draft_schema.extend(schema.get("fields", []))
             ui_state.draft_title["value"] = schema.get("title", prompt[:50])
@@ -86,9 +87,15 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 schema = await ai_service.generate_form_schema(edit_prompt)
                 if schema:
                     ui_state.draft_schema.clear()
-                    ui_state.draft_schema.extend(schema.get("fields", ui_state.draft_schema))
-                    ui_state.draft_title["value"] = schema.get("title", ui_state.draft_title["value"])
-                    ui_state.draft_desc["value"] = schema.get("description", ui_state.draft_desc["value"])
+                    ui_state.draft_schema.extend(
+                        schema.get("fields", ui_state.draft_schema)
+                    )
+                    ui_state.draft_title["value"] = schema.get(
+                        "title", ui_state.draft_title["value"]
+                    )
+                    ui_state.draft_desc["value"] = schema.get(
+                        "description", ui_state.draft_desc["value"]
+                    )
                     ui_state.ai_edit_text["value"] = ""
             except Exception as err:
                 _show_error(f"AI edit failed: {err}")
@@ -107,7 +114,9 @@ def build_forms_view(page: ft.Page) -> ft.View:
             if result:
                 audio_bytes, mime_type = result
                 try:
-                    transcript = await ai_service.transcribe_audio(audio_bytes, mime_type)
+                    transcript = await ai_service.transcribe_audio(
+                        audio_bytes, mime_type
+                    )
                     if transcript and not transcript.startswith("["):
                         ui_state.ai_edit_text["value"] = transcript
                     else:
@@ -198,7 +207,9 @@ def build_forms_view(page: ft.Page) -> ft.View:
             if result:
                 audio_bytes, mime_type = result
                 try:
-                    transcript = await ai_service.transcribe_audio(audio_bytes, mime_type)
+                    transcript = await ai_service.transcribe_audio(
+                        audio_bytes, mime_type
+                    )
                     if transcript and not transcript.startswith("["):
                         ui_state.prompt_text["value"] = transcript
                         if ui_state.form_prompt_field.current:
@@ -238,7 +249,11 @@ def build_forms_view(page: ft.Page) -> ft.View:
         if result:
             audio_bytes, mime_type = result
             transcript = await ai_service.transcribe_audio(audio_bytes, mime_type)
-            if transcript and not transcript.startswith("[") and ui_state.form_prompt_field.current:
+            if (
+                transcript
+                and not transcript.startswith("[")
+                and ui_state.form_prompt_field.current
+            ):
                 ui_state.form_prompt_field.current.value = transcript
                 page.update()
 
@@ -289,7 +304,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
             return
         csv_bytes = forms_service.responses_to_csv_bytes(responses)
         picker = ft.FilePicker()
-        
+
         async def _do_save():
             result = await picker.save_file(
                 dialog_title="Save Responses CSV",
@@ -298,15 +313,18 @@ def build_forms_view(page: ft.Page) -> ft.View:
             )
             if result:
                 try:
+
                     def _write_csv():
                         with open(result, "wb") as f:
                             f.write(csv_bytes)
+
                     await asyncio.to_thread(_write_csv)
                     page.snack_bar = ft.SnackBar(ft.Text("Saved!"), duration=3000)
                     page.snack_bar.open = True
                     page.update()
                 except Exception as err:
                     _show_error(f"Save failed: {err}")
+
         page.run_task(_do_save)
 
     async def on_analyze_responses(form: dict):
@@ -362,7 +380,9 @@ def build_forms_view(page: ft.Page) -> ft.View:
                         on_title_changed=lambda v: (
                             ui_state.draft_title.__setitem__("value", v),
                         ),
-                        on_desc_changed=lambda v: (ui_state.draft_desc.__setitem__("value", v),),
+                        on_desc_changed=lambda v: (
+                            ui_state.draft_desc.__setitem__("value", v),
+                        ),
                         on_publish=lambda: page.run_task(on_publish),
                         on_cancel=on_cancel_editor,
                         on_ai_edit=lambda action, text="": page.run_task(
@@ -393,22 +413,27 @@ def build_forms_view(page: ft.Page) -> ft.View:
                         on_download_csv=on_download_csv,
                         on_analyze_responses=on_analyze_responses,
                         on_delete_form=on_delete_form,
-                        page=page
+                        page=page,
                     )
                 )
                 ui_state.detail_container_ref.current.update()
 
         else:
             if ui_state.dashboard_container_ref.current:
-                if not ui_state.dashboard_container_ref.current.content or not isinstance(
-                    ui_state.dashboard_container_ref.current.content, ft.Column
+                if (
+                    not ui_state.dashboard_container_ref.current.content
+                    or not isinstance(
+                        ui_state.dashboard_container_ref.current.content, ft.Column
+                    )
                 ):
-                    ui_state.dashboard_container_ref.current.content = build_dashboard_layout(
-                        ui_state=ui_state,
-                        page=page,
-                        on_create_form=on_create_form,
-                        on_voice_toggle=on_voice_toggle,
-                        load_forms=load_forms
+                    ui_state.dashboard_container_ref.current.content = (
+                        build_dashboard_layout(
+                            ui_state=ui_state,
+                            page=page,
+                            on_create_form=on_create_form,
+                            on_voice_toggle=on_voice_toggle,
+                            load_forms=load_forms,
+                        )
                     )
                     ui_state.dashboard_container_ref.current.update()
 
@@ -422,7 +447,9 @@ def build_forms_view(page: ft.Page) -> ft.View:
                     ui_state.recording_timer.current.value = (
                         f"00:{ui_state.recording_time['value']:02d} / 01:00"
                     )
-                    ui_state.recording_timer.current.visible = ui_state.is_recording["value"]
+                    ui_state.recording_timer.current.visible = ui_state.is_recording[
+                        "value"
+                    ]
                     ui_state.recording_timer.current.update()
 
                 if ui_state.dashboard_voice_button_ref.current:
@@ -437,7 +464,9 @@ def build_forms_view(page: ft.Page) -> ft.View:
                     ui_state.dashboard_voice_button_ref.current.tooltip = (
                         "Stop" if ui_state.is_recording["value"] else "Voice"
                     )
-                    ui_state.dashboard_voice_button_ref.current.disabled = ui_state.is_creating["value"]
+                    ui_state.dashboard_voice_button_ref.current.disabled = (
+                        ui_state.is_creating["value"]
+                    )
                     ui_state.dashboard_voice_button_ref.current.update()
 
                 if ui_state.dashboard_send_button_ref.current:
@@ -448,7 +477,8 @@ def build_forms_view(page: ft.Page) -> ft.View:
 
                 if ui_state.dashboard_progress_bar_ref.current:
                     ui_state.dashboard_progress_bar_ref.current.visible = (
-                        ui_state.is_creating["value"] or ui_state.is_transcribing["value"]
+                        ui_state.is_creating["value"]
+                        or ui_state.is_transcribing["value"]
                     )
                     ui_state.dashboard_progress_bar_ref.current.update()
 
@@ -500,7 +530,8 @@ def build_forms_view(page: ft.Page) -> ft.View:
                         ]
                     else:
                         ui_state.user_forms_column_ref.current.controls = [
-                            build_form_card(form, on_view_form, page) for form in ui_state.user_forms
+                            build_form_card(form, on_view_form, page)
+                            for form in ui_state.user_forms
                         ]
                     ui_state.user_forms_column_ref.current.update()
 
@@ -523,14 +554,18 @@ def build_forms_view(page: ft.Page) -> ft.View:
                             page=page,
                             on_create_form=on_create_form,
                             on_voice_toggle=on_voice_toggle,
-                            load_forms=load_forms
+                            load_forms=load_forms,
                         ),
                     ),
                     ft.Container(
-                        ref=ui_state.editor_container_ref, visible=False, content=ft.Column([])
+                        ref=ui_state.editor_container_ref,
+                        visible=False,
+                        content=ft.Column([]),
                     ),
                     ft.Container(
-                        ref=ui_state.detail_container_ref, visible=False, content=ft.Column([])
+                        ref=ui_state.detail_container_ref,
+                        visible=False,
+                        content=ft.Column([]),
                     ),
                 ],
                 scroll="auto",

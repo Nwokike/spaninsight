@@ -12,10 +12,12 @@ Architecture mirrors Akili flet-rewrite (production) patterns:
 from __future__ import annotations
 
 import asyncio
-import datetime  # FIX: Moved to top
-import json      # FIX: Added missing global import to fix save warning
+import datetime
+import json
 import logging
 import sys
+import shutil
+from pathlib import Path
 
 import flet as ft
 
@@ -68,8 +70,6 @@ except Exception as monkey_err:
     )
 
 # Monkeypatch FigureManagerBase to stub WebAgg methods that flet_charts expects.
-# The Agg backend (used in sandbox) uses FigureManagerBase directly, which lacks
-# add_web_socket/remove_web_socket/handle_json — flet_charts.MatplotlibChart calls these.
 try:
     import matplotlib.backend_bases as _mb
 
@@ -83,6 +83,19 @@ except Exception as agg_err:
     logger.warning(
         "Failed to monkeypatch FigureManagerBase for flet_charts: %s", agg_err
     )
+
+
+# ── Housekeeping (Audit Fix) ─────────────────────────────────────────
+def cleanup_temp_files():
+    """Wipe old imported CSV/Excel files from temp dir on startup to prevent storage bloat."""
+    try:
+        temp_dir = Path.home() / ".spaninsight" / "temp"
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Storage housekeeping complete: Temporary cache wiped clean.")
+    except Exception as e:
+        logger.warning("Temp cleanup failed: %s", e)
 
 
 async def main(page: ft.Page):
@@ -121,7 +134,6 @@ async def main(page: ft.Page):
     # ── Error Handler ───────────────────────────────────────────────
     def on_error(e):
         logger.error("Page error: %s", e.data)
-        # Only show snackbar if page is still active
         try:
             page.snack_bar = ft.SnackBar(
                 content=ft.Text(
@@ -132,7 +144,7 @@ async def main(page: ft.Page):
             page.snack_bar.open = True
             page.update()
         except Exception:
-            pass  # Page may already be closed
+            pass
 
     page.on_error = on_error
 
@@ -196,7 +208,7 @@ async def main(page: ft.Page):
         state.gateway_online = await ai_service.check_health()
         if not state.gateway_online:
             logger.warning("Gateway offline — AI features will use fallbacks")
-        # P9: Version check
+
         try:
             from core.constants import (
                 API_BASE_URL,
@@ -226,7 +238,7 @@ async def main(page: ft.Page):
                     page.snack_bar.open = True
                     page.update()
         except Exception:
-            pass  # Non-blocking
+            pass
 
     await _startup_checks()
 
@@ -265,24 +277,20 @@ async def main(page: ft.Page):
         label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
     )
 
-    # Tab routes mapping
     TAB_ROUTES = ["/home", "/forms", "/analysis", "/reports", "/settings"]
 
     # ── Navigation Helpers ──────────────────────────────────────────
     async def navigate(route: str):
-        """Navigate to a route — Akili pattern (direct assignment)."""
         page.route = route
         await route_change()
 
     async def _save_recent_analysis():
-        """Persist current analysis session to recent_analyses storage."""
         if not storage or not state.current_df_name:
             return
         try:
             recent_str = await storage.get("recent_analyses")
             recent = json.loads(recent_str) if recent_str else []
 
-            # Remove duplicate if same file was analyzed before
             recent = [
                 s for s in recent if s.get("file_path") != state.current_file_path
             ]
@@ -297,19 +305,16 @@ async def main(page: ft.Page):
                     if state.current_df_columns
                     else 0,
                     "timestamp": datetime.datetime.now().timestamp(),
-                    # FIX: safely check charts to prevent crashing
                     "chart_count": len(getattr(state, "charts", [])),
                 },
             )
 
-            # Keep only last 10
             recent = recent[:10]
             await storage.set("recent_analyses", json.dumps(recent))
         except Exception as e:
             logger.warning("Failed to save recent analysis: %s", e)
 
     def on_import_file(e, autopilot: bool = False):
-        """Trigger file import — switch to analysis tab."""
         nav_bar.selected_index = 1
         state.current_tab = 1
         state.trigger_file_picker = True
@@ -317,7 +322,6 @@ async def main(page: ft.Page):
         page.run_task(navigate, "/analysis")
 
     def on_nav_change(e):
-        """Handle NavigationBar tab change."""
         index = e.control.selected_index
         old_tab = state.current_tab
         state.current_tab = index
@@ -330,7 +334,6 @@ async def main(page: ft.Page):
     nav_bar.on_change = on_nav_change
 
     def nav_to(route: str):
-        """Navigation callback for child views."""
         page.run_task(navigate, route)
 
     # ── Route Change Handler ────────────────────────────────────────
@@ -447,17 +450,13 @@ async def main(page: ft.Page):
                 pass
         page.update()
 
-    # ── Register Handlers ──────────────────────────────────
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
     # ── Splash → Home/Onboarding ─────────────────────────────
-    # U1 FIX: Event-driven splash — dismiss when initialization is complete
-    # rather than a fixed 2-second delay
     splash_start = asyncio.get_event_loop().time()
 
     async def splash_complete():
-        # Ensure splash is shown for at least 1.5s (avoid flicker)
         elapsed = asyncio.get_event_loop().time() - splash_start
         remaining = max(0, 1.5 - elapsed)
         if remaining > 0:
@@ -477,4 +476,6 @@ async def main(page: ft.Page):
 
 # ── Entry Point ─────────────────────────────────────────────────────
 if __name__ == "__main__":
+    # Wipe old temp data BEFORE the Flet engine mounts
+    cleanup_temp_files()
     ft.run(main, assets_dir="assets")

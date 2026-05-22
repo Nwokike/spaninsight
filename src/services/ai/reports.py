@@ -1,4 +1,5 @@
 """AI report generation and editing."""
+
 from __future__ import annotations
 
 import json
@@ -7,6 +8,7 @@ from core.constants import TASK_SUGGEST
 from .client import call_gateway, extract_content, extract_block_by_pattern
 
 logger = logging.getLogger(__name__)
+
 
 async def arrange_report(blocks: list[dict], dataset_name: str = "") -> dict | None:
     """AI auto-arranges report blocks into optimal order with polished descriptions."""
@@ -55,6 +57,7 @@ async def arrange_report(blocks: list[dict], dataset_name: str = "") -> dict | N
     except Exception as e:
         logger.error("Arrange report failed: %s", e)
         return None
+
 
 async def edit_report_with_ai(
     current_blocks: list[dict],

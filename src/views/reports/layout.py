@@ -1,4 +1,5 @@
 """Reports view layout and UI builder."""
+
 from __future__ import annotations
 
 import flet as ft
@@ -11,6 +12,7 @@ from components.report_editor import build_report_editor
 
 from .state import ReportsState
 from . import handlers
+
 
 def build_report_view(
     page: ft.Page,
@@ -35,6 +37,7 @@ def build_report_view(
     def _build_report_card(report: dict) -> ft.Container:
         block_count = len(report.get("blocks", []))
         import datetime
+
         try:
             dt = datetime.datetime.fromtimestamp(report.get("created_at", 0))
             time_str = dt.strftime("%b %d, %Y")
@@ -100,7 +103,9 @@ def build_report_view(
             border_radius=14,
             bgcolor=theme.GLASS_BG,
             border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
-            on_click=lambda e, r=report: page.run_task(handlers.on_open_report, page, ui_state, r, report_service),
+            on_click=lambda e, r=report: page.run_task(
+                handlers.on_open_report, page, ui_state, r, report_service
+            ),
             ink=True,
         )
 
@@ -117,7 +122,9 @@ def build_report_view(
                         ft.IconButton(
                             ft.Icons.REFRESH_ROUNDED,
                             tooltip="Refresh",
-                            on_click=lambda e: page.run_task(handlers.load_reports, page, ui_state, report_service),
+                            on_click=lambda e: page.run_task(
+                                handlers.load_reports, page, ui_state, report_service
+                            ),
                         ),
                     ],
                 ),
@@ -145,7 +152,9 @@ def build_report_view(
                             ft.Icon(
                                 ft.Icons.ASSESSMENT_OUTLINED,
                                 size=64,
-                                color=ft.Colors.with_opacity(0.15, ft.Colors.ON_SURFACE),
+                                color=ft.Colors.with_opacity(
+                                    0.15, ft.Colors.ON_SURFACE
+                                ),
                             ),
                             ft.Text(
                                 "No reports yet",
@@ -219,12 +228,20 @@ def build_report_view(
             on_blocks_changed=_rebuild,
             on_title_changed=lambda v: ui_state.draft_title.update({"value": v}),
             on_desc_changed=lambda v: ui_state.draft_desc.update({"value": v}),
-            on_save=lambda: page.run_task(handlers.on_save, page, ui_state, report_service),
-            on_share=lambda: page.run_task(handlers.on_share, page, ui_state, report_service, ad_service),
+            on_save=lambda: page.run_task(
+                handlers.on_save, page, ui_state, report_service
+            ),
+            on_share=lambda: page.run_task(
+                handlers.on_share, page, ui_state, report_service, ad_service
+            ),
             on_back=lambda: handlers.on_back(page, ui_state, report_service),
             on_import=lambda: handlers.on_import(page, ui_state),
-            on_ai_edit=lambda action, text: page.run_task(handlers.on_ai_edit, page, ui_state, action, text),
-            on_voice_toggle=lambda e: page.run_task(handlers.on_voice_toggle, page, ui_state),
+            on_ai_edit=lambda action, text: page.run_task(
+                handlers.on_ai_edit, page, ui_state, action, text
+            ),
+            on_voice_toggle=lambda e: page.run_task(
+                handlers.on_voice_toggle, page, ui_state
+            ),
             is_saving=ui_state.is_saving["value"],
             is_sharing=ui_state.is_sharing["value"],
             is_recording=ui_state.is_recording["value"],

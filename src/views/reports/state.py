@@ -1,6 +1,8 @@
 """Reports view state management."""
+
 from __future__ import annotations
 import flet as ft
+
 
 class ReportsState:
     def __init__(self, page: ft.Page):
@@ -19,12 +21,13 @@ class ReportsState:
         self.ai_prompt_text = {"value": ""}
         self.recording_time = {"value": 0}
         self.editor_active = {"value": False}
-        
+
         self.recording_timer_ref = ft.Ref[ft.Text]()
         self.content_column = ft.Ref[ft.Column]()
         self.rebuild_fn = None
-        
+
         from services.audio_service import AudioService
+
         self.audio_svc = AudioService(page)
 
     def rebuild(self):

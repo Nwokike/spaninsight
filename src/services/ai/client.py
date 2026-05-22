@@ -1,4 +1,5 @@
 """AI Gateway client and utility functions."""
+
 from __future__ import annotations
 
 import logging
@@ -23,6 +24,7 @@ TIMEOUTS = {
     "audio": 60.0,
 }
 
+
 async def check_health() -> bool:
     """Ping the gateway health endpoint. Returns True if online."""
     try:
@@ -36,6 +38,7 @@ async def check_health() -> bool:
     except Exception as e:
         logger.warning("Gateway health check failed: %s", e)
         return False
+
 
 async def call_gateway(task_type: str, messages: list[dict]) -> dict:
     """Make a non-streaming POST to the gateway with retry and expanded processing thresholds."""
@@ -55,6 +58,7 @@ async def call_gateway(task_type: str, messages: list[dict]) -> dict:
     resp.raise_for_status()
     return resp.json()
 
+
 async def call_gateway_raw(payload: dict, timeout: float = 15.0) -> dict:
     """Make a raw POST to the gateway with active connection parameters."""
     resp = await request_with_retry(
@@ -65,6 +69,7 @@ async def call_gateway_raw(payload: dict, timeout: float = 15.0) -> dict:
     )
     resp.raise_for_status()
     return resp.json()
+
 
 def extract_content(data: dict) -> str:
     """Extract assistant payload content while handling thinking steps safely."""
@@ -79,9 +84,11 @@ def extract_content(data: dict) -> str:
         pass
     return ""
 
+
 def strip_thinking(text: str) -> str:
     """Remove <think>...</think> reasoning blocks using efficient pre-compiled matching."""
     return _THINK_RE.sub("", text).strip()
+
 
 def extract_block_by_pattern(text: str, is_json: bool = False) -> str:
     """Uses advanced Regex pattern matching to pull code arrays safely."""

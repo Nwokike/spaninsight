@@ -14,6 +14,7 @@ from views.analysis.state import AnalysisState
 
 logger = logging.getLogger(__name__)
 
+
 def show_error(view_state: AnalysisState, msg: str):
     view_state.page.snack_bar = ft.SnackBar(
         ft.Text(msg, color=ft.Colors.WHITE), bgcolor=theme.ERROR, duration=4000
@@ -21,10 +22,12 @@ def show_error(view_state: AnalysisState, msg: str):
     view_state.page.snack_bar.open = True
     view_state.page.update()
 
+
 def show_success(view_state: AnalysisState, msg: str):
     view_state.page.snack_bar = ft.SnackBar(ft.Text(msg), duration=2000)
     view_state.page.snack_bar.open = True
     view_state.page.update()
+
 
 def build_analysis_context() -> str:
     blocks = state.analysis_blocks
@@ -37,6 +40,7 @@ def build_analysis_context() -> str:
     for b in recent:
         parts.append(f"Done: {b.get('prompt', '')} → {b.get('description', '')}")
     return "\n".join(parts)
+
 
 async def process_file(view_state: AnalysisState, file):
     if not file.path:
@@ -56,6 +60,7 @@ async def process_file(view_state: AnalysisState, file):
 
     try:
         import matplotlib.pyplot as plt
+
         plt.close("all")
         df = await asyncio.to_thread(file_service.load_dataframe, file.path)
         state.set_dataframe(df, file.name)
@@ -92,18 +97,12 @@ async def process_file(view_state: AnalysisState, file):
                     )
                     state.analysis_blocks[0]["suggestions"] = ai_service.fallback_suggestions()
                 else:
-                    desc_task = asyncio.create_task(
-                        ai_service.describe_dataset(state.current_df_summary)
-                    )
-                    suggest_task = asyncio.create_task(
-                        ai_service.suggest(state.current_df_summary)
-                    )
-
-                    description = await desc_task
+                    # Sequence strictly to ensure context isn't stale
+                    description = await ai_service.describe_dataset(state.current_df_summary)
                     state.analysis_blocks[0]["description"] = description
                     view_state.rebuild()
 
-                    suggestions = await suggest_task
+                    suggestions = await ai_service.suggest(state.current_df_summary)
                     state.analysis_blocks[0]["suggestions"] = suggestions
                     state.suggestions = suggestions
 
@@ -137,6 +136,7 @@ async def process_file(view_state: AnalysisState, file):
         state.is_loading = False
         view_state.rebuild()
 
+
 async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_autopilot: bool = False):
     if state.current_df is None:
         return
@@ -150,14 +150,12 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
 
         try:
             ctx = build_analysis_context()
-            
+
             code = await ai_service.generate_code(
                 prompt, state.current_df_summary, analysis_context=ctx
             )
             if not code:
                 show_error(view_state, "AI failed to generate code. Try a different prompt.")
-                state.is_analyzing = False
-                view_state.rebuild()
                 return
 
             tx_id = None
@@ -165,8 +163,6 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                 tx_id = await view_state.credit_service.reserve(COST_SUGGEST)
                 if not tx_id:
                     show_error(view_state, "Not enough credits.")
-                    state.is_analyzing = False
-                    view_state.rebuild()
                     return
 
             max_retries = 2
@@ -209,6 +205,7 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                     "prompt": prompt,
                     "code": current_code,
                     "figure": None,
+                    "figure_png": None,
                     "stdout": result.get("stdout", "") if result else "",
                     "result": "",
                     "description": f"Execution failed after {max_retries} self-heal attempts: {result.get('error', 'Unknown Error') if result else 'Code Generation Error'}",
@@ -217,7 +214,6 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                     "failed": True,
                 }
                 state.analysis_blocks.append(block)
-                state.is_analyzing = False
                 view_state.rebuild()
                 return
 
@@ -225,17 +221,20 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                 await view_state.credit_service.commit(tx_id)
 
             figure_png = None
-            if result.get("figure"):
+            raw_figure = result.get("figure")
+            if raw_figure:
                 try:
-                    figure_png = await asyncio.to_thread(figure_to_png_bytes, result["figure"])
+                    figure_png = await asyncio.to_thread(figure_to_png_bytes, raw_figure)
                 except Exception:
                     pass
+                result["figure"] = None  # Free C++ memory reference
+                raw_figure = None
 
             block = {
                 "type": "analysis",
                 "prompt": prompt,
                 "code": current_code,
-                "figure": result["figure"],
+                "figure": None,  
                 "figure_png": figure_png,
                 "stdout": result.get("stdout", ""),
                 "result": result.get("result", ""),
@@ -244,8 +243,9 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                 "pinned": is_autopilot,
                 "failed": False,
             }
+            
+            # 1. Append block but keep is_analyzing = True
             state.analysis_blocks.append(block)
-            state.is_analyzing = False
             view_state.rebuild()
 
             async def load_block_ai(b):
@@ -262,23 +262,20 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                         "result": str(b["result"]),
                     }
 
-                    desc_task = asyncio.create_task(
-                        ai_service.describe_result(block0_desc, res_data)
-                    )
-                    ctx = build_analysis_context()
-                    suggest_task = asyncio.create_task(
-                        ai_service.suggest(
-                            state.current_df_summary,
-                            initial_description=block0_desc,
-                            analysis_context=ctx,
-                        )
-                    )
-
-                    description = await desc_task
+                    # 2. Fetch Description FIRST
+                    description = await ai_service.describe_result(block0_desc, res_data)
                     b["description"] = description
                     view_state.rebuild()
 
-                    suggestions = await suggest_task
+                    # 3. Build context AFTER description to avoid stale history
+                    ctx = build_analysis_context()
+                    
+                    # 4. Fetch Suggestions
+                    suggestions = await ai_service.suggest(
+                        state.current_df_summary,
+                        initial_description=block0_desc,
+                        analysis_context=ctx,
+                    )
                     b["suggestions"] = suggestions
                     state.suggestions = suggestions
 
@@ -286,7 +283,7 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                         state.charts.append(
                             {
                                 "prompt": b["prompt"],
-                                "figure": b["figure"],
+                                "figure": None, # Never store
                                 "figure_png": b.get("figure_png"),
                                 "description": description,
                             }
@@ -296,18 +293,21 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
                 except Exception as e:
                     logger.error("Block AI load failed: %s", e)
 
+            # Ensure all AI is finished while lock is held
             await load_block_ai(block)
 
         except Exception as err:
             show_error(view_state, f"Analysis failed: {err}")
             logger.exception("Analysis error")
-            state.is_analyzing = False
-            view_state.rebuild()
         finally:
+            # 5. NOW release the UI, ensuring no inputs were dropped
+            state.is_analyzing = False
             try:
                 state.credits_remaining = await view_state.credit_service.get_balance()
             except Exception:
                 pass
+            view_state.rebuild()
+
 
 async def on_rerun_code(view_state: AnalysisState, block_index: int, new_code: str):
     if block_index < 0 or block_index >= len(state.analysis_blocks):
@@ -318,13 +318,16 @@ async def on_rerun_code(view_state: AnalysisState, block_index: int, new_code: s
 
     block["code"] = new_code
     if result["success"]:
-        block["figure"] = result["figure"]
-        try:
-            block["figure_png"] = (
-                await asyncio.to_thread(figure_to_png_bytes, result["figure"]) if result["figure"] else None
-            )
-        except Exception:
-            pass
+        raw_figure = result.get("figure")
+        figure_png = None
+        if raw_figure:
+            try:
+                figure_png = await asyncio.to_thread(figure_to_png_bytes, raw_figure)
+            except Exception:
+                pass
+        
+        block["figure"] = None 
+        block["figure_png"] = figure_png
         block["stdout"] = result.get("stdout", "")
         block["result"] = result.get("result", "")
         block["description"] = "Code re-executed successfully."
@@ -336,6 +339,7 @@ async def on_rerun_code(view_state: AnalysisState, block_index: int, new_code: s
         show_error(view_state, f"Execution Error: {result['error']}")
 
     view_state.rebuild()
+
 
 async def run_autopilot(view_state: AnalysisState):
     MAX_ITERATIONS = 8
@@ -383,18 +387,12 @@ async def run_autopilot(view_state: AnalysisState):
 
             if plan.get("is_complete"):
                 state.autopilot_progress = f"Analysis complete after {iteration - 1} steps. {plan.get('reason', '')}"
-                logger.info(
-                    "Autopilot complete at step %d: %s",
-                    iteration - 1,
-                    plan.get("reason", ""),
-                )
+                logger.info("Autopilot complete at step %d: %s", iteration - 1, plan.get("reason", ""))
                 break
 
             next_prompt = plan.get("prompt", "").strip()
             if not next_prompt:
-                state.autopilot_progress = (
-                    f"Agent decided analysis is complete. {plan.get('reason', '')}"
-                )
+                state.autopilot_progress = f"Agent decided analysis is complete. {plan.get('reason', '')}"
                 break
 
             state.autopilot_progress = f"Step {iteration}/{MAX_ITERATIONS}: {plan.get('label', next_prompt[:60])}"
@@ -443,9 +441,7 @@ async def run_autopilot(view_state: AnalysisState):
                         "result": "",
                         "description": "",
                         "success": False,
-                        "error": result.get("error", "No code generated")
-                        if result
-                        else "No code generated",
+                        "error": result.get("error", "No code generated") if result else "No code generated",
                     }
                 )
                 block = {
@@ -469,17 +465,19 @@ async def run_autopilot(view_state: AnalysisState):
                 await view_state.credit_service.commit(tx_id)
 
             figure_png = None
-            if result.get("figure"):
+            raw_figure = result.get("figure")
+            if raw_figure:
                 try:
-                    figure_png = await asyncio.to_thread(figure_to_png_bytes, result["figure"])
+                    figure_png = await asyncio.to_thread(figure_to_png_bytes, raw_figure)
                 except Exception:
                     pass
+                result["figure"] = None 
 
             block = {
                 "type": "analysis",
                 "prompt": next_prompt,
                 "code": current_code,
-                "figure": result["figure"],
+                "figure": None, 
                 "figure_png": figure_png,
                 "stdout": result.get("stdout", ""),
                 "result": result.get("result", ""),
@@ -494,7 +492,7 @@ async def run_autopilot(view_state: AnalysisState):
             state.charts.append(
                 {
                     "prompt": next_prompt,
-                    "figure": result["figure"],
+                    "figure": None,
                     "figure_png": figure_png,
                     "description": "",
                 }
@@ -519,26 +517,22 @@ async def run_autopilot(view_state: AnalysisState):
                         "stdout": b["stdout"],
                         "result": str(b["result"]),
                     }
-                    desc_task = asyncio.create_task(
-                        ai_service.describe_result(block0_desc, res_data)
-                    )
-                    ctx = build_analysis_context()
-                    suggest_task = asyncio.create_task(
-                        ai_service.suggest(
-                            state.current_df_summary,
-                            initial_description=block0_desc,
-                            analysis_context=ctx,
-                        )
-                    )
-
-                    description = await desc_task
+                    
+                    description = await ai_service.describe_result(block0_desc, res_data)
                     b["description"] = description
                     hist_entry["description"] = description
                     if state.charts:
                         state.charts[-1]["description"] = description
                     view_state.rebuild()
 
-                    suggestions = await suggest_task
+                    ctx = build_analysis_context()
+                    
+                    suggestions = await ai_service.suggest(
+                        state.current_df_summary,
+                        initial_description=block0_desc,
+                        analysis_context=ctx,
+                    )
+                    
                     b["suggestions"] = suggestions
                     state.suggestions = suggestions
                     view_state.rebuild()
@@ -559,6 +553,7 @@ async def run_autopilot(view_state: AnalysisState):
             pass
         view_state.rebuild()
 
+
 async def on_custom_prompt(view_state: AnalysisState, e):
     if not view_state.custom_prompt_field.current:
         return
@@ -574,6 +569,7 @@ async def on_custom_prompt(view_state: AnalysisState, e):
     view_state.custom_prompt_field.current.value = ""
     view_state.page.update()
     await on_suggestion_selected(view_state, prompt)
+
 
 async def _handle_auto_stop(view_state: AnalysisState, result):
     view_state.is_recording["value"] = False
@@ -591,6 +587,7 @@ async def _handle_auto_stop(view_state: AnalysisState, result):
             view_state.page.update()
     view_state.is_transcribing["value"] = False
     view_state.rebuild()
+
 
 async def on_voice_toggle(view_state: AnalysisState, e):
     if view_state.is_recording["value"]:
@@ -629,6 +626,7 @@ async def on_voice_toggle(view_state: AnalysisState, e):
                 view_state.page.update(view_state.recording_timer.current)
     view_state.is_recording["value"] = False
 
+
 def on_clear_data(view_state: AnalysisState, e):
     import matplotlib.pyplot as plt
 
@@ -636,6 +634,7 @@ def on_clear_data(view_state: AnalysisState, e):
     state.clear_data()
     state.analysis_blocks.clear()
     view_state.rebuild()
+
 
 def on_pin_block(view_state: AnalysisState, index: int):
     if index < 0 or index >= len(state.analysis_blocks):
@@ -648,18 +647,11 @@ def on_pin_block(view_state: AnalysisState, index: int):
         return
 
     import base64
-    from core.utils import figure_to_png_bytes
 
     async def _pin_to_report(report_id=None):
         png_b64 = ""
         if block.get("figure_png"):
             png_b64 = base64.b64encode(block["figure_png"]).decode("utf-8")
-        elif block.get("figure"):
-            try:
-                png_bytes = await asyncio.to_thread(figure_to_png_bytes, block["figure"], 150)
-                png_b64 = base64.b64encode(png_bytes).decode("utf-8")
-            except Exception:
-                pass
 
         report_block = {
             "prompt": block.get("prompt", "Data Overview"),
@@ -672,7 +664,7 @@ def on_pin_block(view_state: AnalysisState, index: int):
         state.charts.append(
             {
                 "prompt": block.get("prompt", "Data Overview"),
-                "figure": block.get("figure"),
+                "figure": None,
                 "figure_png": block.get("figure_png"),
                 "description": block.get("description", ""),
             }
@@ -715,12 +707,17 @@ def on_pin_block(view_state: AnalysisState, index: int):
             await _pin_to_report(None)
             return
 
+        # FIX: Securely defining the close handler before attaching it to the dialog
+        def _close_dlg(e=None):
+            dlg.open = False
+            view_state.page.update()
+
         def _select(rid):
-            view_state.page.close(dlg)
+            _close_dlg()
             view_state.page.run_task(_pin_to_report, rid)
 
         def _create_new():
-            view_state.page.close(dlg)
+            _close_dlg()
             view_state.page.run_task(_pin_to_report, None)
 
         items = []
@@ -756,8 +753,12 @@ def on_pin_block(view_state: AnalysisState, index: int):
                 width=350,
                 height=min(len(items) * 65, 350),
             ),
-            actions=[ft.TextButton("Cancel", on_click=lambda e: view_state.page.close(dlg))],
+            actions=[ft.TextButton("Cancel", on_click=_close_dlg)],
         )
-        view_state.page.open(dlg)
+        
+        # FIX: Reverted to the older Flet API mount pattern
+        view_state.page.dialog = dlg
+        dlg.open = True
+        view_state.page.update()
 
     view_state.page.run_task(_show_picker)

@@ -1,4 +1,5 @@
 """Core AI data analysis, generation, and orchestration."""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +11,7 @@ from .client import call_gateway, extract_content, extract_block_by_pattern
 from .vision import analyze_image
 
 logger = logging.getLogger(__name__)
+
 
 async def describe_dataset(schema_json: dict) -> str:
     """Block 0 describe: AI reads the schema and describes the dataset."""
@@ -37,6 +39,7 @@ async def describe_dataset(schema_json: dict) -> str:
     except Exception as e:
         logger.error("Describe dataset failed: %s", e)
         return "Dataset loaded. AI description unavailable."
+
 
 async def describe_result(initial_description: str, latest_result: dict) -> str:
     """Block N describe: AI describes what a specific analysis result shows."""
@@ -68,6 +71,7 @@ async def describe_result(initial_description: str, latest_result: dict) -> str:
     except Exception as e:
         logger.error("Describe result failed: %s", e)
         return "Analysis completed."
+
 
 async def suggest(
     schema_json: dict,
@@ -118,7 +122,10 @@ async def suggest(
         logger.error("Suggest failed: %s", e)
         return fallback_suggestions()
 
-async def generate_code(prompt: str, schema_json: dict, analysis_context: str = "") -> str:
+
+async def generate_code(
+    prompt: str, schema_json: dict, analysis_context: str = ""
+) -> str:
     """Send prompt to code route using full uncut dataset schema statistics."""
     context_section = ""
     if analysis_context:
@@ -160,6 +167,7 @@ async def generate_code(prompt: str, schema_json: dict, analysis_context: str = 
         logger.error("Code generation failed: %s", e)
         return ""
 
+
 async def generate_corrected_code(
     prompt: str,
     bad_code: str,
@@ -195,7 +203,10 @@ async def generate_corrected_code(
         logger.error("Corrected code generation failed: %s", e)
         return ""
 
-async def plan_next_step(schema_json: dict, initial_description: str, analysis_history: list[dict]) -> dict:
+
+async def plan_next_step(
+    schema_json: dict, initial_description: str, analysis_history: list[dict]
+) -> dict:
     """Autopilot planner: given all previous analysis results, decide the next step."""
     history_lines = []
     for i, entry in enumerate(analysis_history):
@@ -232,10 +243,15 @@ async def plan_next_step(schema_json: dict, initial_description: str, analysis_h
         result = json.loads(cleaned)
         if isinstance(result, dict) and "prompt" in result and "is_complete" in result:
             return result
-        return {"prompt": "", "is_complete": True, "reason": "Planner returned invalid format."}
+        return {
+            "prompt": "",
+            "is_complete": True,
+            "reason": "Planner returned invalid format.",
+        }
     except Exception as e:
         logger.error("Plan next step failed: %s", e)
         return {"prompt": "", "is_complete": True, "reason": f"Planner error: {e}"}
+
 
 async def interpret(result_data: dict) -> str:
     """Send execution metrics to interpret route to fetch clean insight text."""
@@ -254,7 +270,10 @@ async def interpret(result_data: dict) -> str:
         logger.error("Interpret failed: %s", e)
         return "Analysis complete. Review workspace metrics."
 
-async def analyze_image_for_data(image_bytes: bytes, mime_type: str, schema_json: dict) -> str:
+
+async def analyze_image_for_data(
+    image_bytes: bytes, mime_type: str, schema_json: dict
+) -> str:
     """Eye + Code combo: extract metadata details from graphic and pipe straight to generator."""
     description = await analyze_image(image_bytes, mime_type)
     prompt = (
@@ -263,6 +282,7 @@ async def analyze_image_for_data(image_bytes: bytes, mime_type: str, schema_json
         f"Correlate this visibility context against the loaded dataset variables and compile analytical code."
     )
     return await generate_code(prompt, schema_json)
+
 
 def fallback_suggestions() -> list[dict]:
     """Return an expanded suite of safe fallbacks if remote channels are offline."""

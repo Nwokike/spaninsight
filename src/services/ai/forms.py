@@ -1,4 +1,5 @@
 """AI forms generation."""
+
 from __future__ import annotations
 
 import json
@@ -7,6 +8,7 @@ from core.constants import TASK_SUGGEST
 from .client import call_gateway, extract_content, extract_block_by_pattern
 
 logger = logging.getLogger(__name__)
+
 
 async def generate_form_schema(prompt: str) -> dict | None:
     """Generate high-fidelity research forms with comprehensive structural depth."""

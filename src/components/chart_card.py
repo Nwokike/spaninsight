@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import flet as ft
-import flet_charts as fch
+import base64
 
 from core import theme, tokens
 
@@ -11,30 +11,34 @@ from core import theme, tokens
 def build_chart_card(
     index: int,
     prompt: str,
-    figure,
-    insight: str,
+    figure=None,
+    insight: str = "",
     code: str = "",
     on_change: callable = None,
 ) -> ft.Container:
-    """Build a single chart card with its AI insight.
-
-    Args:
-        index: Chart number (1-based).
-        prompt: The analysis prompt that generated this chart.
-        figure: Matplotlib figure object.
-        insight: AI-generated interpretation text.
-        code: The Python code that generated the chart.
-        on_change: Callback when the insight description is edited.
-    """
-    # Chart widget
+    """Build a single chart card with its AI insight."""
     chart_widget = ft.Container(height=10)  # fallback
+
     if figure:
-        chart_widget = ft.Container(
-            content=fch.MatplotlibChart(figure=figure, expand=True),
-            height=280,
-            border_radius=tokens.RADIUS_MD,
-            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-        )
+        b64_img = ""
+        # Handle raw bytes from Sandbox backend
+        if isinstance(figure, bytes):
+            b64_img = base64.b64encode(figure).decode("utf-8")
+        # Handle string if it's already encoded by ReportService
+        elif isinstance(figure, str):
+            b64_img = figure
+
+        if b64_img:
+            chart_widget = ft.Container(
+                content=ft.Image(
+                    src=b64_img,  # <-- FIXED: Using 'src' here as well
+                    fit="contain",
+                ),
+                height=280,
+                border_radius=tokens.RADIUS_MD,
+                clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                alignment=ft.Alignment.CENTER,
+            )
 
     return ft.Container(
         content=ft.Column(

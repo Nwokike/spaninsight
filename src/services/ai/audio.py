@@ -1,4 +1,5 @@
 """Audio transcription handling via Whisper."""
+
 from __future__ import annotations
 
 import logging
@@ -7,6 +8,7 @@ from services.api_client import get_client, COMMON_HEADERS
 from .client import extract_content
 
 logger = logging.getLogger(__name__)
+
 
 async def transcribe_audio(audio_bytes: bytes, mime_type: str) -> str:
     """Send audio to Whisper for transcription."""

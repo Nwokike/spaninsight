@@ -1,4 +1,5 @@
 """AI Service package exporting all split modules."""
+
 from __future__ import annotations
 
 from .client import check_health

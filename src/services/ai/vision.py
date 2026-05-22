@@ -1,4 +1,5 @@
 """Vision models handling for images."""
+
 from __future__ import annotations
 
 import base64
@@ -7,6 +8,7 @@ from core.constants import TASK_VISION
 from .client import call_gateway_raw, extract_content
 
 logger = logging.getLogger(__name__)
+
 
 async def analyze_image(image_bytes: bytes, mime_type: str) -> str:
     """Send an image to the vision model for detailed description."""

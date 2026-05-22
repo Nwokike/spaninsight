@@ -16,9 +16,10 @@ from views.analysis.handlers import (
 )
 from views.analysis.ui_components import build_block_card
 
+
 def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> ft.View:
     view_state = AnalysisState(page, credit_service, report_service)
-    
+
     if not hasattr(state, "analysis_blocks"):
         state.analysis_blocks = []
 
@@ -33,8 +34,24 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
     def on_autopilot_toggle_handler(e):
         state.autopilot_enabled = e.control.value
 
-    def _build_content() -> list[ft.Control]:
-        res = []
+    # --- STATEFUL DOM CONTAINERS ---
+    top_section = ft.Container()
+    blocks_list = ft.Column(
+        spacing=16
+    )  # <-- FIXED: Changed from ListView to standard Column
+    loading_section = ft.Container()
+    input_section = ft.Container()
+
+    # <-- FIXED: Added scroll="auto" here so the entire page scrolls natively on any laptop
+    main_column = ft.Column(
+        controls=[top_section, blocks_list, loading_section, input_section],
+        expand=True,
+        scroll="auto",
+    )
+    view_state.content_column = ft.Ref[ft.Column]()
+    view_state.content_column.current = main_column
+
+    def _update_top_section():
         if state.current_df is None:
             if state.is_loading:
                 fname = view_state.loading_file_name["value"] or "data"
@@ -51,57 +68,55 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                 ]
                 if size_mb > 5 and fname.lower().endswith(".xlsx"):
                     loading_controls.append(
-                        ft.Text("Large Excel files may take up to 60 seconds", size=12, color=ft.Colors.ON_SURFACE_VARIANT, italic=True)
+                        ft.Text(
+                            "Large Excel files may take up to 60 seconds",
+                            size=12,
+                            italic=True,
+                        )
                     )
-                elif size_mb > 10:
-                    loading_controls.append(
-                        ft.Text("Large files may take a moment to process", size=12, color=ft.Colors.ON_SURFACE_VARIANT, italic=True)
-                    )
-
-                res.append(
-                    ft.Container(
-                        content=ft.Column(loading_controls, horizontal_alignment="center", spacing=16),
-                        expand=True,
-                        alignment=ft.Alignment.CENTER,
-                    )
+                top_section.content = ft.Column(
+                    loading_controls, horizontal_alignment="center", spacing=16
                 )
+                top_section.alignment = ft.Alignment.CENTER
+                top_section.expand = True
             else:
-                res.append(
-                    ft.Container(
-                        content=ft.Column(
+                top_section.content = ft.Column(
+                    [
+                        build_brand_header(show_tagline=True, spacing_below=True),
+                        build_file_import_card(on_pick_file, False),
+                        ft.Container(height=20),
+                        ft.Row(
                             [
-                                build_brand_header(show_tagline=True, spacing_below=True),
-                                build_file_import_card(on_pick_file, False),
-                                ft.Container(height=20),
-                                ft.Row(
-                                    [
-                                        ft.Icon(ft.Icons.ROCKET_LAUNCH_ROUNDED, color=theme.ACCENT),
-                                        ft.Text("Autopilot Mode", weight="w500"),
-                                        ft.Switch(
-                                            ref=view_state.autopilot_enabled_ref,
-                                            value=getattr(state, "autopilot_enabled", True),
-                                            active_color=theme.PRIMARY,
-                                            on_change=on_autopilot_toggle_handler,
-                                        ),
-                                    ],
-                                    alignment="center",
-                                    spacing=10,
+                                ft.Icon(
+                                    ft.Icons.ROCKET_LAUNCH_ROUNDED, color=theme.ACCENT
+                                ),
+                                ft.Text("Autopilot Mode", weight="w500"),
+                                ft.Switch(
+                                    ref=view_state.autopilot_enabled_ref,
+                                    value=getattr(state, "autopilot_enabled", True),
+                                    active_color=theme.PRIMARY,
+                                    on_change=on_autopilot_toggle_handler,
                                 ),
                             ],
-                            horizontal_alignment="center",
+                            alignment="center",
+                            spacing=10,
                         ),
-                        padding=20,
-                    )
+                    ],
+                    horizontal_alignment="center",
                 )
+                top_section.padding = 20
+                top_section.expand = False
         else:
-            res.append(
-                ft.Container(
-                    content=ft.Row(
+            top_section.content = ft.Column(
+                [
+                    ft.Row(
                         [
                             ft.Icon(ft.Icons.DESCRIPTION_ROUNDED, color=theme.ACCENT),
                             ft.Column(
                                 [
-                                    ft.Text(state.current_df_name, weight="bold", size=16),
+                                    ft.Text(
+                                        state.current_df_name, weight="bold", size=16
+                                    ),
                                     ft.Text(
                                         f"{state.current_df_rows:,} rows | {len(state.current_df_columns)} cols",
                                         size=12,
@@ -111,127 +126,177 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                 spacing=2,
                                 expand=True,
                             ),
-                            ft.IconButton(ft.Icons.CLOSE_ROUNDED, on_click=lambda e: on_clear_data(view_state, e)),
+                            ft.IconButton(
+                                ft.Icons.CLOSE_ROUNDED,
+                                on_click=lambda e: on_clear_data(view_state, e),
+                            ),
                         ]
                     ),
-                    padding=ft.Padding(20, 10, 20, 10),
-                )
-            )
-
-            res.append(
-                ft.Container(
                     ft.Row(
                         [
-                            build_stat_card("Rows", f"{state.current_df_rows:,}", ft.Icons.TABLE_ROWS_ROUNDED, theme.ACCENT),
-                            build_stat_card("Cols", str(len(state.current_df_columns)), ft.Icons.VIEW_COLUMN_ROUNDED, theme.PRIMARY),
-                            build_stat_card("Credits", str(state.credits_remaining), ft.Icons.BOLT_ROUNDED, theme.SUCCESS),
+                            build_stat_card(
+                                "Rows",
+                                f"{state.current_df_rows:,}",
+                                ft.Icons.TABLE_ROWS_ROUNDED,
+                                theme.ACCENT,
+                            ),
+                            build_stat_card(
+                                "Cols",
+                                str(len(state.current_df_columns)),
+                                ft.Icons.VIEW_COLUMN_ROUNDED,
+                                theme.PRIMARY,
+                            ),
+                            build_stat_card(
+                                "Credits",
+                                str(state.credits_remaining),
+                                ft.Icons.BOLT_ROUNDED,
+                                theme.SUCCESS,
+                            ),
                         ],
                         spacing=10,
                     ),
-                    padding=ft.Padding(20, 0, 20, 10),
-                )
-            )
-
-            res.append(
-                ft.Container(
                     build_data_preview(state.current_df),
-                    padding=ft.Padding(20, 0, 20, 10),
-                )
+                ],
+                spacing=15,
             )
+            top_section.padding = ft.Padding(20, 10, 20, 10)
+            top_section.expand = False
 
-            for i, b in enumerate(state.analysis_blocks):
-                res.append(build_block_card(view_state, b, i))
+    def _update_blocks():
+        if state.current_df is None:
+            blocks_list.controls.clear()
+            return
 
-            if state.is_analyzing:
-                progress_text = getattr(state, "autopilot_progress", "") or "AI thinking..."
-                loading_controls = [
-                    ft.ProgressRing(width=16, height=16),
-                    ft.Text(progress_text, size=13, expand=True),
-                ]
-                if getattr(state, "autopilot_progress", ""):
-                    loading_controls.append(
-                        ft.TextButton(
-                            "Stop",
-                            icon=ft.Icons.STOP_ROUNDED,
-                            icon_color=theme.ERROR,
-                            on_click=lambda e: (setattr(state, "autopilot_cancelled", True) or view_state.rebuild()),
-                        )
-                    )
-                res.append(
-                    ft.Container(
-                        content=ft.Row(loading_controls, alignment="center", spacing=10),
-                        padding=ft.Padding(0, 16, 0, 16),
+        if len(blocks_list.controls) == len(state.analysis_blocks):
+            blocks_list.controls = [
+                build_block_card(view_state, b, i)
+                for i, b in enumerate(state.analysis_blocks)
+            ]
+        elif len(blocks_list.controls) < len(state.analysis_blocks):
+            for i in range(len(blocks_list.controls), len(state.analysis_blocks)):
+                blocks_list.controls.append(
+                    build_block_card(view_state, state.analysis_blocks[i], i)
+                )
+        else:
+            blocks_list.controls.clear()
+
+    def _update_bottom_sections():
+        if state.current_df is None:
+            loading_section.visible = False
+            input_section.visible = False
+            return
+
+        if state.is_analyzing:
+            progress_text = getattr(state, "autopilot_progress", "") or "AI thinking..."
+            controls = [
+                ft.ProgressRing(width=16, height=16),
+                ft.Text(progress_text, size=13, expand=True),
+            ]
+            if getattr(state, "autopilot_progress", ""):
+                controls.append(
+                    ft.TextButton(
+                        "Stop",
+                        icon=ft.Icons.STOP_ROUNDED,
+                        icon_color=theme.ERROR,
+                        on_click=lambda e: (
+                            setattr(state, "autopilot_cancelled", True)
+                            or view_state.rebuild()
+                        ),
                     )
                 )
 
-            if not state.is_analyzing:
-                res.append(
-                    ft.Container(
-                        content=ft.Row(
+            loading_section.content = ft.Row(controls, alignment="center", spacing=10)
+            loading_section.padding = ft.Padding(0, 16, 0, 16)
+            loading_section.visible = True
+            input_section.visible = False
+        else:
+            loading_section.visible = False
+            if not input_section.content:
+                input_section.content = ft.Row(
+                    [
+                        ft.TextField(
+                            ref=view_state.custom_prompt_field,
+                            hint_text="Describe an analysis or tap mic...",
+                            expand=True,
+                            border_radius=12,
+                            on_submit=lambda e: page.run_task(
+                                on_custom_prompt, view_state, e
+                            ),
+                        ),
+                        ft.Row(
                             [
-                                ft.TextField(
-                                    ref=view_state.custom_prompt_field,
-                                    hint_text="Describe an analysis or tap mic...",
-                                    expand=True,
-                                    border_radius=12,
-                                    on_submit=lambda e: page.run_task(on_custom_prompt, view_state, e),
-                                    disabled=view_state.is_recording["value"] or view_state.is_transcribing["value"],
+                                ft.Text(
+                                    ref=view_state.recording_timer,
+                                    value="00:00 / 01:00",
+                                    size=12,
+                                    color=theme.ERROR,
+                                    weight="bold",
+                                    visible=False,
                                 ),
-                                ft.Row(
-                                    [
-                                        ft.Text(
-                                            ref=view_state.recording_timer,
-                                            value=f"00:{view_state.recording_time['value']:02d} / 01:00",
-                                            size=12,
-                                            color=theme.ERROR,
-                                            weight="bold",
-                                            visible=view_state.is_recording["value"],
-                                        ),
-                                        ft.ProgressRing(
-                                            width=16,
-                                            height=16,
-                                            stroke_width=2,
-                                            visible=view_state.is_transcribing["value"],
-                                        ),
-                                        ft.IconButton(
-                                            ft.Icons.STOP_ROUNDED if view_state.is_recording["value"] else ft.Icons.MIC_ROUNDED,
-                                            icon_color=theme.ERROR if view_state.is_recording["value"] else ft.Colors.ON_SURFACE_VARIANT,
-                                            tooltip="Stop" if view_state.is_recording["value"] else "Voice",
-                                            on_click=lambda e: page.run_task(on_voice_toggle, view_state, e),
-                                            disabled=view_state.is_transcribing["value"],
-                                        ),
-                                    ],
-                                    spacing=4,
-                                    vertical_alignment="center",
+                                ft.ProgressRing(
+                                    width=16, height=16, stroke_width=2, visible=False
                                 ),
                                 ft.IconButton(
-                                    ft.Icons.SEND_ROUNDED,
-                                    icon_color=theme.PRIMARY,
-                                    on_click=lambda e: page.run_task(on_custom_prompt, view_state, e),
-                                    disabled=view_state.is_recording["value"] or view_state.is_transcribing["value"],
+                                    ft.Icons.MIC_ROUNDED,
+                                    icon_color=ft.Colors.ON_SURFACE_VARIANT,
+                                    tooltip="Voice",
+                                    on_click=lambda e: page.run_task(
+                                        on_voice_toggle, view_state, e
+                                    ),
                                 ),
-                            ]
+                            ],
+                            spacing=4,
+                            vertical_alignment="center",
                         ),
-                        padding=ft.Padding(20, 10, 10, 10),
-                    )
+                        ft.IconButton(
+                            ft.Icons.SEND_ROUNDED,
+                            icon_color=theme.PRIMARY,
+                            on_click=lambda e: page.run_task(
+                                on_custom_prompt, view_state, e
+                            ),
+                        ),
+                    ]
                 )
 
-            res.append(ft.Container(height=100))
+            input_section.padding = ft.Padding(20, 10, 10, 30)
+            input_section.visible = True
 
-        return res
+            tf = input_section.content.controls[0]
+            action_row = input_section.content.controls[1]
+            send_btn = input_section.content.controls[2]
+
+            is_rec = view_state.is_recording["value"]
+            is_trans = view_state.is_transcribing["value"]
+
+            tf.disabled = is_rec or is_trans
+            send_btn.disabled = is_rec or is_trans
+
+            action_row.controls[0].visible = is_rec
+            action_row.controls[1].visible = is_trans
+            mic_btn = action_row.controls[2]
+            mic_btn.icon = ft.Icons.STOP_ROUNDED if is_rec else ft.Icons.MIC_ROUNDED
+            mic_btn.icon_color = theme.ERROR if is_rec else ft.Colors.ON_SURFACE_VARIANT
+            mic_btn.disabled = is_trans
 
     def _rebuild():
         try:
-            if view_state.content_column.current and view_state.page.route == "/analysis":
-                view_state.content_column.current.controls = _build_content()
+            if page.route == "/analysis":
+                _update_top_section()
+                _update_blocks()
+                _update_bottom_sections()
+                page.update()
+
+                # <-- FIXED: Restored auto-scroll-to-bottom on update
                 async def do_scroll():
                     try:
                         if view_state.content_column.current:
-                            await view_state.content_column.current.scroll_to(offset=-1, duration=500)
+                            await view_state.content_column.current.scroll_to(
+                                offset=-1, duration=300
+                            )
                     except Exception:
                         pass
+
                 page.run_task(do_scroll)
-                page.update()
         except Exception:
             pass
 
@@ -249,8 +314,14 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
             page.run_task(
                 process_file,
                 view_state,
-                type("File", (), {"path": file_path, "name": session.get("df_name", "Dataset")})(),
+                type(
+                    "File",
+                    (),
+                    {"path": file_path, "name": session.get("df_name", "Dataset")},
+                )(),
             )
+
+    _rebuild()
 
     return ft.View(
         route="/analysis",
@@ -263,13 +334,6 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                 )
             ],
         ),
-        controls=[
-            ft.Column(
-                ref=view_state.content_column,
-                controls=_build_content(),
-                scroll="auto",
-                expand=True,
-            )
-        ],
+        controls=[main_column],
         padding=0,
     )

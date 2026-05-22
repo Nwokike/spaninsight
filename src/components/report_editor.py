@@ -235,7 +235,9 @@ def build_report_editor(
                                 expand=True,
                                 text_size=13,
                                 disabled=is_ai_editing or is_recording,
-                                on_change=lambda e: on_ai_edit("__set_text__", e.control.value),
+                                on_change=lambda e: on_ai_edit(
+                                    "__set_text__", e.control.value
+                                ),
                             ),
                             ft.Row(
                                 [
@@ -248,8 +250,12 @@ def build_report_editor(
                                         visible=is_recording,
                                     ),
                                     ft.IconButton(
-                                        ft.Icons.STOP_ROUNDED if is_recording else ft.Icons.MIC_ROUNDED,
-                                        icon_color=theme.ERROR if is_recording else theme.ACCENT,
+                                        ft.Icons.STOP_ROUNDED
+                                        if is_recording
+                                        else ft.Icons.MIC_ROUNDED,
+                                        icon_color=theme.ERROR
+                                        if is_recording
+                                        else theme.ACCENT,
                                         tooltip="Stop" if is_recording else "Voice",
                                         on_click=on_voice_toggle,
                                         disabled=is_ai_editing,
@@ -264,7 +270,9 @@ def build_report_editor(
                                 tooltip="Apply AI edit",
                                 on_click=lambda e: on_ai_edit(
                                     "__submit__",
-                                    ai_field_ref.current.value if ai_field_ref.current else "",
+                                    ai_field_ref.current.value
+                                    if ai_field_ref.current
+                                    else "",
                                 ),
                                 disabled=is_ai_editing or is_recording,
                             ),

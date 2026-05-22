@@ -1,6 +1,7 @@
 import flet as ft
 from dataclasses import dataclass, field
 
+
 @dataclass
 class FormsState:
     # Dashboard Refs
@@ -34,7 +35,7 @@ class FormsState:
     editor_active: dict = field(default_factory=lambda: {"value": False})
     is_transcribing: dict = field(default_factory=lambda: {"value": False})
     prompt_text: dict = field(default_factory=lambda: {"value": ""})
-    
+
     is_ai_editing: dict = field(default_factory=lambda: {"value": False})
     editor_recording: dict = field(default_factory=lambda: {"value": False})
     editor_transcribing: dict = field(default_factory=lambda: {"value": False})

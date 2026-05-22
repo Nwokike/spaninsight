@@ -144,18 +144,6 @@ wheels = [
 ]
 
 [[package]]
-name = "flet-charts"
-version = "0.85.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "flet" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/da/fe/7eb34553a82ffb20e7ed15f120ef281048b8ec686ff9bfe3a512eed527d1/flet_charts-0.85.0.tar.gz", hash = "sha256:ec796a4705447b45fddc28347de3ab3b1b73c70eeb4deb0bf97535aacacba335", size = 44213, upload-time = "2026-05-08T22:16:17.969Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/3f/4976491966d5420fc572950187c917464e1de804f92cf4547eb62c59c5b4/flet_charts-0.85.0-py3-none-any.whl", hash = "sha256:020de8ef274396eaf8f605f106068d8f39273e2e5d76e0e558001653472164db", size = 67649, upload-time = "2026-05-08T22:16:16.975Z" },
-]
-
-[[package]]
 name = "fonttools"
 version = "4.62.1"
 source = { registry = "https://pypi.org/simple" }
@@ -640,7 +628,6 @@ dependencies = [
     { name = "flet" },
     { name = "flet-ads" },
     { name = "flet-audio-recorder" },
-    { name = "flet-charts" },
     { name = "httpx" },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -658,7 +645,6 @@ requires-dist = [
     { name = "flet", specifier = "==0.85.0" },
     { name = "flet-ads", specifier = "==0.85.0" },
     { name = "flet-audio-recorder", specifier = "==0.85.0" },
-    { name = "flet-charts", specifier = "==0.85.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=1.26" },

@@ -1,4 +1,5 @@
 """Event handlers for Reports view."""
+
 from __future__ import annotations
 
 import base64
@@ -9,9 +10,9 @@ from core.state import state
 from core.utils import figure_to_png_bytes
 
 from services import ai as ai_service
-from services.audio_service import AudioService
 
 logger = logging.getLogger(__name__)
+
 
 async def load_reports(page: ft.Page, ui_state, report_service):
     ui_state.is_loading["value"] = True
@@ -26,6 +27,7 @@ async def load_reports(page: ft.Page, ui_state, report_service):
         logger.error("Failed to load reports: %s", e)
     ui_state.is_loading["value"] = False
     ui_state.rebuild()
+
 
 async def on_open_report(page: ft.Page, ui_state, report: dict, report_service):
     ui_state.active_report["data"] = report
@@ -50,7 +52,9 @@ async def on_open_report(page: ft.Page, ui_state, report: dict, report_service):
                     if 0 <= orig_idx < len(ui_state.editor_blocks):
                         b = ui_state.editor_blocks[orig_idx].copy()
                         b["prompt"] = ai_block.get("prompt", b.get("prompt", ""))
-                        b["description"] = ai_block.get("description", b.get("description", ""))
+                        b["description"] = ai_block.get(
+                            "description", b.get("description", "")
+                        )
                         new_blocks.append(b)
                 if len(new_blocks) == len(ui_state.editor_blocks):
                     ui_state.editor_blocks.clear()
@@ -61,20 +65,25 @@ async def on_open_report(page: ft.Page, ui_state, report: dict, report_service):
                     ui_state.draft_desc["value"] = result["description"]
 
                 if report_service:
-                    await report_service.update_report(report["id"], {
-                        "is_arranged": True,
-                        "title": ui_state.draft_title["value"],
-                        "description": ui_state.draft_desc["value"],
-                        "blocks": ui_state.editor_blocks,
-                    })
+                    await report_service.update_report(
+                        report["id"],
+                        {
+                            "is_arranged": True,
+                            "title": ui_state.draft_title["value"],
+                            "description": ui_state.draft_desc["value"],
+                            "blocks": ui_state.editor_blocks,
+                        },
+                    )
         except Exception as e:
             logger.error("AI arrange failed: %s", e)
         ui_state.is_arranging["value"] = False
 
     ui_state.rebuild()
 
+
 async def on_save(page: ft.Page, ui_state, report_service):
     from core import theme
+
     ui_state.is_saving["value"] = True
     ui_state.rebuild()
     try:
@@ -104,8 +113,10 @@ async def on_save(page: ft.Page, ui_state, report_service):
     ui_state.is_saving["value"] = False
     ui_state.rebuild()
 
+
 async def on_share(page: ft.Page, ui_state, report_service, ad_service):
     from core import theme
+
     if not ui_state.active_report["data"] or ui_state.is_sharing["value"]:
         return
     ui_state.is_sharing["value"] = True
@@ -125,7 +136,11 @@ async def on_share(page: ft.Page, ui_state, report_service, ad_service):
                 page.snack_bar = ft.SnackBar(
                     content=ft.Row(
                         [
-                            ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED, color=theme.SUCCESS, size=20),
+                            ft.Icon(
+                                ft.Icons.CHECK_CIRCLE_ROUNDED,
+                                color=theme.SUCCESS,
+                                size=20,
+                            ),
                             ft.Column(
                                 [
                                     ft.Text("Link copied!", weight=ft.FontWeight.W_600),
@@ -145,12 +160,15 @@ async def on_share(page: ft.Page, ui_state, report_service, ad_service):
                 )
                 page.snack_bar.open = True
             else:
-                page.snack_bar = ft.SnackBar(ft.Text("Share failed. Try again."), duration=3000)
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("Share failed. Try again."), duration=3000
+                )
                 page.snack_bar.open = True
     except Exception as e:
         logger.error("Share failed: %s", e)
     ui_state.is_sharing["value"] = False
     ui_state.rebuild()
+
 
 def on_back(page: ft.Page, ui_state, report_service):
     ui_state.editor_active["value"] = False
@@ -158,8 +176,10 @@ def on_back(page: ft.Page, ui_state, report_service):
     ui_state.editor_blocks.clear()
     page.run_task(load_reports, page, ui_state, report_service)
 
+
 def on_import(page: ft.Page, ui_state):
     from core import theme
+
     if not state.analysis_blocks:
         page.snack_bar = ft.SnackBar(
             ft.Text("No analysis blocks available. Run an analysis first."),
@@ -201,7 +221,9 @@ def on_import(page: ft.Page, ui_state):
         items.append(
             ft.ListTile(
                 leading=ft.Icon(
-                    ft.Icons.AUTO_AWESOME_ROUNDED if not block.get("failed") else ft.Icons.ERROR_OUTLINE,
+                    ft.Icons.AUTO_AWESOME_ROUNDED
+                    if not block.get("failed")
+                    else ft.Icons.ERROR_OUTLINE,
                     color=theme.ACCENT if not block.get("failed") else theme.ERROR,
                 ),
                 title=ft.Text(
@@ -210,7 +232,9 @@ def on_import(page: ft.Page, ui_state):
                     size=13,
                 ),
                 subtitle=ft.Text(
-                    (block.get("description", "")[:80] + "...") if block.get("description") else "",
+                    (block.get("description", "")[:80] + "...")
+                    if block.get("description")
+                    else "",
                     size=11,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),
@@ -222,7 +246,9 @@ def on_import(page: ft.Page, ui_state):
     if not items:
         items.append(
             ft.Container(
-                ft.Text("No importable blocks found.", color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(
+                    "No importable blocks found.", color=ft.Colors.ON_SURFACE_VARIANT
+                ),
                 padding=20,
             )
         )
@@ -239,6 +265,7 @@ def on_import(page: ft.Page, ui_state):
         ],
     )
     page.open(dlg)
+
 
 async def on_ai_edit(page: ft.Page, ui_state, action: str, text: str):
     if action == "__set_text__":
@@ -266,7 +293,9 @@ async def on_ai_edit(page: ft.Page, ui_state, action: str, text: str):
                     if 0 <= orig_idx < len(ui_state.editor_blocks):
                         b = ui_state.editor_blocks[orig_idx].copy()
                         b["prompt"] = ai_block.get("prompt", b.get("prompt", ""))
-                        b["description"] = ai_block.get("description", b.get("description", ""))
+                        b["description"] = ai_block.get(
+                            "description", b.get("description", "")
+                        )
                         new_blocks.append(b)
                 if len(new_blocks) == len(ui_state.editor_blocks):
                     ui_state.editor_blocks.clear()
@@ -283,6 +312,7 @@ async def on_ai_edit(page: ft.Page, ui_state, action: str, text: str):
         ui_state.is_ai_editing["value"] = False
         ui_state.rebuild()
 
+
 async def _handle_voice_auto_stop(page: ft.Page, ui_state, result):
     ui_state.is_recording["value"] = False
     ui_state.is_transcribing["value"] = True
@@ -298,8 +328,10 @@ async def _handle_voice_auto_stop(page: ft.Page, ui_state, result):
     ui_state.is_transcribing["value"] = False
     ui_state.rebuild()
 
+
 async def _update_timer(page: ft.Page, ui_state):
     import asyncio
+
     while ui_state.is_recording["value"]:
         await asyncio.sleep(1)
         if ui_state.is_recording["value"]:
@@ -309,6 +341,7 @@ async def _update_timer(page: ft.Page, ui_state):
                     f"00:{ui_state.recording_time['value']:02d} / 01:00"
                 )
                 page.update(ui_state.recording_timer_ref.current)
+
 
 async def on_voice_toggle(page: ft.Page, ui_state):
     if ui_state.is_recording["value"]:
@@ -328,13 +361,16 @@ async def on_voice_toggle(page: ft.Page, ui_state):
         ui_state.rebuild()
     else:
         started = await ui_state.audio_svc.start_recording(
-            on_auto_stop=lambda res: page.run_task(_handle_voice_auto_stop, page, ui_state, res)
+            on_auto_stop=lambda res: page.run_task(
+                _handle_voice_auto_stop, page, ui_state, res
+            )
         )
         if started:
             ui_state.is_recording["value"] = True
             ui_state.recording_time["value"] = 0
             ui_state.rebuild()
             page.run_task(_update_timer, page, ui_state)
+
 
 async def on_delete_report(page: ft.Page, ui_state, report_id: str, report_service):
     if report_service:
