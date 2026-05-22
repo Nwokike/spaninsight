@@ -59,6 +59,10 @@ class StorageService:
             logger.info("StorageService: running on native — using local file")
             self._load()
 
+        if self._data.get("schema_version") != "1.0":
+            self._data["schema_version"] = "1.0"
+            self._schedule_write()
+
     # ── Web/Pyodide helpers ──────────────────────────────────────────
 
     def _load_web(self) -> None:

@@ -191,7 +191,7 @@ async def main(page: ft.Page):
 
     # ── Gateway Health Check (I8) + Version Check (P9) ──────────
     async def _startup_checks():
-        from services import ai_service
+        from services import ai as ai_service
 
         state.gateway_online = await ai_service.check_health()
         if not state.gateway_online:
@@ -373,7 +373,7 @@ async def main(page: ft.Page):
             nav_bar.selected_index = 2
 
         elif route == "/reports" or route == "/report":
-            from views.report_view import build_report_view
+            from views.reports import build_report_view
             from services.report_service import ReportService
 
             report_service = ReportService(storage)

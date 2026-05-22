@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import flet as ft
-
+import numpy as np
+import pandas as pd
 from core import tokens
 from core.constants import DATA_PREVIEW_ROWS
 
@@ -97,8 +98,6 @@ def build_data_preview(df) -> ft.Column:
 def _format_cell(value) -> str:
     """Format a cell value for display."""
     # P2: imports moved to module level — avoid 500+ lookups per preview
-    import numpy as np
-    import pandas as pd
 
     # C4: Guard against 0-d numpy arrays (e.g. np.float64(3.14))
     if isinstance(value, np.ndarray):

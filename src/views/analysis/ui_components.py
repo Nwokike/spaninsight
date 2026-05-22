@@ -25,6 +25,13 @@ def build_chart_container(block: dict) -> ft.Container | None:
 
 def build_text_output_container(result_val, stdout_val) -> ft.Container | None:
     import pandas as pd
+    import numpy as np
+
+    if isinstance(result_val, (np.ndarray, pd.Index, list)):
+        try:
+            result_val = pd.DataFrame(result_val)
+        except Exception:
+            pass
 
     if isinstance(result_val, pd.DataFrame):
         if not result_val.empty:

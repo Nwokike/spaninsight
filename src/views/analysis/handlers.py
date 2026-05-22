@@ -8,7 +8,7 @@ from core.state import state
 from core.constants import COST_SUGGEST, COST_CUSTOM_PROMPT, COST_AUTOPILOT
 from core import theme
 from core.utils import figure_to_png_bytes
-from services import ai_service, file_service, sandbox
+from services import ai as ai_service, file_service, sandbox
 from services.file_service import FileValidationError
 from views.analysis.state import AnalysisState
 
@@ -55,6 +55,8 @@ async def process_file(view_state: AnalysisState, file):
     await asyncio.sleep(0.1)
 
     try:
+        import matplotlib.pyplot as plt
+        plt.close("all")
         df = await asyncio.to_thread(file_service.load_dataframe, file.path)
         state.set_dataframe(df, file.name)
         state.current_file_path = file.path
@@ -225,7 +227,7 @@ async def on_suggestion_selected(view_state: AnalysisState, prompt: str, is_auto
             figure_png = None
             if result.get("figure"):
                 try:
-                    figure_png = figure_to_png_bytes(result["figure"])
+                    figure_png = await asyncio.to_thread(figure_to_png_bytes, result["figure"])
                 except Exception:
                     pass
 
@@ -319,7 +321,7 @@ async def on_rerun_code(view_state: AnalysisState, block_index: int, new_code: s
         block["figure"] = result["figure"]
         try:
             block["figure_png"] = (
-                figure_to_png_bytes(result["figure"]) if result["figure"] else None
+                await asyncio.to_thread(figure_to_png_bytes, result["figure"]) if result["figure"] else None
             )
         except Exception:
             pass
@@ -469,7 +471,7 @@ async def run_autopilot(view_state: AnalysisState):
             figure_png = None
             if result.get("figure"):
                 try:
-                    figure_png = figure_to_png_bytes(result["figure"])
+                    figure_png = await asyncio.to_thread(figure_to_png_bytes, result["figure"])
                 except Exception:
                     pass
 
@@ -648,34 +650,34 @@ def on_pin_block(view_state: AnalysisState, index: int):
     import base64
     from core.utils import figure_to_png_bytes
 
-    png_b64 = ""
-    if block.get("figure_png"):
-        png_b64 = base64.b64encode(block["figure_png"]).decode("utf-8")
-    elif block.get("figure"):
-        try:
-            png_bytes = figure_to_png_bytes(block["figure"], dpi=150)
-            png_b64 = base64.b64encode(png_bytes).decode("utf-8")
-        except Exception:
-            pass
-
-    report_block = {
-        "prompt": block.get("prompt", "Data Overview"),
-        "description": block.get("description", ""),
-        "figure_png_b64": png_b64,
-        "block_type": "chart" if png_b64 else "text",
-    }
-
-    block["pinned"] = True
-    state.charts.append(
-        {
-            "prompt": block.get("prompt", "Data Overview"),
-            "figure": block.get("figure"),
-            "figure_png": block.get("figure_png"),
-            "description": block.get("description", ""),
-        }
-    )
-
     async def _pin_to_report(report_id=None):
+        png_b64 = ""
+        if block.get("figure_png"):
+            png_b64 = base64.b64encode(block["figure_png"]).decode("utf-8")
+        elif block.get("figure"):
+            try:
+                png_bytes = await asyncio.to_thread(figure_to_png_bytes, block["figure"], 150)
+                png_b64 = base64.b64encode(png_bytes).decode("utf-8")
+            except Exception:
+                pass
+
+        report_block = {
+            "prompt": block.get("prompt", "Data Overview"),
+            "description": block.get("description", ""),
+            "figure_png_b64": png_b64,
+            "block_type": "chart" if png_b64 else "text",
+        }
+
+        block["pinned"] = True
+        state.charts.append(
+            {
+                "prompt": block.get("prompt", "Data Overview"),
+                "figure": block.get("figure"),
+                "figure_png": block.get("figure_png"),
+                "description": block.get("description", ""),
+            }
+        )
+
         if not view_state.report_service:
             view_state.page.snack_bar = ft.SnackBar(ft.Text("Report service unavailable"), duration=2000)
             view_state.page.snack_bar.open = True

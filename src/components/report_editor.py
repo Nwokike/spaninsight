@@ -26,8 +26,8 @@ def build_report_block_card(
     if block.get("figure_png_b64"):
         chart_widget = ft.Container(
             content=ft.Image(
-                src_base64=block["figure_png_b64"],
-                fit=ft.ImageFit.CONTAIN,
+                src=f"data:image/png;base64,{block['figure_png_b64']}",
+                fit="contain",
                 expand=True,
             ),
             height=240,

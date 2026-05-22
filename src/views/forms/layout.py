@@ -7,7 +7,7 @@ import flet as ft
 from core import theme
 from core.state import state
 from components.form_editor import build_form_editor
-from services import ai_service, forms_service
+from services import ai as ai_service, forms_service
 from services.audio_service import AudioService
 
 from .state import FormsState
