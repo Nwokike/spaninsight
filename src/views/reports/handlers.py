@@ -208,7 +208,8 @@ def on_import(page: ft.Page, ui_state):
             "block_type": "chart" if png_b64 else "text",
         }
         ui_state.editor_blocks.append(new_block)
-        page.close(dlg)
+        dlg.open = False
+        page.update()
         ui_state.rebuild()
         page.snack_bar = ft.SnackBar(ft.Text("Block imported!"), duration=2000)
         page.snack_bar.open = True
@@ -253,6 +254,10 @@ def on_import(page: ft.Page, ui_state):
             )
         )
 
+    def _close_dlg(e=None):
+        dlg.open = False
+        page.update()
+
     dlg = ft.AlertDialog(
         title=ft.Text("Import from Analysis"),
         content=ft.Container(
@@ -261,10 +266,12 @@ def on_import(page: ft.Page, ui_state):
             height=400,
         ),
         actions=[
-            ft.TextButton("Cancel", on_click=lambda e: page.close(dlg)),
+            ft.TextButton("Cancel", on_click=_close_dlg),
         ],
     )
-    page.open(dlg)
+    page.dialog = dlg
+    dlg.open = True
+    page.update()
 
 
 async def on_ai_edit(page: ft.Page, ui_state, action: str, text: str):
