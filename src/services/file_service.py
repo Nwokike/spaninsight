@@ -35,7 +35,7 @@ def validate_file(file_path: str) -> None:
     if ext not in ALLOWED_EXTENSIONS:
         raise FileValidationError(
             f"Unsupported file type: '{ext}'. "
-            f"Please use CSV, Excel, JSON, or XML files ({', '.join(ALLOWED_EXTENSIONS)})."
+            f"Please use CSV, Excel, JSON, XML, STATA, or SAS files ({', '.join(ALLOWED_EXTENSIONS)})."
         )
 
     # Check size
@@ -99,6 +99,12 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
         elif ext == ".xml":
             # NATIVE PARSING: Parse XML natively using Python's built-in etree parser
             df = pd.read_xml(file_path, parser="etree")
+        elif ext == ".dta":
+            # NATIVE PARSING: Parse STATA natively using pandas read_stata
+            df = pd.read_stata(file_path)
+        elif ext in {".sas7bdat", ".xport"}:
+            # NATIVE PARSING: Parse SAS natively using pandas read_sas
+            df = pd.read_sas(file_path)
         else:
             raise FileValidationError(f"Unsupported format: {ext}")
 

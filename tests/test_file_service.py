@@ -81,6 +81,21 @@ def test_load_dataframe_xml_success():
         os.remove(temp_name)
 
 
+def test_load_dataframe_stata_success():
+    df_orig = pd.DataFrame({"X": [10, 30], "Y": [20, 40]})
+    with tempfile.NamedTemporaryFile(suffix=".dta", delete=False) as f:
+        temp_name = f.name
+
+    try:
+        df_orig.to_stata(temp_name, write_index=False)
+        df = load_dataframe(temp_name)
+        assert len(df) == 2
+        assert list(df.columns) == ["X", "Y"]
+        assert df.iloc[0]["X"] == 10
+    finally:
+        os.remove(temp_name)
+
+
 def test_get_data_summary():
     df = pd.DataFrame(
         {"Num": [1.5, 2.5, 3.5, None], "Cat": ["apple", "banana", "apple", "cherry"]}

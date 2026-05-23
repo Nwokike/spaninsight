@@ -46,7 +46,7 @@ def build_file_import_card(
                     alignment=ft.Alignment.CENTER,
                 ),
                 ft.Text(
-                    "Import CSV, Excel, JSON, or XML",
+                    "Import Dataset Files",
                     size=tokens.FONT_LG,
                     weight=ft.FontWeight.W_600,
                 ),
@@ -74,7 +74,7 @@ def build_file_import_card(
                             border_radius=tokens.RADIUS_SM,
                             bgcolor=ft.Colors.with_opacity(0.1, theme.ACCENT),
                         )
-                        for ext in [".csv", ".xlsx", ".json", ".xml"]
+                        for ext in [".csv", ".xlsx", ".json", ".xml", ".dta", ".sas7bdat"]
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     spacing=tokens.SPACE_SM,
