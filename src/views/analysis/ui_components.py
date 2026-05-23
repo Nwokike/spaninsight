@@ -119,9 +119,11 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                 )
             
             # Wrap metric cards in a responsive row
+            for c in metric_cards:
+                c.col = {"xs": 6, "sm": 4, "md": 3}
             controls.append(
                 ft.ResponsiveRow(
-                    [ft.col({"xs": 6, "sm": 4, "md": 3}, controls=c) for c in metric_cards],
+                    metric_cards,
                     spacing=8,
                     run_spacing=8,
                 )
