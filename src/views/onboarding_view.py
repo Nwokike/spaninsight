@@ -25,6 +25,12 @@ def build_onboarding_view(page: ft.Page, on_done: Callable, storage=None) -> ft.
     indicator_row = ft.Ref[ft.Row]()
     slide_container = ft.Ref[ft.Container]()
 
+    async def _launch_privacy(e):
+        await ft.UrlLauncher().launch_url("https://spaninsight.com/privacy.html")
+
+    async def _launch_terms(e):
+        await ft.UrlLauncher().launch_url("https://spaninsight.com/terms.html")
+
     slides = [
         {
             "icon": ft.Icons.SHIELD_ROUNDED,
@@ -100,29 +106,46 @@ def build_onboarding_view(page: ft.Page, on_done: Callable, storage=None) -> ft.
             )
         return dots
 
+    agree_checkbox_ref = ft.Ref[ft.Checkbox]()
+    agree_container_ref = ft.Ref[ft.Container]()
+
+    def on_agree_changed(e):
+        if button_ref.current:
+            button_ref.current.disabled = not e.control.value
+            page.update(button_ref.current)
+
     button_ref = ft.Ref[ft.FilledButton]()
 
     def _update():
+        is_last = current_page["index"] == len(slides) - 1
         if slide_container.current:
             slide_container.current.content = _build_slide(
                 slides[current_page["index"]]
             )
         if indicator_row.current:
             indicator_row.current.controls = _build_indicators()
+        if agree_container_ref.current:
+            agree_container_ref.current.visible = is_last
         if button_ref.current:
-            is_last = current_page["index"] == len(slides) - 1
             button_ref.current.content = "Get Started" if is_last else "Next"
             button_ref.current.icon = (
                 ft.Icons.CHECK_ROUNDED if is_last else ft.Icons.ARROW_FORWARD_ROUNDED
             )
+            # Disable button on last slide if checkbox is unchecked
+            button_ref.current.disabled = is_last and not (
+                agree_checkbox_ref.current and agree_checkbox_ref.current.value
+            )
         page.update()
 
     def on_next(e):
-        if current_page["index"] < len(slides) - 1:
+        is_last = current_page["index"] == len(slides) - 1
+        if is_last:
+            if agree_checkbox_ref.current and not agree_checkbox_ref.current.value:
+                return
+            page.run_task(_finish)
+        else:
             current_page["index"] += 1
             _update()
-        else:
-            page.run_task(_finish)
 
     def on_prev(e=None):
         if current_page["index"] > 0:
@@ -180,7 +203,36 @@ def build_onboarding_view(page: ft.Page, on_done: Callable, storage=None) -> ft.
                         alignment="center",
                         spacing=6,
                     ),
-                    ft.Container(height=24),
+                    ft.Container(height=20),
+                    # Agreement check row
+                    ft.Container(
+                        ref=agree_container_ref,
+                        content=ft.Row(
+                            [
+                                ft.Checkbox(
+                                    ref=agree_checkbox_ref,
+                                    on_change=on_agree_changed,
+                                    value=False,
+                                ),
+                                ft.Text("I agree to the ", size=12),
+                                ft.TextButton(
+                                    "Privacy Policy",
+                                    style=ft.ButtonStyle(color=theme.PRIMARY),
+                                    on_click=_launch_privacy,
+                                ),
+                                ft.Text(" & ", size=12),
+                                ft.TextButton(
+                                    "Terms of Service",
+                                    style=ft.ButtonStyle(color=theme.PRIMARY),
+                                    on_click=_launch_terms,
+                                ),
+                            ],
+                            alignment="center",
+                            spacing=0,
+                        ),
+                        visible=False,
+                    ),
+                    ft.Container(height=16),
                     ft.Container(
                         content=ft.FilledButton(
                             "Get Started" if is_last else "Next",

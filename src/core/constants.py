@@ -41,7 +41,6 @@ DAILY_FREE_CREDITS = 50
 COST_SUGGEST = 1
 COST_CUSTOM_PROMPT = 3
 COST_AUTOPILOT = 15
-REFERRAL_BONUS_DAILY = 10
 
 # ── Sandbox Security ────────────────────────────────────────────────
 BLOCKED_TERMS = [
@@ -125,8 +124,6 @@ SANDBOX_TIMEOUT_SEC = 10
 STORAGE_UUID = "spaninsight_uuid"
 STORAGE_THEME = "spaninsight.theme"
 STORAGE_CREDITS = "spaninsight_credits"
-STORAGE_BONUS_CREDITS = "spaninsight_bonus_credits"
 STORAGE_LAST_RESET = "spaninsight_last_reset"
-STORAGE_REFERRAL_CODE = "spaninsight_referral_code"
 STORAGE_ONBOARDING_DONE = "spaninsight_onboarding_done"
 STORAGE_REPORTS = "spaninsight_reports"

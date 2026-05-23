@@ -1,9 +1,8 @@
-"""Settings view — UUID backup, credits, theme, pro tease."""
+"""Settings view — project-centric workspace and device config."""
 
 from __future__ import annotations
 
 import logging
-
 import flet as ft
 
 from core import theme, tokens
@@ -12,13 +11,10 @@ from core.constants import (
     STORAGE_THEME,
     STORAGE_UUID,
     STORAGE_CREDITS,
-    STORAGE_BONUS_CREDITS,
     STORAGE_LAST_RESET,
-    STORAGE_REFERRAL_CODE,
 )
 from core.styles import section_header, setting_tile
 from components.brand_header import build_brand_header
-import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -32,39 +28,24 @@ def build_settings_view(
     """Build the Settings tab view."""
 
     def show_dialog(dialog):
-        page.overlay.append(dialog)
-        dialog.open = True
-        page.update()
+        page.show_dialog(dialog)
 
     async def close_dialog_helper(dialog):
-        dialog.open = False
-        page.update()
-        await asyncio.sleep(0.1)
-        if dialog in page.overlay:
-            page.overlay.remove(dialog)
-            page.update()
+        page.pop_dialog()
 
     async def on_copy_uuid(e):
         user_uuid = await uuid_service.get_uuid()
         if user_uuid:
-            await page.clipboard.set(user_uuid)
+            await ft.Clipboard().set(user_uuid)
             page.snack_bar = ft.SnackBar(
-                content=ft.Text("UUID copied to clipboard"),
+                content=ft.Text("Device ID copied to clipboard"),
                 duration=2000,
             )
             page.snack_bar.open = True
             page.update()
 
-    async def on_copy_phrase(e):
-        phrase = await uuid_service.get_backup_phrase()
-        if phrase:
-            await page.clipboard.set(phrase)
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Backup phrase copied!"),
-                duration=2000,
-            )
-            page.snack_bar.open = True
-            page.update()
+    async def on_launch_privacy(e):
+        await ft.UrlLauncher().launch_url("https://spaninsight.com/privacy.html")
 
     async def on_theme_changed(e):
         mode = e.control.value
@@ -92,19 +73,20 @@ def build_settings_view(
                         STORAGE_UUID,
                         STORAGE_THEME,
                         STORAGE_CREDITS,
-                        STORAGE_BONUS_CREDITS,
                         STORAGE_LAST_RESET,
-                        STORAGE_REFERRAL_CODE,
+                        "spaninsight_projects",
+                        "spaninsight_active_project_id",
                     ]:
                         try:
                             await storage.delete(key)
                         except Exception:
                             pass
                     state.clear_data()
+                    state.user_projects = {}
                     state.credits_remaining = 50
                     state.user_uuid = ""
                     page.snack_bar = ft.SnackBar(
-                        content=ft.Text("All local data cleared."),
+                        content=ft.Text("All local database & project data cleared."),
                         duration=2000,
                     )
                     page.snack_bar.open = True
@@ -113,13 +95,10 @@ def build_settings_view(
             return _close
 
         dialog = ft.AlertDialog(
-            title=ft.Text("Clear All Data?"),
+            title=ft.Text("Clear All Local Data?"),
             content=ft.Text(
-                "This will delete your local UUID, credits, and settings. "
-                "While your secure cloud-side backup registration remains active, "
-                "you MUST have your 12-word recovery seed phrase saved to restore "
-                "your account and credits. Without it, your account and credits "
-                "CANNOT be recovered!\n\n"
+                "This will permanently delete all your local project workspaces, "
+                "AI analysis recipes, saved reports, survey forms, daily credits, and settings.\n\n"
                 "Are you sure you want to proceed?"
             ),
             actions=[
@@ -133,121 +112,14 @@ def build_settings_view(
         )
         show_dialog(dialog)
 
-    async def _share_invite(e):
-        """Share the user's invite code (first 8 chars of UUID)."""
-        invite_code = state.user_uuid[:8] if state.user_uuid else ""
-        if invite_code:
-            await page.clipboard.set(invite_code)
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Invite code copied: {invite_code}"),
-                duration=3000,
-            )
-            page.snack_bar.open = True
-            page.update()
-
-    async def _enter_referral_code(e):
-        """Prompt for a friend's invite code and apply the referral bonus."""
-        code_field = ft.Ref[ft.TextField]()
-
-        async def _apply(ev):
-            code = code_field.current.value.strip() if code_field.current else ""
-            if not code or len(code) < 6:
-                page.snack_bar = ft.SnackBar(
-                    ft.Text("Code must be at least 6 characters."),
-                    duration=3000,
-                )
-                page.snack_bar.open = True
-                page.update()
-                return
-            # Register referral via gateway
-            try:
-                from core.constants import API_BASE_URL
-                from services.api_client import request_with_retry
-
-                resp = await request_with_retry(
-                    "POST",
-                    f"{API_BASE_URL}/referrals",
-                    json={
-                        "referrer_uuid": code,
-                        "referred_uuid": state.user_uuid,
-                    },
-                    timeout=10.0,
-                )
-                if resp.status_code == 201:
-                    new_cap = await credit_service.add_referral_bonus()
-                    state.credits_remaining = await credit_service.get_balance()
-                    page.snack_bar = ft.SnackBar(
-                        ft.Text(f"Bonus applied! Daily cap now {new_cap}"),
-                        duration=3000,
-                    )
-                elif resp.status_code == 409:
-                    page.snack_bar = ft.SnackBar(
-                        ft.Text("Already used this code."),
-                        duration=3000,
-                    )
-                else:
-                    page.snack_bar = ft.SnackBar(
-                        ft.Text("Invalid code. Try again."),
-                        duration=3000,
-                    )
-            except Exception:
-                page.snack_bar = ft.SnackBar(
-                    ft.Text("Network error. Try again."),
-                    duration=3000,
-                )
-
-            await close_dialog_helper(dialog)
-            page.snack_bar.open = True
-            page.update()
-
-        async def _cancel(ev):
-            await close_dialog_helper(dialog)
-
-        dialog = ft.AlertDialog(
-            title=ft.Text("Enter Invite Code"),
-            content=ft.TextField(
-                ref=code_field,
-                hint_text="Paste a friend's invite code",
-                border_radius=tokens.RADIUS_MD,
-            ),
-            actions=[
-                ft.TextButton("Cancel", on_click=_cancel),
-                ft.FilledButton(
-                    "Apply",
-                    on_click=lambda ev: page.run_task(_apply, ev),
-                ),
-            ],
-        )
-        show_dialog(dialog)
-
-    phrase_subtitle = ft.Text(
-        "Copy your recovery phrase",
-        size=tokens.FONT_XS,
-        color=ft.Colors.ON_SURFACE_VARIANT,
-    )
-
-    async def check_sync_status():
-        is_synced = await uuid_service.is_synced()
-        if not is_synced:
-            # Try syncing once more when they visit settings
-            synced = await uuid_service.sync_pending_uuid()
-            if synced:
-                phrase_subtitle.value = "Copy your recovery phrase (Synced)"
-                phrase_subtitle.color = theme.SUCCESS
-            else:
-                phrase_subtitle.value = "⚠️ Backup phrase NOT synced to cloud!"
-                phrase_subtitle.color = theme.ERROR
-        else:
-            phrase_subtitle.value = "Copy your recovery phrase (Synced)"
-            phrase_subtitle.color = theme.SUCCESS
-        try:
-            phrase_subtitle.update()
-        except Exception:
-            pass
-
-    page.run_task(check_sync_status)
-
     masked_uuid = uuid_service.get_masked_uuid(state.user_uuid)
+
+    # Project Workspace display details
+    active_title = state.active_project.get("title", "My Workspace")
+    is_local = state.active_project_id.startswith("loc_")
+    display_pin = (
+        "Local Only (Offline)" if is_local else f"PIN: {state.active_project_id}"
+    )
 
     # Theme dropdown value
     current_theme = "light"
@@ -258,58 +130,35 @@ def build_settings_view(
 
     content = ft.Column(
         controls=[
-            # ── Account Section ─────────────────────────────────
-            section_header("Account"),
+            # ── Project Workspace Section ──────────────────────────────
+            section_header("Active Workspace"),
+            setting_tile(
+                icon=ft.Icons.WORKSPACES_ROUNDED,
+                title="Current Project",
+                subtitle=active_title,
+            ),
+            setting_tile(
+                icon=ft.Icons.LOCK_ROUNDED if is_local else ft.Icons.PEOPLE_ROUNDED,
+                title="Connection Mode",
+                subtitle=display_pin,
+            ),
+            # ── Device & Credits Section ───────────────────────────────
+            section_header("Device & AI Credits"),
             setting_tile(
                 icon=ft.Icons.FINGERPRINT_ROUNDED,
-                title="Your ID",
+                title="Device ID",
                 subtitle=masked_uuid,
                 trailing=ft.IconButton(
                     icon=ft.Icons.COPY_ROUNDED,
                     icon_size=tokens.ICON_MD,
-                    tooltip="Copy full UUID",
+                    tooltip="Copy Device ID",
                     on_click=lambda e: page.run_task(on_copy_uuid, e),
                 ),
             ),
             setting_tile(
-                icon=ft.Icons.KEY_ROUNDED,
-                title="Backup Phrase",
-                subtitle=phrase_subtitle,
-                trailing=ft.IconButton(
-                    icon=ft.Icons.COPY_ALL_ROUNDED,
-                    icon_size=tokens.ICON_MD,
-                    tooltip="Copy phrase",
-                    on_click=lambda e: page.run_task(on_copy_phrase, e),
-                ),
-            ),
-            # ── Credits Section ─────────────────────────────────
-            section_header("Credits"),
-            setting_tile(
                 icon=ft.Icons.BOLT_ROUNDED,
                 title="Daily Credits",
                 subtitle=f"{state.credits_remaining} remaining today",
-            ),
-            setting_tile(
-                icon=ft.Icons.PEOPLE_ROUNDED,
-                title="Invite Friends",
-                subtitle="Get +10 daily credits per referral",
-                trailing=ft.IconButton(
-                    icon=ft.Icons.SHARE_ROUNDED,
-                    icon_size=tokens.ICON_MD,
-                    tooltip="Share invite code",
-                    on_click=lambda e: page.run_task(_share_invite, e),
-                ),
-            ),
-            setting_tile(
-                icon=ft.Icons.CARD_GIFTCARD_ROUNDED,
-                title="Enter Invite Code",
-                subtitle="Paste a friend's code to unlock bonus credits",
-                trailing=ft.IconButton(
-                    icon=ft.Icons.INPUT_ROUNDED,
-                    icon_size=tokens.ICON_MD,
-                    tooltip="Enter code",
-                    on_click=lambda e: page.run_task(_enter_referral_code, e),
-                ),
             ),
             # ── Appearance Section ──────────────────────────────
             section_header("Appearance"),
@@ -351,11 +200,11 @@ def build_settings_view(
                 ),
             ),
             # ── Data Section ────────────────────────────────────
-            section_header("Data"),
+            section_header("Data Management"),
             setting_tile(
                 icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-                title="Clear All Local Data",
-                subtitle="Remove UUID, credits, and cached data",
+                title="Wipe Local Database & Projects",
+                subtitle="Reset device ID, credits, and workspaces",
                 on_click=lambda e: page.run_task(on_clear_data, e),
             ),
             # ── Pro Tier Tease ──────────────────────────────────
@@ -429,7 +278,7 @@ def build_settings_view(
                 icon=ft.Icons.PRIVACY_TIP_OUTLINED,
                 title="Privacy Policy",
                 subtitle="Read our 100% privacy commitment",
-                on_click=lambda e: page.run_task(page.launch_url, "https://spaninsight.com/privacy.html"),
+                on_click=on_launch_privacy,
             ),
             ft.Container(height=tokens.SPACE_XL),
             ft.Container(

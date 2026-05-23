@@ -31,39 +31,212 @@ def build_chart_container(block: dict) -> ft.Container | None:
         return None
 
 
-def build_text_output_container(result_val, stdout_val) -> ft.Container | None:
+def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
     import pandas as pd
+    import numpy as np
 
+    if result_val is None:
+        if not stdout_val or not str(stdout_val).strip() or str(stdout_val).strip() == "None":
+            return None
+        # Monospace terminal block for stdout
+        return ft.Container(
+            content=ft.Text(
+                str(stdout_val).strip(),
+                size=11,
+                font_family="RobotoMono",
+                color="#E0E0E0"
+            ),
+            padding=12,
+            bgcolor="#0D0D1A",
+            border_radius=8,
+            border=ft.Border.all(1, "#1A1A2E"),
+        )
+
+    # 1. Handle Pandas DataFrame
     if isinstance(result_val, pd.DataFrame):
         if not result_val.empty:
-            return ft.Container(
-                content=build_data_preview(result_val),
-                padding=ft.Padding(0, 10, 0, 10),
-            )
-        result_val = "Empty DataFrame"
-    elif isinstance(result_val, pd.Series):
+            return build_data_preview(result_val)
+        return ft.Text("Empty DataFrame", size=12, italic=True)
+
+    # 2. Handle Pandas Series
+    if isinstance(result_val, pd.Series):
         if not result_val.empty:
-            return ft.Container(
-                content=build_data_preview(result_val.to_frame()),
-                padding=ft.Padding(0, 10, 0, 10),
+            return build_data_preview(result_val.to_frame())
+        return ft.Text("Empty Series", size=12, italic=True)
+
+    # 3. Handle Dictionary
+    if isinstance(result_val, dict):
+        primitives = {}
+        structures = {}
+        for k, v in result_val.items():
+            if isinstance(v, (int, float, str, bool)) or isinstance(v, np.number) or (isinstance(v, np.ndarray) and v.ndim == 0):
+                primitives[k] = v
+            else:
+                structures[k] = v
+
+        controls = []
+
+        # Render primitives as a beautiful metric grid
+        if primitives:
+            metric_cards = []
+            for k, v in primitives.items():
+                if isinstance(v, (float, np.floating)):
+                    val_str = f"{v:.4f}"
+                else:
+                    val_str = str(v)
+                
+                label_text = str(k).replace("_", " ").title()
+                
+                # Build a premium mini stat card
+                metric_cards.append(
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text(
+                                    label_text,
+                                    size=10,
+                                    color=ft.Colors.ON_SURFACE_VARIANT,
+                                    weight="w600",
+                                    max_lines=1,
+                                    overflow="ellipsis",
+                                ),
+                                ft.Text(
+                                    val_str,
+                                    size=18,
+                                    weight="bold",
+                                    color=theme.PRIMARY,
+                                ),
+                            ],
+                            spacing=2,
+                        ),
+                        padding=12,
+                        border_radius=8,
+                        bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.ON_SURFACE),
+                        border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                        expand=True,
+                        min_width=120,
+                    )
+                )
+            
+            # Wrap metric cards in a responsive row
+            controls.append(
+                ft.ResponsiveRow(
+                    [ft.col({"xs": 6, "sm": 4, "md": 3}, controls=c) for c in metric_cards],
+                    spacing=8,
+                    run_spacing=8,
+                )
             )
-        result_val = "Empty Series"
 
-    output_text = str(result_val) if result_val is not None else ""
-    if not output_text or output_text.strip() == "None":
-        output_text = str(stdout_val) if stdout_val is not None else ""
+        # Render structures recursively
+        if structures:
+            for k, v in structures.items():
+                label_text = str(k).replace("_", " ").title()
+                sub_visualizer = build_result_visualizer(v, None)
+                if sub_visualizer:
+                    controls.append(
+                        ft.Column(
+                            [
+                                ft.Row(
+                                    [
+                                        ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=14, color=theme.ACCENT),
+                                        ft.Text(label_text, size=12, weight="bold", color=theme.ACCENT),
+                                    ],
+                                    spacing=6,
+                                    margin=ft.Margin(0, 4, 0, 2),
+                                ),
+                                sub_visualizer,
+                            ],
+                            spacing=4,
+                        )
+                    )
 
-    if not output_text or not output_text.strip() or output_text.strip() == "None":
+        if controls:
+            return ft.Column(controls, spacing=12)
+
+    # 4. Handle List or Numpy Array
+    if isinstance(result_val, (list, np.ndarray)):
+        # Check if list of dicts (render as dataframe)
+        if isinstance(result_val, list) and len(result_val) > 0 and all(isinstance(x, dict) for x in result_val):
+            try:
+                df = pd.DataFrame(result_val)
+                return build_data_preview(df)
+            except Exception:
+                pass
+
+        items = list(result_val)
+        if len(items) == 0:
+            return ft.Text("Empty list", size=12, italic=True)
+            
+        # If small list, render as a nice row of chips
+        if len(items) <= 12 and all(isinstance(x, (int, float, np.number)) for x in items):
+            chips = []
+            for x in items:
+                val_str = f"{x:.4f}" if isinstance(x, (float, np.floating)) else str(x)
+                chips.append(
+                    ft.Container(
+                        content=ft.Text(val_str, size=11, font_family="RobotoMono"),
+                        padding=ft.Padding(8, 4, 8, 4),
+                        border_radius=6,
+                        bgcolor=ft.Colors.with_opacity(0.06, theme.PRIMARY),
+                    )
+                )
+            return ft.Row(chips, spacing=4, wrap=True)
+        else:
+            arr_str = ", ".join(f"{x:.4f}" if isinstance(x, float) else str(x) for x in items[:50])
+            if len(items) > 50:
+                arr_str += f" ... (+{len(items) - 50} more items)"
+            return ft.Container(
+                content=ft.Text(
+                    arr_str,
+                    size=11,
+                    font_family="RobotoMono",
+                    color="#E0E0E0"
+                ),
+                padding=10,
+                bgcolor="#0D0D1A",
+                border_radius=8,
+            )
+
+    # 5. Primitive values
+    val_str = str(result_val).strip()
+    if not val_str or val_str == "None":
         return None
-
+        
     return ft.Container(
         content=ft.Text(
-            output_text, size=12, font_family="RobotoMono", color="#E0E0E0"
+            val_str, size=12, font_family="RobotoMono", color="#E0E0E0"
         ),
         padding=10,
         bgcolor="#0D0D1A",
         border_radius=8,
     )
+
+
+def build_text_output_container(result_val, stdout_val) -> ft.Container | None:
+    try:
+        visualizer = build_result_visualizer(result_val, stdout_val)
+        if not visualizer:
+            return None
+        return ft.Container(
+            content=visualizer,
+            padding=ft.Padding(0, 8, 0, 8),
+        )
+    except Exception as e:
+        logger.error("Failed to render native result beautifully: %s", e)
+        # Safe fallback
+        output_text = str(result_val) if result_val is not None else ""
+        if not output_text or output_text.strip() == "None":
+            output_text = str(stdout_val) if stdout_val is not None else ""
+        if not output_text or not output_text.strip() or output_text.strip() == "None":
+            return None
+        return ft.Container(
+            content=ft.Text(
+                output_text, size=12, font_family="RobotoMono", color="#E0E0E0"
+            ),
+            padding=10,
+            bgcolor="#0D0D1A",
+            border_radius=8,
+        )
 
 
 def build_terminal(
@@ -345,19 +518,16 @@ def build_block_card(
                 logger.error("Block 0 describe render failed: %s", ex)
 
     if not is_initial:
-        has_chart = False
         if block.get("figure_png"):
             chart_ui = build_chart_container(block)
             if chart_ui:
                 controls.append(chart_ui)
-                has_chart = True
 
-        if not has_chart:
-            text_ui = build_text_output_container(
-                block.get("result"), block.get("stdout")
-            )
-            if text_ui:
-                controls.append(text_ui)
+        text_ui = build_text_output_container(
+            block.get("result"), block.get("stdout")
+        )
+        if text_ui:
+            controls.append(text_ui)
 
     desc = block.get("description", "")
     controls.append(
@@ -431,7 +601,12 @@ def build_block_card(
                     style=ft.ButtonStyle(color=theme.WARNING),
                 )
             )
-        is_pinned = block.get("pinned", False)
+        is_pinned = any(
+            any(
+                b.get("source_block_id") == block.get("id") for b in r.get("blocks", [])
+            )
+            for r in state.user_reports
+        )
         if not is_failed:
             action_row.append(
                 ft.TextButton(
@@ -440,7 +615,6 @@ def build_block_card(
                     if is_pinned
                     else ft.Icons.PUSH_PIN_OUTLINED,
                     on_click=lambda e, idx=index: on_pin_block(view_state, idx),
-                    disabled=is_pinned,
                     style=ft.ButtonStyle(
                         color=theme.SUCCESS if is_pinned else theme.PRIMARY
                     ),
@@ -484,8 +658,18 @@ def build_skeleton_loader() -> ft.Container:
             # Header Row Placeholder
             ft.Row(
                 [
-                    ft.Container(width=16, height=16, border_radius=8, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Container(width=140, height=12, border_radius=4, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Container(
+                        width=16,
+                        height=16,
+                        border_radius=8,
+                        bgcolor=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                    ft.Container(
+                        width=140,
+                        height=12,
+                        border_radius=4,
+                        bgcolor=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
                 ],
                 spacing=8,
             ),
@@ -493,9 +677,24 @@ def build_skeleton_loader() -> ft.Container:
             ft.Container(
                 content=ft.Column(
                     [
-                        ft.Container(height=10, width=280, border_radius=3, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
-                        ft.Container(height=10, width=240, border_radius=3, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
-                        ft.Container(height=10, width=160, border_radius=3, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Container(
+                            height=10,
+                            width=280,
+                            border_radius=3,
+                            bgcolor=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Container(
+                            height=10,
+                            width=240,
+                            border_radius=3,
+                            bgcolor=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Container(
+                            height=10,
+                            width=160,
+                            border_radius=3,
+                            bgcolor=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
                     ],
                     spacing=6,
                 ),
@@ -506,7 +705,12 @@ def build_skeleton_loader() -> ft.Container:
             # Footer Action Placeholders
             ft.Row(
                 [
-                    ft.Container(width=60, height=12, border_radius=3, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Container(
+                        width=60,
+                        height=12,
+                        border_radius=3,
+                        bgcolor=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
                 ],
                 alignment=ft.MainAxisAlignment.END,
             ),
@@ -532,14 +736,21 @@ def build_skeleton_loader() -> ft.Container:
 def build_db_import_card(view_state: AnalysisState) -> ft.Container:
     """Build a premium, glassmorphic Database Connection Card."""
     import asyncio
+
     url_field = ft.Ref[ft.TextField]()
 
     # Dialects config
     dialects = {
         "sqlite": ("SQLite", "sqlite:///C:/path/to/database.db"),
-        "postgres": ("PostgreSQL", "postgresql+psycopg2://username:password@localhost:5432/dbname"),
+        "postgres": (
+            "PostgreSQL",
+            "postgresql+psycopg2://username:password@localhost:5432/dbname",
+        ),
         "mysql": ("MySQL", "mysql+mysqldb://username:password@localhost:3306/dbname"),
-        "mssql": ("SQL Server", "mssql+pyodbc://username:password@localhost:1433/dbname?driver=ODBC+Driver+17+for+SQL+Server"),
+        "mssql": (
+            "SQL Server",
+            "mssql+pyodbc://username:password@localhost:1433/dbname?driver=ODBC+Driver+17+for+SQL+Server",
+        ),
     }
 
     # If empty url, pre-fill with sqlite default
@@ -569,6 +780,7 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
         view_state.rebuild()
 
         from services.db_service import DatabaseService
+
         success, msg = await asyncio.to_thread(
             DatabaseService.test_connection, view_state.db_url
         )
@@ -581,7 +793,7 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
             view_state.db_tables = tables
         else:
             view_state.db_test_status = f"failed: {msg}"
-            
+
         view_state.rebuild()
 
     def _on_table_selected(e):
@@ -591,8 +803,12 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
     def _on_import(e):
         if view_state.db_url and view_state.db_selected_table:
             from views.analysis.handlers import process_db_table
+
             view_state.page.run_task(
-                process_db_table, view_state, view_state.db_url, view_state.db_selected_table
+                process_db_table,
+                view_state,
+                view_state.db_url,
+                view_state.db_selected_table,
             )
 
     # Build Test status feedback
@@ -601,7 +817,11 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
         status_indicator = ft.Row(
             [
                 ft.ProgressRing(width=14, height=14, stroke_width=2),
-                ft.Text("Testing database link...", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                ft.Text(
+                    "Testing database link...",
+                    size=11,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
             ],
             spacing=8,
         )
@@ -609,7 +829,12 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
         status_indicator = ft.Row(
             [
                 ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED, color=theme.SUCCESS, size=16),
-                ft.Text("Connected successfully!", size=11, color=theme.SUCCESS, weight="bold"),
+                ft.Text(
+                    "Connected successfully!",
+                    size=11,
+                    color=theme.SUCCESS,
+                    weight="bold",
+                ),
             ],
             spacing=8,
         )
@@ -618,7 +843,14 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
         status_indicator = ft.Row(
             [
                 ft.Icon(ft.Icons.CANCEL_ROUNDED, color=theme.ERROR, size=16),
-                ft.Text(err, size=11, color=theme.ERROR, expand=True, max_lines=2, overflow="ellipsis"),
+                ft.Text(
+                    err,
+                    size=11,
+                    color=theme.ERROR,
+                    expand=True,
+                    max_lines=2,
+                    overflow="ellipsis",
+                ),
             ],
             spacing=8,
             expand=True,
@@ -627,7 +859,10 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
     # Dialect dropdown
     dialect_dd = ft.Dropdown(
         label="SQL Dialect",
-        value=next((k for k, v in dialects.items() if view_state.db_url.startswith(k)), "sqlite"),
+        value=next(
+            (k for k, v in dialects.items() if view_state.db_url.startswith(k)),
+            "sqlite",
+        ),
         options=[ft.DropdownOption(key=k, text=v[0]) for k, v in dialects.items()],
         on_select=_on_dialect_changed,
         border_radius=12,
@@ -661,7 +896,9 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
     # Tables Dropdown
     table_dd = ft.Dropdown(
         label="Select Table",
-        value=view_state.db_selected_table if view_state.db_selected_table in view_state.db_tables else None,
+        value=view_state.db_selected_table
+        if view_state.db_selected_table in view_state.db_tables
+        else None,
         options=[ft.DropdownOption(key=t, text=t) for t in view_state.db_tables],
         disabled=(not view_state.db_tables),
         on_select=_on_table_selected,
@@ -693,8 +930,16 @@ def build_db_import_card(view_state: AnalysisState) -> ft.Container:
             ft.Container(height=4),
             dialect_dd,
             url_input,
-            ft.Row([test_btn, status_indicator], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, spacing=10),
-            ft.Divider(height=16, thickness=0.5, color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)),
+            ft.Row(
+                [test_btn, status_indicator],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                spacing=10,
+            ),
+            ft.Divider(
+                height=16,
+                thickness=0.5,
+                color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+            ),
             table_dd,
             ft.Row([import_btn], alignment=ft.MainAxisAlignment.END),
         ],

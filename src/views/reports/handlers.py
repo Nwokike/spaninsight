@@ -52,9 +52,7 @@ async def on_open_report(page: ft.Page, ui_state, report: dict, report_service):
                     if 0 <= orig_idx < len(ui_state.editor_blocks):
                         b = ui_state.editor_blocks[orig_idx].copy()
                         b["prompt"] = ai_block.get("prompt", b.get("prompt", ""))
-                        b["description"] = ai_block.get(
-                            "description", b.get("description", "")
-                        )
+                        # Retain original block-level description — AI auto-arranger should not touch it!
                         new_blocks.append(b)
                 if len(new_blocks) == len(ui_state.editor_blocks):
                     ui_state.editor_blocks.clear()
@@ -132,7 +130,7 @@ async def on_share(page: ft.Page, ui_state, report_service, ad_service):
                 ui_state.active_report["data"], state.user_uuid
             )
             if url:
-                await page.clipboard.set(url)
+                await ft.Clipboard().set(url)
                 page.snack_bar = ft.SnackBar(
                     content=ft.Row(
                         [
@@ -202,6 +200,7 @@ def on_import(page: ft.Page, ui_state):
                 pass
 
         new_block = {
+            "source_block_id": block.get("id"),
             "prompt": block.get("prompt", "Analysis"),
             "description": block.get("description", ""),
             "figure_png_b64": png_b64,
@@ -255,8 +254,7 @@ def on_import(page: ft.Page, ui_state):
         )
 
     def _close_dlg(e=None):
-        dlg.open = False
-        page.update()
+        page.pop_dialog()
 
     dlg = ft.AlertDialog(
         title=ft.Text("Import from Analysis"),
@@ -269,9 +267,7 @@ def on_import(page: ft.Page, ui_state):
             ft.TextButton("Cancel", on_click=_close_dlg),
         ],
     )
-    page.dialog = dlg
-    dlg.open = True
-    page.update()
+    page.show_dialog(dlg)
 
 
 async def on_ai_edit(page: ft.Page, ui_state, action: str, text: str):
@@ -380,6 +376,35 @@ async def on_voice_toggle(page: ft.Page, ui_state):
 
 
 async def on_delete_report(page: ft.Page, ui_state, report_id: str, report_service):
-    if report_service:
-        await report_service.delete_report(report_id)
-    on_back(page, ui_state, report_service)
+    from core import theme
+
+    def _close_dlg(e=None):
+        page.pop_dialog()
+
+    async def _confirm_delete(e=None):
+        _close_dlg()
+        if report_service:
+            await report_service.delete_report(report_id)
+        on_back(page, ui_state, report_service)
+
+    confirm_dlg = ft.AlertDialog(
+        title=ft.Text("Delete Report?"),
+        content=ft.Container(
+            content=ft.Text(
+                "Are you sure you want to permanently delete this report from your device? "
+                "This cannot be undone.",
+                size=13,
+            ),
+            width=340,
+        ),
+        actions=[
+            ft.TextButton("Cancel", on_click=_close_dlg),
+            ft.FilledButton(
+                "Delete",
+                bgcolor=theme.ERROR,
+                color=ft.Colors.WHITE,
+                on_click=lambda e: page.run_task(_confirm_delete),
+            ),
+        ],
+    )
+    page.show_dialog(confirm_dlg)

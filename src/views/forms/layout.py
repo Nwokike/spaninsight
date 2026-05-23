@@ -26,9 +26,12 @@ def build_forms_view(page: ft.Page) -> ft.View:
         ui_state.is_loading["value"] = True
         _rebuild()
         try:
-            forms = await forms_service.list_forms(state.user_uuid)
+            forms = await forms_service.list_forms(state.active_project_id)
             ui_state.user_forms.clear()
             ui_state.user_forms.extend(forms)
+
+            # Sync active project's forms in global state
+            state.forms = forms
         except Exception as e:
             logger.error("Failed to load forms: %s", e)
             _show_error("Could not load forms. Check your connection.")
@@ -164,7 +167,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
         _rebuild()
         try:
             result = await forms_service.create_form(
-                user_uuid=state.user_uuid,
+                project_id=state.active_project_id,
                 title=ui_state.draft_title["value"],
                 description=ui_state.draft_desc["value"],
                 schema_json=ui_state.draft_schema,
@@ -180,7 +183,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 )
                 page.snack_bar.open = True
                 try:
-                    await page.clipboard.set(result["url"])
+                    await ft.Clipboard().set(result["url"])
                 except Exception:
                     pass
                 await load_forms()
@@ -260,7 +263,9 @@ def build_forms_view(page: ft.Page) -> ft.View:
     # ── Form Detail (existing form) ──────────────────────────────
     async def on_view_form(form: dict):
         ui_state.active_form["data"] = form
-        resp_data = await forms_service.get_responses(form["id"], state.user_uuid)
+        resp_data = await forms_service.get_responses(
+            form["id"], state.active_project_id
+        )
         ui_state.active_form["data"]["_responses"] = resp_data.get("responses", [])
         ui_state.active_form["data"]["_count"] = resp_data.get("count", 0)
         _rebuild()
@@ -271,13 +276,13 @@ def build_forms_view(page: ft.Page) -> ft.View:
 
     async def on_copy_link(form_id: str):
         url = f"https://f.spaninsight.com/{form_id}"
-        await page.clipboard.set(url)
+        await ft.Clipboard().set(url)
         page.snack_bar = ft.SnackBar(ft.Text("Link copied!"), duration=2000)
         page.snack_bar.open = True
         page.update()
 
     async def on_renew_form(form_id: str):
-        new_exp = await forms_service.renew_form(form_id, state.user_uuid)
+        new_exp = await forms_service.renew_form(form_id, state.active_project_id)
         if new_exp:
             page.snack_bar = ft.SnackBar(
                 ft.Text(f"Extended to {new_exp[:10]}"), duration=3000
@@ -288,14 +293,48 @@ def build_forms_view(page: ft.Page) -> ft.View:
             _show_error("Failed to renew.")
 
     async def on_delete_form(form_id: str):
-        success = await forms_service.delete_form(form_id, state.user_uuid)
-        if success:
-            ui_state.active_form["data"] = None
-            page.snack_bar = ft.SnackBar(ft.Text("Form deleted."), duration=2000)
-            page.snack_bar.open = True
-            await load_forms()
-        else:
-            _show_error("Failed to delete.")
+        def _close_dlg(e=None):
+            page.pop_dialog()
+
+        async def _confirm_delete(e=None):
+            _close_dlg()
+            ui_state.is_loading["value"] = True
+            _rebuild()
+            success = await forms_service.delete_form(form_id, state.active_project_id)
+            if success:
+                ui_state.active_form["data"] = None
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("Form permanently deleted from project."), duration=2000
+                )
+                page.snack_bar.open = True
+                await load_forms()
+            else:
+                ui_state.is_loading["value"] = False
+                _rebuild()
+                _show_error("Failed to delete form from edge database.")
+
+        confirm_dlg = ft.AlertDialog(
+            title=ft.Text("Delete Shared Form?"),
+            content=ft.Container(
+                content=ft.Text(
+                    "Anyone with access to this project PIN can edit or delete items. "
+                    "Deleting this form will permanently remove it and all collected responses "
+                    "from the cloud node for all collaborators. This cannot be undone.",
+                    size=13,
+                ),
+                width=340,
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=_close_dlg),
+                ft.FilledButton(
+                    "Delete",
+                    bgcolor=theme.ERROR,
+                    color=ft.Colors.WHITE,
+                    on_click=lambda e: page.run_task(_confirm_delete),
+                ),
+            ],
+        )
+        page.show_dialog(confirm_dlg)
 
     async def on_download_csv(form: dict):
         responses = form.get("_responses", [])
@@ -350,6 +389,12 @@ def build_forms_view(page: ft.Page) -> ft.View:
         page.update()
 
     def _rebuild():
+        try:
+            _rebuild_unsafe()
+        except Exception as ex:
+            logger.debug("Bypassed rebuild during navigation: %s", ex)
+
+    def _rebuild_unsafe():
         if not ui_state.content_column.current:
             return
 

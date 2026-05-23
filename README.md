@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  Autonomous data intelligence platform — smart data collection, analysis and reporting for everyone.
+  Autonomous data intelligence platform — smart data collection, collaborative analysis, and secure reporting for everyone.
   Built with Python and Flet.
 </p>
 
@@ -39,22 +39,24 @@
 
 | Capability | Description |
 |:---|:---|
-| **Automated Analysis** | Intelligent data ingestion (CSV/Excel/JSON) with AI-suggested insights and local code execution. |
+| **Collaborative Workspace** | Multi-collaborator workspaces grouped under secure 6-digit PIN keys. Sync analyses, reports, and survey forms in real-time. |
+| **Recipe Re-execution** | Data residency is guaranteed. Raw datasets remain local to each collaborator. Shared analysis steps are processed as recipes that re-execute inside local sandboxes. |
 | **Smart Surveys** | Natural language survey generation (Text/Voice) with real-time preview — great for student research and customer feedback. |
 | **Autopilot Engine** | Multi-pass analysis orchestration for comprehensive automated report generation. |
-| **Professional Export** | Export reports as PDF and PowerPoint via the web viewer with cloud sharing via secure links. |
+| **Professional Export** | Export reports as PDF and PowerPoint via the web viewer with secure cloud sharing via ephemeral links. |
 | **Local Security** | Sandbox-restricted Python execution environment ensuring 100% data residency. |
 
 ---
 
 ## Features
 
-- **Privacy-First AI** — Analysis runs locally; only AI prompts touch the cloud, never your raw data.
+- **Privacy-First AI** — Analysis runs locally; only AI prompts touch the secure gateway, never your raw dataset files.
+- **Dynamic Workspaces** — Create, join, and switch between separate project workspaces instantly via a top-right switcher drop-down.
 - **Voice-to-Insight** — Use natural language voice commands to query your data or build survey forms.
 - **Editable Code Blocks** — View, edit, and re-run the Python code behind every analysis result.
 - **Local Sandbox** — Built-in Python runtime (`pandas`, `matplotlib`) runs in a restricted environment.
 - **Credit-Based System** — AI tasks use a transparent credit system with generous daily free allowances.
-- **Cross-Platform** — Works on Android, Windows, and Web with the same experience.
+- **Cross-Platform** — Works on Android, Windows, and Web with the same premium, responsive experience.
 
 ---
 
@@ -62,35 +64,32 @@
 
 | Layer | Technology | Purpose |
 |:---|:---|:---|
-| **Frontend** | Flet | Reactive UI with smooth animations |
+| **Frontend** | Flet | Reactive UI with vibrant styling, dark mode, and smooth transitions |
 | **Compute** | Local Python Runtime | Pandas-based data processing & Matplotlib rendering |
-| **AI Gateway** | spaninsight cloud (api.spaninsight.com) | Multi-model AI orchestration with automatic failover |
-| **Database** | Cloudflare D1 | Forms, responses, referrals, UUID recovery |
-| **Local Storage** | Secure Storage API | AES-256 encrypted credentials & config |
+| **Secure Edge Gateway** | Secure Gateway (api.spaninsight.com) | Private multi-model AI orchestration with automatic failover |
+| **Edge Metadata Store** | Secure Edge Database | Workspace configurations, collaborative forms, and response indices |
+| **Ephemeral Cache Store** | Ephemeral Secure Storage | Fast-loading shared interactive reports (7-day lifecycle) |
+| **Local Storage** | Platform Keychain | Encrypted client-side credentials & offline project states |
 
 ### Visual Flow
 
-```text
-┌──────────────────────────────────────────────────────────┐
-│                     SPANINSIGHT APP                       │
-│  ┌──────┐ ┌──────────┐ ┌───────┐ ┌────────┐ ┌────────┐ │
-│  │ Home │ │ Analysis │ │ Forms │ │ Report │ │Settings│ │
-│  └──────┘ └──────────┘ └───────┘ └────────┘ └────────┘ │
-│       │         │           │         │                  │
-│  ┌────┴─────────┴───────────┴─────────┴──────────────┐  │
-│  │         Local Python Runtime (pandas, plt)         │  │
-│  └───────────────────────┬───────────────────────────┘  │
-└──────────────────────────┼──────────────────────────────┘
-                           │ HTTPS (api.spaninsight.com)
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│              CLOUDFLARE EDGE (Gateway Worker)            │
-│  ┌──────────────┐  ┌────────┐  ┌─────┐  ┌───────────┐  │
-│  │ AI Inference │  │ D1 SQL │  │ R2  │  │ Turnstile │  │
-│  │ api gateway  │  │  Forms │  │Rpts │  │   Verify  │  │
-│  └──────────────┘  └────────┘  └─────┘  └───────────┘  │
-└──────────────────────────────────────────────────────────┘
-````
+```mermaid
+graph TB
+    subgraph SPANINSIGHT_APP ["📱 SPANINSIGHT CLIENT (Local-First APP)"]
+        UI["🎨 Flet Reactive UI (Home | Analysis | Forms | Reports | Settings)"]
+        Runtime["⚙️ Local Python Runtime (Pandas, Matplotlib)"]
+        UI --> Runtime
+    end
+
+    subgraph CLOUDFLARE_GATEWAY ["🔒 SECURE EDGE GATEWAY NODE (api.spaninsight.com)"]
+        Inference["🤖 Autonomous AI Inference Engine"]
+        D1["💾 Secure Edge Database (D1 Store)"]
+        R2["📦 Ephemeral Storage Bucket (R2 Share)"]
+        Verify["🔑 Cryptographic Challenge Verification"]
+    end
+
+    Runtime ==>|HTTPS TLS 1.3| CLOUDFLARE_GATEWAY
+```
 
 ---
 

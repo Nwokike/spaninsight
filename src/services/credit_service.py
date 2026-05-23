@@ -1,7 +1,6 @@
 """Local credit economy service.
 
 All tracking is local. 50 free credits daily, reset on date change.
-Referral bonuses permanently increase the daily cap.
 
 FIX: Replaced global cumulative _reserved integer with transaction-keyed
 dictionary to prevent reservation corruption from overlapping commits/rollbacks.
@@ -18,8 +17,6 @@ import flet as ft
 
 from core.constants import (
     DAILY_FREE_CREDITS,
-    REFERRAL_BONUS_DAILY,
-    STORAGE_BONUS_CREDITS,
     STORAGE_CREDITS,
     STORAGE_LAST_RESET,
 )
@@ -115,16 +112,8 @@ class CreditService:
         return balance >= amount, balance
 
     async def get_daily_cap(self) -> int:
-        """Return the daily credit cap (base + referral bonuses)."""
-        bonus = await self._get_bonus()
-        return DAILY_FREE_CREDITS + bonus
-
-    async def add_referral_bonus(self) -> int:
-        """Add permanent +10 daily credits. Returns new daily cap."""
-        bonus = await self._get_bonus()
-        new_bonus = bonus + REFERRAL_BONUS_DAILY
-        await self._storage.set(STORAGE_BONUS_CREDITS, str(new_bonus))
-        return DAILY_FREE_CREDITS + new_bonus
+        """Return the daily credit cap."""
+        return DAILY_FREE_CREDITS
 
     async def _check_daily_reset(self) -> None:
         """Reset credits if the date has changed."""
@@ -143,10 +132,3 @@ class CreditService:
             return int(val) if val else DAILY_FREE_CREDITS
         except (TypeError, ValueError):
             return DAILY_FREE_CREDITS
-
-    async def _get_bonus(self) -> int:
-        val = await self._storage.get(STORAGE_BONUS_CREDITS)
-        try:
-            return int(val) if val else 0
-        except (TypeError, ValueError):
-            return 0

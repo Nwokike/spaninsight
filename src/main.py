@@ -173,8 +173,14 @@ async def main(page: ft.Page):
     # ── Initialize Services ─────────────────────────────────
     storage = StorageService(page)
     uuid_service = UUIDService(page, storage)
+    from services.project_service import ProjectService
+
+    project_service = ProjectService(page, storage)
     credit_service = CreditService(page, storage)
     ad_service = AdService(page)
+
+    # Initialize projects
+    await project_service.initialize_projects()
 
     # Generate or load UUID
     state.user_uuid = await uuid_service.get_or_create_uuid()
@@ -435,6 +441,59 @@ async def main(page: ft.Page):
         # Attach nav bar to the current view (skip splash)
         if page.views and route != "/splash":
             page.views[-1].navigation_bar = nav_bar
+
+        # Inject standard consistent appbar actions dynamically
+        if page.views and route not in ("/splash", "/onboarding"):
+            top_view = page.views[-1]
+            if top_view.appbar:
+                from components.project_switcher import build_project_switcher
+                from components.credit_badge import build_credit_badge
+
+                # 1. Workspace Switcher
+                switcher = build_project_switcher(page, project_service)
+
+                # 2. Color Mode Switch (Theme toggle)
+                async def _global_toggle_theme(e):
+                    is_dark = page.theme_mode == ft.ThemeMode.DARK or (
+                        page.theme_mode == ft.ThemeMode.SYSTEM
+                        and page.platform_brightness == ft.Brightness.DARK
+                    )
+                    page.theme_mode = (
+                        ft.ThemeMode.LIGHT if is_dark else ft.ThemeMode.DARK
+                    )
+                    state.theme_mode = page.theme_mode
+
+                    if storage:
+                        from core.constants import STORAGE_THEME
+
+                        await storage.set(
+                            STORAGE_THEME,
+                            "light"
+                            if page.theme_mode == ft.ThemeMode.LIGHT
+                            else "dark",
+                        )
+
+                    # Re-run route change to ensure all AppBars reflect correct theme and icons
+                    await route_change()
+
+                theme_btn = ft.IconButton(
+                    icon=ft.Icons.LIGHT_MODE_ROUNDED
+                    if page.theme_mode == ft.ThemeMode.DARK
+                    else ft.Icons.DARK_MODE_ROUNDED,
+                    tooltip="Toggle Theme",
+                    on_click=lambda e: page.run_task(_global_toggle_theme),
+                )
+
+                # 3. Credit Balance Badge
+                badge = build_credit_badge(state.credits_remaining)
+                badge_container = ft.Container(
+                    content=badge,
+                    margin=ft.Margin(0, 0, 16, 0),
+                )
+
+                top_view.appbar.actions = [switcher, theme_btn, badge_container]
+                top_view.appbar.center_title = False
+                top_view.appbar.bgcolor = ft.Colors.TRANSPARENT
 
         page.update()
 

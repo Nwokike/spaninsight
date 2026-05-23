@@ -185,8 +185,12 @@ def execute_code(
     # FIX: Safely mock plt.show() so it doesn't open GUI windows or trigger AST blocks
     plt.show = lambda *args, **kwargs: None
 
-    # Enable Pandas 2.0 Copy-on-Write globally to avoid memory exhaustion/UI freezes
-    pd.options.mode.copy_on_write = True
+    # Enable Pandas 2.0 Copy-on-Write globally to avoid memory exhaustion/UI freezes (only needed for Pandas < 3.0)
+    try:
+        if int(pd.__version__.split(".")[0]) < 3:
+            pd.options.mode.copy_on_write = True
+    except Exception:
+        pass
 
     # 2. Build execution namespace
     # With Copy-on-Write enabled, passing a direct reference is O(1) time and memory,
@@ -212,12 +216,27 @@ def execute_code(
             if plt.get_fignums():
                 figure = plt.gcf()
 
+            # Check if dataframe is modified
+            modified = False
+            try:
+                # Compare namespace["df"] with the initial df
+                if not namespace["df"].equals(df):
+                    modified = True
+            except Exception:
+                pass
+
+            # Check for clean/save keywords
+            if any(kw in code for kw in ["to_csv", "save", "df.to_csv"]):
+                modified = True
+
             return {
                 "success": True,
                 "result": namespace.get("result"),
                 "figure": figure,
                 "stdout": captured_output.getvalue(),
                 "error": None,
+                "modified": modified,
+                "new_df": namespace.get("df"),
             }
 
         except _TimeoutError as te:

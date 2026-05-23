@@ -28,7 +28,9 @@ class DatabaseService:
             if "sqlite" in connection_url:
                 engine = create_engine(connection_url)
             else:
-                engine = create_engine(connection_url, connect_args={"connect_timeout": 5})
+                engine = create_engine(
+                    connection_url, connect_args={"connect_timeout": 5}
+                )
 
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
@@ -38,7 +40,10 @@ class DatabaseService:
             # Return a cleaned, human-readable error snippet
             err_msg = str(e).split("\n")[0]
             if "timeout" in err_msg.lower():
-                return False, "Connection timed out. Please check host, port, or firewall settings."
+                return (
+                    False,
+                    "Connection timed out. Please check host, port, or firewall settings.",
+                )
             if "denied" in err_msg.lower():
                 return False, "Access denied. Please check username and password."
             return False, f"Connection failed: {err_msg}"
@@ -57,7 +62,9 @@ class DatabaseService:
             return []
 
     @staticmethod
-    def load_table(connection_url: str, table_name: str, max_rows: int = 100000) -> pd.DataFrame:
+    def load_table(
+        connection_url: str, table_name: str, max_rows: int = 100000
+    ) -> pd.DataFrame:
         """Load a database table into a Pandas DataFrame, capping rows to prevent OOM on mobile."""
         try:
             engine = create_engine(connection_url)

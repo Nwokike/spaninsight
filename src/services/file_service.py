@@ -35,7 +35,7 @@ def validate_file(file_path: str) -> None:
     if ext not in ALLOWED_EXTENSIONS:
         raise FileValidationError(
             f"Unsupported file type: '{ext}'. "
-            f"Please use CSV or Excel files ({', '.join(ALLOWED_EXTENSIONS)})."
+            f"Please use CSV, Excel, or JSON files ({', '.join(ALLOWED_EXTENSIONS)})."
         )
 
     # Check size
@@ -79,6 +79,7 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
         elif ext == ".json":
             # PERFORMANCE FIX: Parse JSON/JSON Lines natively using high-performance orjson
             import orjson
+
             with open(file_path, "rb") as f:
                 content = f.read()
             try:
@@ -86,7 +87,9 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
                 df = pd.DataFrame(parsed)
             except orjson.JSONDecodeError:
                 # Fallback: Parse line-delimited JSON
-                parsed = [orjson.loads(line) for line in content.split(b"\n") if line.strip()]
+                parsed = [
+                    orjson.loads(line) for line in content.split(b"\n") if line.strip()
+                ]
                 df = pd.DataFrame(parsed)
         elif ext == ".xlsx":
             # MOBILE COMPATIBILITY FIX: Swapped calamine for pure-Python openpyxl to ensure

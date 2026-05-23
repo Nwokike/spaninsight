@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import datetime
-import json
+import logging
 from typing import Callable
 
 import flet as ft
 
 from core import theme, tokens
 from core.state import state
-from core.constants import STORAGE_THEME
-from components.credit_badge import build_credit_badge
 from components.brand_header import build_brand_header
+
+logger = logging.getLogger(__name__)
 
 
 def build_home_view(
@@ -229,7 +228,7 @@ def build_home_view(
                             weight=ft.FontWeight.W_600,
                         ),
                         ft.Text(
-                            "Each analysis costs 1 credit. Invite friends for +10 bonus credits per referral.",
+                            "Each analysis costs 1 credit. Your balance resets automatically every day at midnight UTC.",
                             size=tokens.FONT_XS,
                             color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
@@ -250,123 +249,217 @@ def build_home_view(
         border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.ACCENT)),
     )
 
-    # ── Recent Analyses ─────────────────────────────────────────────
-    recent_col = ft.Ref[ft.Column]()
+    # ── Workspaces Section ───────────────────────────────────────────
+    workspaces_grid = ft.Ref[ft.ResponsiveRow]()
+    from services.project_service import ProjectService
 
-    async def load_recent(p: ft.Page):
+    project_service = ProjectService(page, storage)
+
+    def _stat_badge(icon: str, label: str) -> ft.Container:
+        return ft.Container(
+            content=ft.Row(
+                controls=[
+                    ft.Icon(icon, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(label, size=10, color=ft.Colors.ON_SURFACE_VARIANT),
+                ],
+                spacing=4,
+            ),
+            padding=ft.Padding(6, 2, 6, 2),
+            border_radius=6,
+            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
+        )
+
+    async def load_workspaces(p: ft.Page):
         if not storage:
-            return
-        try:
-            recent_str = await storage.get("recent_analyses")
-            recent = json.loads(recent_str) if recent_str else []
-        except Exception:
-            recent = []
-
-        if not recent:
-            if recent_col.current:
-                recent_col.current.controls = [
-                    ft.Text(
-                        "No recent analyses yet. Import a dataset to get started!",
-                        size=tokens.FONT_XS,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                        italic=True,
-                    )
-                ]
-                recent_col.current.update()
             return
 
         controls = []
 
-        async def on_delete_session(session_to_delete, e):
+        async def on_delete_project(pid_to_delete, e):
+            e.control.disabled = True
+            p.update()
             try:
-                recent_str = await storage.get("recent_analyses")
-                cur_recent = json.loads(recent_str) if recent_str else []
-                cur_recent = [
-                    s
-                    for s in cur_recent
-                    if s.get("file_path") != session_to_delete.get("file_path")
-                ]
-                await storage.set("recent_analyses", json.dumps(cur_recent))
-                # Reload list
-                page.run_task(load_recent, page)
-            except Exception:
-                pass
+                await project_service.delete_project(pid_to_delete)
+                p.run_task(load_workspaces, p)
+            except Exception as ex:
+                logger.error("Failed to delete project from home: %s", ex)
 
-        def make_delete_handler(session_item):
-            return lambda e: page.run_task(on_delete_session, session_item, e)
+        def make_delete_handler(pid_item):
+            return lambda e: p.run_task(on_delete_project, pid_item, e)
 
-        def make_restore_handler(session_item):
-            def _restore(e):
-                state.session_to_restore = session_item
+        def make_restore_handler(pid_item):
+            async def _restore(e):
+                state.active_project_id = pid_item
+                await storage.set("spaninsight_active_project_id", pid_item)
+
+                # Auto trigger background DataFrame reload if file path is available
+                proj = state.user_projects[pid_item]
+                fpath = proj.get("current_file_path", "")
+                if fpath:
+                    import os
+                    from services import file_service
+
+                    if os.path.exists(fpath):
+                        try:
+                            df = file_service.load_dataframe(fpath)
+                            state.set_dataframe(
+                                df, proj.get("current_df_name", "Dataset")
+                            )
+                            state.current_df_summary = file_service.get_data_summary(df)
+                        except Exception:
+                            state.clear_data()
+                    else:
+                        state.clear_data()
+                else:
+                    state.clear_data()
+
                 on_navigate("/analysis")
 
-            return _restore
+            return lambda e: p.run_task(_restore, e)
 
-        for session in recent:
-            time_val = session.get("timestamp", 0)
-            try:
-                dt = datetime.datetime.fromtimestamp(time_val)
-                time_str = dt.strftime("%b %d, %Y %I:%M %p")
-            except Exception:
-                time_str = "Recent"
+        for pid, proj in state.user_projects.items():
+            is_active = pid == state.active_project_id
+            block_ct = len(proj.get("analysis_blocks", []))
+            report_ct = len(proj.get("user_reports", []))
+            form_ct = len(proj.get("forms", []))
 
-            controls.append(
-                ft.Container(
-                    content=ft.Row(
-                        controls=[
-                            ft.Icon(
-                                ft.Icons.ANALYTICS_ROUNDED, color=theme.PRIMARY, size=22
-                            ),
-                            ft.Column(
-                                controls=[
-                                    ft.Text(
-                                        session.get("df_name", "Dataset"),
-                                        size=tokens.FONT_SM,
-                                        weight=ft.FontWeight.W_600,
-                                    ),
-                                    ft.Text(
-                                        f"{session.get('df_rows', 0):,} rows | {session.get('df_cols', 0)} cols | {time_str}",
-                                        size=tokens.FONT_XS,
-                                        color=ft.Colors.ON_SURFACE_VARIANT,
-                                    ),
-                                ],
-                                spacing=2,
-                                expand=True,
-                            ),
-                            ft.IconButton(
-                                icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-                                icon_color=theme.ERROR,
-                                tooltip="Delete Session",
-                                on_click=make_delete_handler(session),
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                    padding=12,
-                    border_radius=12,
-                    bgcolor=theme.GLASS_BG,
-                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
-                    on_click=make_restore_handler(session),
-                    ink=True,
-                )
+            is_local = pid.startswith("loc_")
+            display_id = "Local Only" if is_local else f"PIN: {pid}"
+
+            card = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Icon(
+                                    ft.Icons.WORKSPACES_ROUNDED,
+                                    color=theme.PRIMARY
+                                    if is_active
+                                    else ft.Colors.ON_SURFACE_VARIANT,
+                                    size=22,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text(
+                                            proj.get("title", "Workspace"),
+                                            size=tokens.FONT_SM,
+                                            weight=ft.FontWeight.W_600,
+                                            max_lines=1,
+                                            overflow="ellipsis",
+                                        ),
+                                        ft.Text(
+                                            "Active Workspace"
+                                            if is_active
+                                            else display_id,
+                                            size=tokens.FONT_XS,
+                                            color=theme.PRIMARY
+                                            if is_active
+                                            else ft.Colors.ON_SURFACE_VARIANT,
+                                            weight=ft.FontWeight.W_500
+                                            if is_active
+                                            else ft.FontWeight.NORMAL,
+                                        ),
+                                    ],
+                                    spacing=2,
+                                    expand=True,
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+                                    icon_color=theme.ERROR,
+                                    icon_size=18,
+                                    tooltip="Delete Workspace",
+                                    on_click=make_delete_handler(pid),
+                                    visible=len(state.user_projects) > 1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=2),
+                        ft.Text(
+                            proj.get("description")
+                            or "Collaborative AI analytical workspace.",
+                            size=tokens.FONT_XS,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            max_lines=2,
+                            overflow="ellipsis",
+                        ),
+                        ft.Container(height=4),
+                        ft.Row(
+                            controls=[
+                                _stat_badge(
+                                    ft.Icons.ANALYTICS_ROUNDED,
+                                    f"{block_ct} step{'s' if block_ct != 1 else ''}",
+                                ),
+                                _stat_badge(
+                                    ft.Icons.ASSESSMENT_ROUNDED,
+                                    f"{report_ct} report{'s' if report_ct != 1 else ''}",
+                                ),
+                                _stat_badge(
+                                    ft.Icons.DYNAMIC_FORM_ROUNDED,
+                                    f"{form_ct} form{'s' if form_ct != 1 else ''}",
+                                ),
+                            ],
+                            spacing=6,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                padding=14,
+                border_radius=12,
+                bgcolor=ft.Colors.with_opacity(0.04, theme.PRIMARY)
+                if is_active
+                else theme.GLASS_BG,
+                border=ft.Border.all(
+                    1.5 if is_active else 1,
+                    theme.PRIMARY if is_active else theme.GLASS_BORDER_COLOR,
+                ),
+                on_click=make_restore_handler(pid),
+                ink=True,
+                col={"sm": 12, "md": 6},
             )
+            controls.append(card)
 
-        if recent_col.current:
-            recent_col.current.controls = controls
-            recent_col.current.update()
+        if workspaces_grid.current:
+            workspaces_grid.current.controls = controls
+            workspaces_grid.current.update()
+
+    from components.project_switcher import _show_switcher_dialog
 
     recent_section = ft.Container(
         content=ft.Column(
             controls=[
-                ft.Text(
-                    "Recent Analyses",
-                    size=tokens.FONT_MD,
-                    weight=ft.FontWeight.W_600,
+                ft.Row(
+                    controls=[
+                        ft.Text(
+                            "Your Workspaces",
+                            size=tokens.FONT_MD,
+                            weight=ft.FontWeight.W_600,
+                            expand=True,
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.ADD_ROUNDED,
+                            icon_color=theme.PRIMARY,
+                            tooltip="Create New Workspace",
+                            on_click=lambda e: _show_switcher_dialog(
+                                page, project_service
+                            ),
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.LOGIN_ROUNDED,
+                            icon_color=theme.PRIMARY,
+                            tooltip="Join Collaborative Workspace",
+                            on_click=lambda e: _show_switcher_dialog(
+                                page, project_service
+                            ),
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
                 ft.Container(height=tokens.SPACE_SM),
-                ft.Column(
-                    ref=recent_col,
+                ft.ResponsiveRow(
+                    ref=workspaces_grid,
                     spacing=8,
+                    run_spacing=8,
                     controls=[ft.ProgressRing(width=20, height=20, stroke_width=2)],
                 ),
             ],
@@ -427,44 +520,9 @@ def build_home_view(
         title=ft.Text("Home", weight=ft.FontWeight.W_600, size=tokens.FONT_XL),
         center_title=False,
         bgcolor=ft.Colors.TRANSPARENT,
-        actions=[
-            ft.IconButton(
-                icon=ft.Icons.LIGHT_MODE_ROUNDED
-                if page.theme_mode == ft.ThemeMode.DARK
-                else ft.Icons.DARK_MODE_ROUNDED,
-                tooltip="Toggle Theme",
-                on_click=lambda e: page.run_task(_toggle_theme, e, page),
-            ),
-            ft.Container(
-                content=build_credit_badge(state.credits_remaining),
-                margin=ft.Margin(0, 0, tokens.SPACE_LG, 0),
-            ),
-        ],
     )
 
-    async def _toggle_theme(e, p: ft.Page):
-        is_dark = p.theme_mode == ft.ThemeMode.DARK or (
-            p.theme_mode == ft.ThemeMode.SYSTEM
-            and p.platform_brightness == ft.Brightness.DARK
-        )
-        p.theme_mode = ft.ThemeMode.LIGHT if is_dark else ft.ThemeMode.DARK
-        state.theme_mode = p.theme_mode
-
-        # Persist
-        if storage:
-            await storage.set(
-                STORAGE_THEME, "light" if p.theme_mode == ft.ThemeMode.LIGHT else "dark"
-            )
-
-        # Update icon directly to avoid full page reload
-        e.control.icon = (
-            ft.Icons.LIGHT_MODE_ROUNDED
-            if p.theme_mode == ft.ThemeMode.DARK
-            else ft.Icons.DARK_MODE_ROUNDED
-        )
-        p.update()
-
-    page.run_task(load_recent, page)
+    page.run_task(load_workspaces, page)
     return ft.View(route="/home", appbar=appbar, controls=[content], padding=0)
 
 

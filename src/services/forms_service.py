@@ -1,9 +1,7 @@
 """Forms API client — CRUD operations against the D1-backed gateway.
 
 Handles form creation, listing, response fetching, CSV download,
-renewal, and deletion.
-
-Audit fixes: Uses shared httpx client (C3), moved pandas import (M3).
+renewal, and deletion under project scopes.
 """
 
 from __future__ import annotations
@@ -17,12 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 async def create_form(
-    user_uuid: str,
+    project_id: str,
     title: str,
     description: str,
     schema_json: list[dict],
 ) -> dict | None:
-    """Create a form via the gateway. Returns {id, url, expires_at} or None."""
+    """Create a form under a project via the gateway. Returns {id, url, expires_at} or None."""
 
     # Validate schema structure before sending
     if not isinstance(schema_json, list):
@@ -54,7 +52,7 @@ async def create_form(
             return None
 
     payload = {
-        "user_uuid": user_uuid,
+        "project_id": project_id,
         "title": title,
         "description": description,
         "schema_json": schema_json,
@@ -68,7 +66,12 @@ async def create_form(
         )
         if resp.status_code == 201:
             data = resp.json()
-            logger.info("Form created: %s → %s", data["id"], data["url"])
+            logger.info(
+                "Form created under project %s: %s → %s",
+                project_id,
+                data["id"],
+                data["url"],
+            )
             return data
         logger.error(
             "Create form failed HTTP %d: %s", resp.status_code, resp.text[:200]
@@ -79,13 +82,13 @@ async def create_form(
         return None
 
 
-async def list_forms(user_uuid: str) -> list[dict]:
-    """Fetch all forms for a user. Returns list of form dicts."""
+async def list_forms(project_id: str) -> list[dict]:
+    """Fetch all forms for a project. Returns list of form dicts."""
     try:
         client = get_client()
         resp = await client.get(
             f"{API_BASE_URL}/forms",
-            params={"uuid": user_uuid},
+            params={"project_id": project_id},
             timeout=10.0,
         )
         if resp.status_code == 200:
@@ -96,13 +99,13 @@ async def list_forms(user_uuid: str) -> list[dict]:
         return []
 
 
-async def get_responses(form_id: str, user_uuid: str = "") -> dict:
-    """Fetch all responses for a form. Returns {count, responses}."""
+async def get_responses(form_id: str, project_id: str = "") -> dict:
+    """Fetch all responses for a form inside a project. Returns {count, responses}."""
     try:
         client = get_client()
         params = {}
-        if user_uuid:
-            params["uuid"] = user_uuid
+        if project_id:
+            params["project_id"] = project_id
         resp = await client.get(
             f"{API_BASE_URL}/forms/{form_id}/responses",
             params=params,
@@ -116,13 +119,13 @@ async def get_responses(form_id: str, user_uuid: str = "") -> dict:
         return {"count": 0, "responses": []}
 
 
-async def renew_form(form_id: str, user_uuid: str = "") -> str | None:
+async def renew_form(form_id: str, project_id: str = "") -> str | None:
     """Extend form expiry by 7 days. Returns new expires_at or None."""
     try:
         resp = await request_with_retry(
             "POST",
             f"{API_BASE_URL}/forms/{form_id}/renew",
-            json={"uuid": user_uuid} if user_uuid else None,
+            json={"project_id": project_id} if project_id else None,
             timeout=10.0,
         )
         if resp.status_code == 200:
@@ -133,14 +136,14 @@ async def renew_form(form_id: str, user_uuid: str = "") -> str | None:
         return None
 
 
-async def delete_form(form_id: str, user_uuid: str = "") -> bool:
-    """Delete a form and all its responses."""
+async def delete_form(form_id: str, project_id: str = "") -> bool:
+    """Delete a form and all its responses under a project."""
     try:
         client = get_client()
         resp = await client.request(
             "DELETE",
             f"{API_BASE_URL}/forms/{form_id}",
-            json={"uuid": user_uuid} if user_uuid else None,
+            json={"project_id": project_id} if project_id else None,
             timeout=10.0,
         )
         return resp.status_code == 200
@@ -154,7 +157,6 @@ def responses_to_csv_bytes(responses: list[dict]) -> bytes:
 
     Each response has a 'data' dict with field values.
     """
-    # P5 FIX: pandas imported at module level
     if not responses:
         return b""
 

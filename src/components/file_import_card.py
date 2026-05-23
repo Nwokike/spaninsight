@@ -46,7 +46,7 @@ def build_file_import_card(
                     alignment=ft.Alignment.CENTER,
                 ),
                 ft.Text(
-                    "Import CSV or Excel",
+                    "Import CSV, Excel, or JSON",
                     size=tokens.FONT_LG,
                     weight=ft.FontWeight.W_600,
                 ),

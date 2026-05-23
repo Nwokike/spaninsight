@@ -2,7 +2,6 @@ import logging
 import flet as ft
 from core import theme
 from core.state import state
-from components.credit_badge import build_credit_badge
 from components.file_import_card import build_file_import_card
 from components.stat_card import build_stat_card
 from components.data_preview import build_data_preview
@@ -63,6 +62,72 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
     view_state.content_column.current = main_column
 
     def _update_top_section():
+        expects_dataset = bool(state.current_df_name)
+        has_dataframe = state.current_df is not None
+
+        if expects_dataset and not has_dataframe:
+            # Beautiful warning banner for locating/linking dataset
+            warning_card = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Icon(
+                                    ft.Icons.WARNING_ROUNDED,
+                                    color=theme.WARNING,
+                                    size=28,
+                                ),
+                                ft.Text(
+                                    f"{state.current_df_name} (Not loaded locally)",
+                                    size=16,
+                                    weight=ft.FontWeight.W_600,
+                                    color=theme.WARNING,
+                                ),
+                            ],
+                            spacing=10,
+                        ),
+                        ft.Text(
+                            "Spaninsight is 100% privacy-first: your raw data is never uploaded to the cloud gateway. "
+                            "Because of this, you must obtain the original file from the creator/collaborator of this project. "
+                            "Once you have a copy, locate and link the file below to re-execute the analysis recipe and enable dataset exports.",
+                            size=13,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Container(height=4),
+                        ft.Row(
+                            controls=[
+                                ft.FilledButton(
+                                    "Locate & Link Dataset",
+                                    icon=ft.Icons.FILE_OPEN_ROUNDED,
+                                    style=ft.ButtonStyle(
+                                        bgcolor=theme.PRIMARY,
+                                        shape=ft.RoundedRectangleBorder(radius=12),
+                                    ),
+                                    on_click=on_pick_file,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.CENTER,
+                        ),
+                    ],
+                    spacing=12,
+                ),
+                padding=20,
+                border_radius=16,
+                bgcolor=ft.Colors.with_opacity(0.04, theme.WARNING),
+                border=ft.Border.all(1, ft.Colors.with_opacity(0.2, theme.WARNING)),
+            )
+
+            top_section.content = ft.Column(
+                [
+                    build_brand_header(show_tagline=True, spacing_below=True),
+                    warning_card,
+                ],
+                horizontal_alignment="center",
+            )
+            top_section.padding = 20
+            top_section.expand = False
+            return
+
         if state.current_df is None:
             if state.is_loading:
                 fname = view_state.loading_file_name["value"] or "data"
@@ -91,6 +156,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                 top_section.alignment = ft.Alignment.CENTER
                 top_section.expand = True
             else:
+
                 def toggle_import_mode(mode):
                     view_state.import_mode = mode
                     view_state.rebuild()
@@ -103,8 +169,12 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                 "File Upload",
                                 icon=ft.Icons.UPLOAD_FILE_ROUNDED,
                                 style=ft.ButtonStyle(
-                                    color=theme.PRIMARY if view_state.import_mode == "file" else ft.Colors.ON_SURFACE_VARIANT,
-                                    bgcolor=ft.Colors.with_opacity(0.1, theme.PRIMARY) if view_state.import_mode == "file" else ft.Colors.TRANSPARENT,
+                                    color=theme.PRIMARY
+                                    if view_state.import_mode == "file"
+                                    else ft.Colors.ON_SURFACE_VARIANT,
+                                    bgcolor=ft.Colors.with_opacity(0.1, theme.PRIMARY)
+                                    if view_state.import_mode == "file"
+                                    else ft.Colors.TRANSPARENT,
                                     shape=ft.RoundedRectangleBorder(radius=12),
                                 ),
                                 on_click=lambda e: toggle_import_mode("file"),
@@ -113,8 +183,12 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                 "SQL Database",
                                 icon=ft.Icons.STORAGE_ROUNDED,
                                 style=ft.ButtonStyle(
-                                    color=theme.PRIMARY if view_state.import_mode == "database" else ft.Colors.ON_SURFACE_VARIANT,
-                                    bgcolor=ft.Colors.with_opacity(0.1, theme.PRIMARY) if view_state.import_mode == "database" else ft.Colors.TRANSPARENT,
+                                    color=theme.PRIMARY
+                                    if view_state.import_mode == "database"
+                                    else ft.Colors.ON_SURFACE_VARIANT,
+                                    bgcolor=ft.Colors.with_opacity(0.1, theme.PRIMARY)
+                                    if view_state.import_mode == "database"
+                                    else ft.Colors.TRANSPARENT,
                                     shape=ft.RoundedRectangleBorder(radius=12),
                                 ),
                                 on_click=lambda e: toggle_import_mode("database"),
@@ -213,15 +287,20 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                             ft.OutlinedButton(
                                 "Download Cleaned Dataset",
                                 icon=ft.Icons.DOWNLOAD_ROUNDED,
-                                on_click=lambda e: page.run_task(on_export_data, view_state),
+                                on_click=lambda e: page.run_task(
+                                    on_export_data, view_state
+                                ),
                                 style=ft.ButtonStyle(
                                     shape=ft.RoundedRectangleBorder(radius=12),
                                     color=theme.SUCCESS,
-                                    overlay_color=ft.Colors.with_opacity(0.08, theme.SUCCESS),
+                                    overlay_color=ft.Colors.with_opacity(
+                                        0.08, theme.SUCCESS
+                                    ),
                                 ),
                             ),
                         ],
                         alignment=ft.MainAxisAlignment.CENTER,
+                        visible=state.dataset_modified,
                     ),
                     build_data_preview(state.current_df),
                 ],
@@ -242,10 +321,14 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
 
         if state.is_analyzing:
             from views.analysis.ui_components import build_skeleton_loader
+
             blocks_list.controls.append(build_skeleton_loader())
 
     def _update_bottom_sections():
-        if state.current_df is None:
+        expects_dataset = bool(state.current_df_name)
+        has_dataframe = state.current_df is not None
+
+        if not expects_dataset and not has_dataframe:
             loading_section.visible = False
             input_section.visible = False
             return
@@ -331,16 +414,24 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
 
             is_rec = view_state.is_recording["value"]
             is_trans = view_state.is_transcribing["value"]
+            is_missing_local = expects_dataset and not has_dataframe
 
-            tf.disabled = is_rec or is_trans
-            send_btn.disabled = is_rec or is_trans
+            tf.disabled = is_rec or is_trans or is_missing_local
+            send_btn.disabled = is_rec or is_trans or is_missing_local
 
             action_row.controls[0].visible = is_rec
             action_row.controls[1].visible = is_trans
             mic_btn = action_row.controls[2]
             mic_btn.icon = ft.Icons.STOP_ROUNDED if is_rec else ft.Icons.MIC_ROUNDED
             mic_btn.icon_color = theme.ERROR if is_rec else ft.Colors.ON_SURFACE_VARIANT
-            mic_btn.disabled = is_trans
+            mic_btn.disabled = is_trans or is_missing_local
+
+            if is_missing_local:
+                tf.hint_text = (
+                    f"Locate raw '{state.current_df_name}' to run AI analysis..."
+                )
+            else:
+                tf.hint_text = "Describe an analysis or tap mic..."
 
     def _rebuild():
         try:
@@ -391,12 +482,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
         route="/analysis",
         appbar=ft.AppBar(
             title=ft.Text("Analysis Engine", weight="bold"),
-            actions=[
-                ft.Container(
-                    build_credit_badge(state.credits_remaining),
-                    margin=ft.Margin(0, 0, 20, 0),
-                )
-            ],
+            bgcolor=ft.Colors.TRANSPARENT,
         ),
         controls=[main_column],
         padding=0,

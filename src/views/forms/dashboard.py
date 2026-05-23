@@ -90,7 +90,7 @@ def build_dashboard_layout(
                                 ft.TextField(
                                     ref=ui_state.form_prompt_field,
                                     value=ui_state.prompt_text["value"],
-                                    hint_text="e.g. 'A survey about student study habits...'",
+                                    hint_text="e.g. Student study habits",
                                     expand=True,
                                     border_radius=12,
                                     max_lines=3,

@@ -12,7 +12,7 @@ import random
 import string
 import time
 
-from core.constants import API_BASE_URL, STORAGE_REPORTS
+from core.constants import API_BASE_URL
 from services.api_client import request_with_retry
 
 logger = logging.getLogger(__name__)
@@ -25,17 +25,27 @@ class ReportService:
         self._storage = storage
 
     async def _load_all(self) -> list[dict]:
-        try:
-            raw = await self._storage.get(STORAGE_REPORTS)
-            if raw:
-                return json.loads(raw)
-        except Exception as e:
-            logger.warning("Failed to load reports: %s", e)
-        return []
+        from core.state import state
+
+        return state.user_reports
 
     async def _save_all(self, reports: list[dict]) -> None:
+        from core.state import state
+
         try:
-            await self._storage.set(STORAGE_REPORTS, json.dumps(reports, default=str))
+            state.user_reports = reports
+            # Persist project changes locally
+            safe_copy = {}
+            for pid, p in state.user_projects.items():
+                copied = json.loads(json.dumps(p, default=str))
+                for b in copied.get("analysis_blocks", []):
+                    # Retain base64 but clean transient chart objects/figures
+                    if b.get("figure_png_b64"):
+                        pass
+                    b.pop("figure_png", None)
+                    b.pop("figure", None)
+                safe_copy[pid] = copied
+            await self._storage.set("spaninsight_projects", json.dumps(safe_copy))
         except Exception as e:
             logger.error("Failed to save reports: %s", e)
 
@@ -45,12 +55,18 @@ class ReportService:
         return reports
 
     async def create_report(
-        self, title: str, dataset_name: str, blocks: list[dict]
+        self, title: str, dataset_name: str, blocks: list[dict], description: str = ""
     ) -> dict:
+        if not description:
+            description = (
+                f"Analytical insights and findings compiled from the {dataset_name} dataset."
+                if dataset_name
+                else "Analytical compilation of data insights and statistical findings."
+            )
         report = {
             "id": self._generate_id(),
             "title": title,
-            "description": "",
+            "description": description,
             "is_arranged": False,
             "created_at": time.time(),
             "updated_at": time.time(),
@@ -109,6 +125,8 @@ class ReportService:
             item = {
                 "prompt": block.get("prompt", ""),
                 "description": block.get("description", ""),
+                "serialized_result": block.get("serialized_result"),
+                "stdout": block.get("stdout"),
             }
             if block.get("figure_png_b64"):
                 item["image_b64"] = block["figure_png_b64"]
@@ -121,10 +139,15 @@ class ReportService:
         }
 
         try:
+            from core.state import state
+
             resp = await request_with_retry(
                 "POST",
                 f"{API_BASE_URL}/reports",
-                json={"user_uuid": user_uuid, "report_json": report_json},
+                json={
+                    "project_id": state.active_project_id,
+                    "report_json": report_json,
+                },
                 timeout=15.0,
             )
             if resp.status_code == 201:
