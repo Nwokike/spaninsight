@@ -257,6 +257,7 @@ async def on_suggestion_selected(
 
             # 1. Append block but keep is_analyzing = True
             state.analysis_blocks.append(block)
+            wrapped_block = state.analysis_blocks[-1]
             view_state.rebuild()
 
             async def load_block_ai(b):
@@ -307,7 +308,7 @@ async def on_suggestion_selected(
                     logger.error("Block AI load failed: %s", e)
 
             # Ensure all AI is finished while lock is held
-            await load_block_ai(block)
+            await load_block_ai(wrapped_block)
 
         except Exception as err:
             show_error(view_state, f"Analysis failed: {err}")
@@ -508,6 +509,7 @@ async def run_autopilot(view_state: AnalysisState):
                 "failed": False,
             }
             state.analysis_blocks.append(block)
+            wrapped_block = state.analysis_blocks[-1]
             view_state.rebuild()
 
             state.charts.append(
@@ -562,7 +564,7 @@ async def run_autopilot(view_state: AnalysisState):
                 except Exception as e:
                     logger.error("Autopilot block AI failed: %s", e)
 
-            await load_block_ai(block, analysis_history[-1])
+            await load_block_ai(wrapped_block, analysis_history[-1])
 
         state.autopilot_progress = f"Agent loop finished ({iteration} steps)."
 

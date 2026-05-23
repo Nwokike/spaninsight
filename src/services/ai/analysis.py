@@ -81,9 +81,15 @@ async def suggest(
 ) -> list[dict]:
     """Context-aware suggestions without cost-cutting limits."""
     system_prompt = (
-        "You are an unrestricted, expert data intelligence consultant. Suggest a rich, multi-angle "
+        "You are an expert data intelligence consultant. Suggest a rich, multi-angle "
         "suite of 5 to 8 distinct, deeply insightful data analysis tracks the user should perform next. "
         "Analyze trends, correlations, pivot metrics, and exploratory profiles. Do NOT repeat previous steps.\n\n"
+        "CRITICAL EXECUTION CONSTRAINTS:\n"
+        "- The execution environment ONLY supports: pandas, numpy, matplotlib.pyplot, and math.\n"
+        "- The environment DOES NOT HAVE: seaborn, scipy, scikit-learn (sklearn), statsmodels, plotly, or pingouin.\n"
+        "- Any visual suggestion must be plotting-compatible with MATPLOTLIB ONLY (do NOT suggest seaborn, plotly, etc.).\n"
+        "- Any mathematical, clustering, or statistical suggestion must be built using ONLY pure pandas/numpy algebra/statistics. Do NOT suggest advanced models requiring sklearn, scipy, statsmodels, or ANOVA/T-tests/OLS libraries.\n"
+        "- Ensure your generated prompts instruct the code generator to use ONLY pandas, numpy, and matplotlib (e.g. 'Plot a correlation heatmap using Matplotlib plt.imshow()', NOT 'using seaborn heatmap').\n\n"
         "Return exclusively a valid, raw JSON array of objects with zero conversational wrappers. "
         "Each object must contain EXACTLY these keys:\n"
         '- "label": concise descriptive title (max 5 words)\n'
@@ -177,8 +183,21 @@ async def generate_corrected_code(
     """Send failing code and traceback to generate corrected Python code."""
     system_prompt = (
         "You are an expert Python data debugging engineer. Correct the failing Python code block.\n\n"
-        "Available libraries: pandas (as pd), numpy (as np), matplotlib.pyplot (as plt), math\n"
-        "Return only functional Python code.\n\n"
+        "CRITICAL — ONLY these 4 libraries are available:\n"
+        "  1. pandas (import as pd)\n"
+        "  2. numpy  (import as np)\n"
+        "  3. matplotlib.pyplot (import as plt)\n"
+        "  4. math\n\n"
+        "STRICTLY FORBIDDEN — do NOT import or use ANY of these (they will cause execution failure):\n"
+        "  seaborn, sns, scipy, sklearn, statsmodels, plotly, pingouin, lifelines, any other library.\n"
+        "Execution Framework Rules:\n"
+        "- The DataFrame is pre-loaded as global variable `df`.\n"
+        "- Use modern Pandas 2.0+ Copy-on-Write syntax.\n"
+        "- The environment uses NumPy 2.0+.\n"
+        "- IMPORTANT: Always use `.dropna()` or `.fillna()` before performing algebraic, matrix, or statistical operations to prevent LAPACK errors.\n"
+        "- For plotting, ALWAYS create a figure explicitly using plt.figure() or plt.subplots().\n"
+        "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
+        "- Return only functional Python code. No introductory remarks.\n\n"
         f"Complete Dataset Metric Schema:\n{json.dumps(schema_json, default=str)}"
     )
 
@@ -219,6 +238,11 @@ async def plan_next_step(
 
     system_prompt = (
         "You are an autonomous data analysis agent. Your job is to decide the NEXT analysis step.\n\n"
+        "CRITICAL EXECUTION CONSTRAINTS:\n"
+        "- The execution environment ONLY supports: pandas, numpy, matplotlib.pyplot, and math.\n"
+        "- The environment DOES NOT HAVE: seaborn, scipy, scikit-learn (sklearn), statsmodels, plotly, or pingouin.\n"
+        "- Any analysis track you decide on must be fully executable using ONLY pure pandas, numpy, matplotlib, and math.\n"
+        "- Do NOT plan any steps that require machine learning (scikit-learn), advanced statistics/modeling (scipy/statsmodels), or seaborn plotting. For example, instead of planning an ANOVA or regression fit, plan correlation matrices, pivot tables, line/bar/scatter plots, and custom descriptive metrics using pandas/numpy/matplotlib.\n\n"
         "Return ONLY a valid JSON object with these keys:\n"
         '- "prompt": the next analysis instruction (empty string if complete)\n'
         '- "is_complete": boolean\n'

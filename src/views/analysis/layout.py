@@ -1,3 +1,4 @@
+import logging
 import flet as ft
 from core import theme
 from core.state import state
@@ -15,6 +16,8 @@ from views.analysis.handlers import (
     on_voice_toggle,
 )
 from views.analysis.ui_components import build_block_card
+
+logger = logging.getLogger(__name__)
 
 
 def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> ft.View:
@@ -297,8 +300,8 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                         pass
 
                 page.run_task(do_scroll)
-        except Exception:
-            pass
+        except Exception as ex:
+            logger.exception("Rebuild failed in analysis view: %s", ex)
 
     view_state.rebuild_fn = _rebuild
 
