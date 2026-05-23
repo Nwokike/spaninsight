@@ -13,7 +13,7 @@ from services.file_service import (
 
 
 def test_validate_file_invalid_extension():
-    with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".xyz", delete=False) as f:
         f.write(b"some content")
         temp_name = f.name
 
@@ -92,6 +92,62 @@ def test_load_dataframe_stata_success():
         assert len(df) == 2
         assert list(df.columns) == ["X", "Y"]
         assert df.iloc[0]["X"] == 10
+    finally:
+        os.remove(temp_name)
+
+
+def test_load_dataframe_tsv_success():
+    tsv_data = "X\tY\n1000\t2000\n3000\t4000\n"
+    with tempfile.NamedTemporaryFile(suffix=".tsv", delete=False, mode="w") as f:
+        f.write(tsv_data)
+        temp_name = f.name
+
+    try:
+        df = load_dataframe(temp_name)
+        assert len(df) == 2
+        assert list(df.columns) == ["X", "Y"]
+        assert df.iloc[0]["X"] == 1000
+    finally:
+        os.remove(temp_name)
+
+
+def test_load_dataframe_zip_success():
+    import zipfile
+    csv_data = "X,Y\n5,6\n7,8\n"
+    
+    # Write a zip archive containing a CSV file
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as f:
+        temp_name = f.name
+        
+    csv_temp_path = temp_name + ".csv"
+    with open(csv_temp_path, "w") as f_csv:
+        f_csv.write(csv_data)
+        
+    try:
+        with zipfile.ZipFile(temp_name, "w") as zf:
+            zf.write(csv_temp_path, arcname="dataset.csv")
+            
+        df = load_dataframe(temp_name)
+        assert len(df) == 2
+        assert list(df.columns) == ["X", "Y"]
+        assert df.iloc[0]["X"] == 5
+    finally:
+        os.remove(temp_name)
+        if os.path.exists(csv_temp_path):
+            os.remove(csv_temp_path)
+
+
+def test_load_dataframe_pickle_success():
+    df_orig = pd.DataFrame({"X": [99, 101], "Y": [88, 77]})
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
+        temp_name = f.name
+
+    try:
+        df_orig.to_pickle(temp_name)
+        df = load_dataframe(temp_name)
+        assert len(df) == 2
+        assert list(df.columns) == ["X", "Y"]
+        assert df.iloc[0]["X"] == 99
     finally:
         os.remove(temp_name)
 

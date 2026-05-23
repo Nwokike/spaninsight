@@ -35,7 +35,7 @@ def validate_file(file_path: str) -> None:
     if ext not in ALLOWED_EXTENSIONS:
         raise FileValidationError(
             f"Unsupported file type: '{ext}'. "
-            f"Please use CSV, Excel, JSON, XML, STATA, or SAS files ({', '.join(ALLOWED_EXTENSIONS)})."
+            f"Please use CSV, Excel, JSON, XML, STATA, SAS, TSV, TXT, ZIP, or Pickle files ({', '.join(ALLOWED_EXTENSIONS)})."
         )
 
     # Check size
@@ -76,7 +76,7 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
                 df = pd.read_csv(file_path, encoding="utf-8")
             except UnicodeDecodeError:
                 df = pd.read_csv(file_path, encoding="latin-1")
-        elif ext == ".json":
+        elif ext in {".json", ".jsonl", ".ndjson"}:
             # PERFORMANCE FIX: Parse JSON/JSON Lines natively using high-performance orjson
             import orjson
 
@@ -105,6 +105,21 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
         elif ext in {".sas7bdat", ".xport"}:
             # NATIVE PARSING: Parse SAS natively using pandas read_sas
             df = pd.read_sas(file_path)
+        elif ext in {".tsv", ".txt"}:
+            # NATIVE PARSING: Parse delimited files natively (tab-separated or auto-detected)
+            try:
+                df = pd.read_csv(file_path, sep="\t")
+            except Exception:
+                df = pd.read_csv(file_path)
+        elif ext == ".zip":
+            # NATIVE DECOMPRESSION: Try loading zipped CSV first
+            try:
+                df = pd.read_csv(file_path)
+            except Exception as e:
+                raise FileValidationError(f"Zipped file must contain a valid CSV dataset: {e}")
+        elif ext in {".pkl", ".pickle"}:
+            # NATIVE PARSING: Parse Python Pickle files natively
+            df = pd.read_pickle(file_path)
         else:
             raise FileValidationError(f"Unsupported format: {ext}")
 

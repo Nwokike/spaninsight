@@ -27,7 +27,22 @@ TASK_VISION = "vision"
 # Modern phones have 4GB+ RAM. pandas can handle ~100MB CSVs comfortably.
 MAX_FILE_SIZE_MB = 100
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-ALLOWED_EXTENSIONS = {".csv", ".json", ".xlsx", ".xml", ".dta", ".sas7bdat", ".xport"}
+ALLOWED_EXTENSIONS = {
+    ".csv",
+    ".json",
+    ".jsonl",
+    ".ndjson",
+    ".xlsx",
+    ".xml",
+    ".dta",
+    ".sas7bdat",
+    ".xport",
+    ".tsv",
+    ".txt",
+    ".pkl",
+    ".pickle",
+    ".zip",
+}
 
 # ── Data Display ────────────────────────────────────────────────────
 DATA_PREVIEW_ROWS = 20
