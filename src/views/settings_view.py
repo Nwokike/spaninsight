@@ -429,7 +429,7 @@ def build_settings_view(
                 icon=ft.Icons.PRIVACY_TIP_OUTLINED,
                 title="Privacy Policy",
                 subtitle="Read our 100% privacy commitment",
-                on_click=lambda e: page.launch_url("https://spaninsight.com/privacy.html"),
+                on_click=lambda e: page.run_task(page.launch_url, "https://spaninsight.com/privacy.html"),
             ),
             ft.Container(height=tokens.SPACE_XL),
             ft.Container(

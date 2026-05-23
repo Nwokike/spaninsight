@@ -14,6 +14,7 @@ from views.analysis.handlers import (
     on_clear_data,
     on_custom_prompt,
     on_voice_toggle,
+    on_export_data,
 )
 from views.analysis.ui_components import build_block_card, build_db_import_card
 
@@ -206,6 +207,21 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                             ),
                         ],
                         spacing=10,
+                    ),
+                    ft.Row(
+                        [
+                            ft.OutlinedButton(
+                                "Download Cleaned Dataset",
+                                icon=ft.Icons.DOWNLOAD_ROUNDED,
+                                on_click=lambda e: page.run_task(on_export_data, view_state),
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    color=theme.SUCCESS,
+                                    overlay_color=ft.Colors.with_opacity(0.08, theme.SUCCESS),
+                                ),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
                     ),
                     build_data_preview(state.current_df),
                 ],

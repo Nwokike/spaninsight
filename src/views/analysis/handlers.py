@@ -659,6 +659,28 @@ async def run_autopilot(view_state: AnalysisState):
 
             await load_block_ai(wrapped_block, analysis_history[-1])
 
+        # Compile successfully completed autopilot blocks and save them to a new report
+        if view_state.report_service and state.analysis_blocks:
+            import base64
+            report_blocks = []
+            for b in state.analysis_blocks:
+                if b.get("type") == "analysis" and b.get("pinned") and not b.get("failed"):
+                    png_b64 = ""
+                    if b.get("figure_png"):
+                        png_b64 = base64.b64encode(b["figure_png"]).decode("utf-8")
+                    report_blocks.append({
+                        "prompt": b.get("prompt", "Data Overview"),
+                        "description": b.get("description", ""),
+                        "figure_png_b64": png_b64,
+                        "block_type": "chart" if png_b64 else "text",
+                    })
+            if report_blocks:
+                title = f"Autopilot: {state.current_df_name or 'Analysis'} Report"
+                await view_state.report_service.create_report(
+                    title, state.current_df_name or "", report_blocks
+                )
+                logger.info("Autopilot compiled and saved report: %s", title)
+
         state.autopilot_progress = f"Agent loop finished ({iteration} steps)."
 
     except Exception as e:
@@ -754,6 +776,57 @@ def on_clear_data(view_state: AnalysisState, e):
     state.clear_data()
     state.analysis_blocks.clear()
     view_state.rebuild()
+
+
+async def on_export_data(view_state: AnalysisState):
+    if state.current_df is None:
+        show_error(view_state, "No active dataset to export.")
+        return
+
+    view_state.page.snack_bar = ft.SnackBar(
+        ft.Text("Preparing dataset export..."), duration=2000
+    )
+    view_state.page.snack_bar.open = True
+    view_state.page.update()
+
+    try:
+        csv_bytes = await asyncio.to_thread(
+            file_service.df_to_csv_bytes, state.current_df
+        )
+
+        base_name = state.current_df_name or "cleaned_dataset"
+        if base_name.lower().endswith(".csv"):
+            suggested_name = base_name.replace(".csv", "_cleaned.csv")
+        elif base_name.lower().endswith(".xlsx"):
+            suggested_name = base_name.replace(".xlsx", "_cleaned.csv")
+        elif base_name.lower().endswith(".json"):
+            suggested_name = base_name.replace(".json", "_cleaned.csv")
+        else:
+            suggested_name = f"{base_name}_cleaned.csv"
+
+        res = await view_state.file_picker_svc.save_file_async(
+            file_name=suggested_name,
+            allowed_extensions=["csv"],
+            src_bytes=csv_bytes,
+        )
+
+        if res:
+            view_state.page.snack_bar = ft.SnackBar(
+                ft.Text("✓ Cleaned dataset saved successfully!"),
+                bgcolor=theme.SUCCESS,
+                duration=3000,
+            )
+        else:
+            view_state.page.snack_bar = ft.SnackBar(
+                ft.Text("Save cancelled by user."),
+                duration=2000,
+            )
+        view_state.page.snack_bar.open = True
+        view_state.page.update()
+
+    except Exception as e:
+        logger.error("Failed to export dataset: %s", e)
+        show_error(view_state, f"Export failed: {e}")
 
 
 def on_pin_block(view_state: AnalysisState, index: int):

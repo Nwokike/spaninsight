@@ -59,6 +59,24 @@ class FilePickerService:
             logger.error("File picking failed: %s", e)
             return None
 
+    async def save_file_async(
+        self,
+        file_name: str,
+        allowed_extensions: Optional[list[str]] = None,
+        src_bytes: Optional[bytes] = None,
+    ) -> str | None:
+        """Trigger the save file picker dialog natively."""
+        try:
+            result = await self._picker.save_file(
+                file_name=file_name,
+                allowed_extensions=allowed_extensions,
+                src_bytes=src_bytes,
+            )
+            return result
+        except Exception as e:
+            logger.error("File saving failed: %s", e)
+            return None
+
     async def _run_data_picker(self):
         """Async picker logic for CSV/Excel files."""
         try:
