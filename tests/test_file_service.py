@@ -66,6 +66,21 @@ def test_load_dataframe_json_success():
         os.remove(temp_name)
 
 
+def test_load_dataframe_xml_success():
+    xml_data = "<data><row><X>100</X><Y>200</Y></row><row><X>300</X><Y>400</Y></row></data>"
+    with tempfile.NamedTemporaryFile(suffix=".xml", delete=False, mode="w") as f:
+        f.write(xml_data)
+        temp_name = f.name
+
+    try:
+        df = load_dataframe(temp_name)
+        assert len(df) == 2
+        assert list(df.columns) == ["X", "Y"]
+        assert df.iloc[0]["X"] == 100
+    finally:
+        os.remove(temp_name)
+
+
 def test_get_data_summary():
     df = pd.DataFrame(
         {"Num": [1.5, 2.5, 3.5, None], "Cat": ["apple", "banana", "apple", "cherry"]}

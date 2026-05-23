@@ -35,7 +35,7 @@ def validate_file(file_path: str) -> None:
     if ext not in ALLOWED_EXTENSIONS:
         raise FileValidationError(
             f"Unsupported file type: '{ext}'. "
-            f"Please use CSV, Excel, or JSON files ({', '.join(ALLOWED_EXTENSIONS)})."
+            f"Please use CSV, Excel, JSON, or XML files ({', '.join(ALLOWED_EXTENSIONS)})."
         )
 
     # Check size
@@ -96,6 +96,9 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
             # 100% Android/iOS compatibility, offloading the parsing to a background thread
             # in process_file to maintain UI responsiveness.
             df = pd.read_excel(file_path, engine="openpyxl")
+        elif ext == ".xml":
+            # NATIVE PARSING: Parse XML natively using Python's built-in etree parser
+            df = pd.read_xml(file_path, parser="etree")
         else:
             raise FileValidationError(f"Unsupported format: {ext}")
 
