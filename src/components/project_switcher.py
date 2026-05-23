@@ -18,6 +18,7 @@ def build_project_switcher(page: ft.Page, project_service) -> ft.Container:
     display_id = "Local Only" if is_local else f"PIN: {state.active_project_id}"
 
     # Outer pill wrapper
+    is_disabled = getattr(state, "is_analyzing", False)
     return ft.Container(
         content=ft.Row(
             [
@@ -51,9 +52,10 @@ def build_project_switcher(page: ft.Page, project_service) -> ft.Container:
         border_radius=12,
         bgcolor=theme.GLASS_BG,
         border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
-        on_click=lambda e: _show_switcher_dialog(page, project_service),
-        ink=True,
-        tooltip="Switch Workspace",
+        on_click=None if is_disabled else lambda e: _show_switcher_dialog(page, project_service),
+        disabled=is_disabled,
+        ink=not is_disabled,
+        tooltip="Switch Workspace" if not is_disabled else "Cannot switch workspace while autopilot is running",
     )
 
 

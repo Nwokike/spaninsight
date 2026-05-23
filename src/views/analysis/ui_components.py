@@ -280,10 +280,11 @@ def build_terminal(
                                 spacing=4,
                             ),
                             ft.Text("analysis.py", size=10, color="#888888"),
-                            ft.TextButton(
+                             ft.TextButton(
                                 "▶ Run",
                                 icon=ft.Icons.PLAY_ARROW_ROUNDED,
                                 style=ft.ButtonStyle(color="#28C840"),
+                                disabled=state.is_analyzing,
                                 on_click=_on_run,
                             )
                             if block_index >= 0
@@ -600,6 +601,7 @@ def build_block_card(
                         on_suggestion_selected, view_state, p
                     ),
                     style=ft.ButtonStyle(color=theme.WARNING),
+                    disabled=state.is_analyzing,
                 )
             )
         is_pinned = any(
@@ -619,6 +621,7 @@ def build_block_card(
                     style=ft.ButtonStyle(
                         color=theme.SUCCESS if is_pinned else theme.PRIMARY
                     ),
+                    disabled=state.is_analyzing,
                 )
             )
         controls.append(ft.Row(action_row, alignment=ft.MainAxisAlignment.END))

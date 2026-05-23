@@ -328,6 +328,11 @@ async def main(page: ft.Page):
         page.run_task(navigate, "/analysis")
 
     def on_nav_change(e):
+        if getattr(state, "is_analyzing", False):
+            nav_bar.selected_index = 2
+            page.update()
+            return
+
         index = e.control.selected_index
         old_tab = state.current_tab
         state.current_tab = index
@@ -481,6 +486,7 @@ async def main(page: ft.Page):
                     if page.theme_mode == ft.ThemeMode.DARK
                     else ft.Icons.DARK_MODE_ROUNDED,
                     tooltip="Toggle Theme",
+                    disabled=getattr(state, "is_analyzing", False),
                     on_click=lambda e: page.run_task(_global_toggle_theme),
                 )
 
