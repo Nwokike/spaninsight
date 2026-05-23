@@ -428,7 +428,8 @@ def build_settings_view(
             setting_tile(
                 icon=ft.Icons.PRIVACY_TIP_OUTLINED,
                 title="Privacy Policy",
-                subtitle="Your data never leaves your device",
+                subtitle="Read our 100% privacy commitment",
+                on_click=lambda e: page.launch_url("https://spaninsight.com/privacy.html"),
             ),
             ft.Container(height=tokens.SPACE_XL),
             ft.Container(

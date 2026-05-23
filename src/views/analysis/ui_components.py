@@ -475,3 +475,238 @@ def build_block_card(
         bgcolor=theme.GLASS_BG,
         border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
     )
+
+
+def build_skeleton_loader() -> ft.Container:
+    """Build a premium shimmering skeleton loader card for active AI analysis."""
+    skeleton_layout = ft.Column(
+        [
+            # Header Row Placeholder
+            ft.Row(
+                [
+                    ft.Container(width=16, height=16, border_radius=8, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Container(width=140, height=12, border_radius=4, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                ],
+                spacing=8,
+            ),
+            # Content Area Placeholder
+            ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Container(height=10, width=280, border_radius=3, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Container(height=10, width=240, border_radius=3, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Container(height=10, width=160, border_radius=3, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                    ],
+                    spacing=6,
+                ),
+                padding=12,
+                bgcolor=ft.Colors.with_opacity(0.04, theme.PRIMARY),
+                border_radius=8,
+            ),
+            # Footer Action Placeholders
+            ft.Row(
+                [
+                    ft.Container(width=60, height=12, border_radius=3, bgcolor=ft.Colors.ON_SURFACE_VARIANT),
+                ],
+                alignment=ft.MainAxisAlignment.END,
+            ),
+        ],
+        spacing=12,
+    )
+
+    return ft.Container(
+        content=ft.Shimmer(
+            content=skeleton_layout,
+            base_color=ft.Colors.with_opacity(0.06, ft.Colors.ON_SURFACE),
+            highlight_color=ft.Colors.with_opacity(0.16, ft.Colors.ON_SURFACE),
+            period=1200,
+        ),
+        padding=16,
+        margin=ft.Margin(tokens.SPACE_LG, 8, tokens.SPACE_LG, 8),
+        border_radius=16,
+        bgcolor=theme.GLASS_BG,
+        border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+    )
+
+
+def build_db_import_card(view_state: AnalysisState) -> ft.Container:
+    """Build a premium, glassmorphic Database Connection Card."""
+    import asyncio
+    url_field = ft.Ref[ft.TextField]()
+
+    # Dialects config
+    dialects = {
+        "sqlite": ("SQLite", "sqlite:///C:/path/to/database.db"),
+        "postgres": ("PostgreSQL", "postgresql+psycopg2://username:password@localhost:5432/dbname"),
+        "mysql": ("MySQL", "mysql+mysqldb://username:password@localhost:3306/dbname"),
+        "mssql": ("SQL Server", "mssql+pyodbc://username:password@localhost:1433/dbname?driver=ODBC+Driver+17+for+SQL+Server"),
+    }
+
+    # If empty url, pre-fill with sqlite default
+    if not view_state.db_url:
+        view_state.db_url = dialects["sqlite"][1]
+
+    def _on_dialect_changed(e):
+        dialect_key = e.control.value
+        view_state.db_url = dialects[dialect_key][1]
+        view_state.db_tables.clear()
+        view_state.db_selected_table = ""
+        view_state.db_test_status = ""
+        view_state.rebuild()
+
+    async def _on_test_connection(e):
+        if url_field.current:
+            view_state.db_url = url_field.current.value.strip()
+
+        if not view_state.db_url:
+            view_state.db_test_status = "failed: URL cannot be empty."
+            view_state.rebuild()
+            return
+
+        view_state.db_test_status = "testing"
+        view_state.db_tables.clear()
+        view_state.db_selected_table = ""
+        view_state.rebuild()
+
+        from services.db_service import DatabaseService
+        success, msg = await asyncio.to_thread(
+            DatabaseService.test_connection, view_state.db_url
+        )
+
+        if success:
+            view_state.db_test_status = "success"
+            tables = await asyncio.to_thread(
+                DatabaseService.list_tables, view_state.db_url
+            )
+            view_state.db_tables = tables
+        else:
+            view_state.db_test_status = f"failed: {msg}"
+            
+        view_state.rebuild()
+
+    def _on_table_selected(e):
+        view_state.db_selected_table = e.control.value
+        view_state.rebuild()
+
+    def _on_import(e):
+        if view_state.db_url and view_state.db_selected_table:
+            from views.analysis.handlers import process_db_table
+            view_state.page.run_task(
+                process_db_table, view_state, view_state.db_url, view_state.db_selected_table
+            )
+
+    # Build Test status feedback
+    status_indicator = ft.Container()
+    if view_state.db_test_status == "testing":
+        status_indicator = ft.Row(
+            [
+                ft.ProgressRing(width=14, height=14, stroke_width=2),
+                ft.Text("Testing database link...", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+            ],
+            spacing=8,
+        )
+    elif view_state.db_test_status == "success":
+        status_indicator = ft.Row(
+            [
+                ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED, color=theme.SUCCESS, size=16),
+                ft.Text("Connected successfully!", size=11, color=theme.SUCCESS, weight="bold"),
+            ],
+            spacing=8,
+        )
+    elif view_state.db_test_status.startswith("failed:"):
+        err = view_state.db_test_status.replace("failed:", "").strip()
+        status_indicator = ft.Row(
+            [
+                ft.Icon(ft.Icons.CANCEL_ROUNDED, color=theme.ERROR, size=16),
+                ft.Text(err, size=11, color=theme.ERROR, expand=True, max_lines=2, overflow="ellipsis"),
+            ],
+            spacing=8,
+            expand=True,
+        )
+
+    # Dialect dropdown
+    dialect_dd = ft.Dropdown(
+        label="SQL Dialect",
+        value=next((k for k, v in dialects.items() if view_state.db_url.startswith(k)), "sqlite"),
+        options=[ft.DropdownOption(key=k, text=v[0]) for k, v in dialects.items()],
+        on_change=_on_dialect_changed,
+        border_radius=12,
+        border_color=theme.DARK_BORDER,
+        bgcolor=theme.GLASS_BG,
+    )
+
+    url_input = ft.TextField(
+        ref=url_field,
+        label="Database Connection URL",
+        value=view_state.db_url,
+        hint_text="e.g. postgresql://user:pass@host:port/dbname",
+        border_radius=12,
+        border_color=theme.DARK_BORDER,
+        bgcolor=theme.GLASS_BG,
+        focused_border_color=theme.PRIMARY,
+        text_size=13,
+    )
+
+    test_btn = ft.FilledButton(
+        "Test Connection",
+        icon=ft.Icons.BOLT_ROUNDED,
+        style=ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=12),
+            bgcolor=theme.PRIMARY,
+        ),
+        disabled=(view_state.db_test_status == "testing"),
+        on_click=lambda e: view_state.page.run_task(_on_test_connection, e),
+    )
+
+    # Tables Dropdown
+    table_dd = ft.Dropdown(
+        label="Select Table",
+        value=view_state.db_selected_table if view_state.db_selected_table in view_state.db_tables else None,
+        options=[ft.DropdownOption(key=t, text=t) for t in view_state.db_tables],
+        disabled=(not view_state.db_tables),
+        on_change=_on_table_selected,
+        border_radius=12,
+        border_color=theme.DARK_BORDER,
+        bgcolor=theme.GLASS_BG,
+    )
+
+    import_btn = ft.FilledButton(
+        "Import Selected Table",
+        icon=ft.Icons.INPUT_ROUNDED,
+        style=ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=12),
+            bgcolor=theme.SUCCESS,
+        ),
+        disabled=(not view_state.db_selected_table),
+        on_click=_on_import,
+    )
+
+    form = ft.Column(
+        [
+            ft.Row(
+                [
+                    ft.Icon(ft.Icons.STORAGE_ROUNDED, size=24, color=theme.ACCENT),
+                    ft.Text("Connect SQL Database", size=tokens.FONT_LG, weight="bold"),
+                ],
+                spacing=8,
+            ),
+            ft.Container(height=4),
+            dialect_dd,
+            url_input,
+            ft.Row([test_btn, status_indicator], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, spacing=10),
+            ft.Divider(height=16, thickness=0.5, color=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)),
+            table_dd,
+            ft.Row([import_btn], alignment=ft.MainAxisAlignment.END),
+        ],
+        spacing=12,
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+    )
+
+    return ft.Container(
+        content=form,
+        padding=24,
+        border_radius=tokens.RADIUS_XL,
+        border=ft.Border.all(2, ft.Colors.with_opacity(0.2, theme.PRIMARY)),
+        bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.WHITE),
+        animate=ft.Animation(tokens.ANIM_DEFAULT_MS, ft.AnimationCurve.EASE_OUT),
+    )

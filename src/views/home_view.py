@@ -41,7 +41,7 @@ def build_home_view(
                         _action_card(
                             icon=ft.Icons.UPLOAD_FILE_ROUNDED,
                             title="Import Data",
-                            subtitle="CSV or Excel",
+                            subtitle="File or Database",
                             color=theme.PRIMARY,
                             on_click=lambda e: on_import_file(e, autopilot=False),
                         ),

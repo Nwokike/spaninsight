@@ -77,17 +77,22 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
             except UnicodeDecodeError:
                 df = pd.read_csv(file_path, encoding="latin-1")
         elif ext == ".json":
-            # try reading JSON line-delimited (default)
+            # PERFORMANCE FIX: Parse JSON/JSON Lines natively using high-performance orjson
+            import orjson
+            with open(file_path, "rb") as f:
+                content = f.read()
             try:
-                df = pd.read_json(file_path, lines=True)
-            except ValueError:
-                # fallback: try reading as normal JSON array
-                df = pd.read_json(file_path)
+                parsed = orjson.loads(content)
+                df = pd.DataFrame(parsed)
+            except orjson.JSONDecodeError:
+                # Fallback: Parse line-delimited JSON
+                parsed = [orjson.loads(line) for line in content.split(b"\n") if line.strip()]
+                df = pd.DataFrame(parsed)
         elif ext == ".xlsx":
-            # PERFORMANCE FIX: Swap openpyxl for python_calamine (10x faster)
-            import python_calamine  # noqa: F401
-
-            df = pd.read_excel(file_path, engine="calamine")
+            # MOBILE COMPATIBILITY FIX: Swapped calamine for pure-Python openpyxl to ensure
+            # 100% Android/iOS compatibility, offloading the parsing to a background thread
+            # in process_file to maintain UI responsiveness.
+            df = pd.read_excel(file_path, engine="openpyxl")
         else:
             raise FileValidationError(f"Unsupported format: {ext}")
 

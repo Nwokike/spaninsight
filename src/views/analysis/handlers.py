@@ -142,6 +142,99 @@ async def process_file(view_state: AnalysisState, file):
         view_state.rebuild()
 
 
+async def process_db_table(view_state: AnalysisState, connection_url: str, table_name: str):
+    """Event handler to load a DB table and boot AI data workspace."""
+    state.is_loading = True
+    view_state.loading_file_name["value"] = f"{table_name} [SQL]"
+    view_state.loading_file_size["value"] = 0
+    view_state.rebuild()
+
+    await asyncio.sleep(0.1)
+
+    try:
+        import matplotlib.pyplot as plt
+        from services.db_service import DatabaseService
+
+        plt.close("all")
+        # Load the DB table on a background thread to prevent UI freezing
+        df = await asyncio.to_thread(DatabaseService.load_table, connection_url, table_name)
+        
+        state.set_dataframe(df, f"{table_name} (SQL)")
+        state.current_file_path = f"sql://{table_name}"
+
+        state.current_df_summary = await asyncio.to_thread(
+            file_service.get_data_summary, df
+        )
+
+        try:
+            describe_data = df.describe(include="all").round(2).fillna("")
+        except Exception:
+            describe_data = None
+
+        block0 = {
+            "type": "initial",
+            "code": "",
+            "describe_data": describe_data,
+            "description": "Analyzing dataset schema...",
+            "suggestions": [],
+            "pinned": False,
+        }
+        state.analysis_blocks.clear()
+        state.analysis_blocks.append(block0)
+        state.is_loading = False
+        view_state.rebuild()
+
+        async def load_initial_ai():
+            try:
+                success, _ = await view_state.credit_service.spend(COST_SUGGEST)
+                if not success:
+                    state.analysis_blocks[0]["description"] = (
+                        "Dataset loaded. AI description unavailable (no credits)."
+                    )
+                    state.analysis_blocks[0]["suggestions"] = (
+                        ai_service.fallback_suggestions()
+                    )
+                else:
+                    description = await ai_service.describe_dataset(
+                        state.current_df_summary
+                    )
+                    state.analysis_blocks[0]["description"] = description
+                    view_state.rebuild()
+
+                    suggestions = await ai_service.suggest(state.current_df_summary)
+                    state.analysis_blocks[0]["suggestions"] = suggestions
+                    state.suggestions = suggestions
+
+                state.credits_remaining = await view_state.credit_service.get_balance()
+                view_state.rebuild()
+
+                if getattr(state, "autopilot_enabled", False):
+                    await run_autopilot(view_state)
+
+            except Exception as e:
+                logger.error("Initial AI load failed: %s", e)
+                state.analysis_blocks[0]["description"] = (
+                    f"Dataset loaded ({state.current_df_rows:,} rows, "
+                    f"{len(state.current_df_columns)} columns). "
+                    f"AI is offline — use custom prompts to analyze."
+                )
+                state.analysis_blocks[0]["suggestions"] = (
+                    ai_service.fallback_suggestions()
+                )
+                state.suggestions = state.analysis_blocks[0]["suggestions"]
+                view_state.rebuild()
+
+        view_state.page.run_task(load_initial_ai)
+
+    except Exception as err:
+        show_error(view_state, f"Failed to load table: {err}")
+        state.clear_data()
+        logger.exception("DB table load error")
+    finally:
+        state.is_loading = False
+        view_state.rebuild()
+
+
 async def on_suggestion_selected(
     view_state: AnalysisState, prompt: str, is_autopilot: bool = False
 ):

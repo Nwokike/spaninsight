@@ -29,6 +29,13 @@ class AnalysisState:
 
         self.rebuild_fn = None
 
+        # --- DATABASE FORM STATE ---
+        self.import_mode = "file"
+        self.db_url = ""
+        self.db_tables = []
+        self.db_selected_table = ""
+        self.db_test_status = ""  # "", "testing", "success", "failed: error"
+
     def rebuild(self):
         if self.rebuild_fn:
             self.rebuild_fn()

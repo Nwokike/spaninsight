@@ -15,7 +15,7 @@ from views.analysis.handlers import (
     on_custom_prompt,
     on_voice_toggle,
 )
-from views.analysis.ui_components import build_block_card
+from views.analysis.ui_components import build_block_card, build_db_import_card
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,13 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
 
     # --- STATEFUL DOM CONTAINERS ---
     top_section = ft.Container()
+    top_section_switcher = ft.AnimatedSwitcher(
+        content=top_section,
+        transition=ft.AnimatedSwitcherTransition.FADE,
+        duration=300,
+        switch_in_curve=ft.AnimationCurve.EASE_OUT,
+        switch_out_curve=ft.AnimationCurve.EASE_IN,
+    )
     blocks_list = ft.Column(
         spacing=16
     )  # <-- FIXED: Changed from ListView to standard Column
@@ -47,7 +54,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
 
     # <-- FIXED: Added scroll="auto" here so the entire page scrolls natively on any laptop
     main_column = ft.Column(
-        controls=[top_section, blocks_list, loading_section, input_section],
+        controls=[top_section_switcher, blocks_list, loading_section, input_section],
         expand=True,
         scroll="auto",
     )
@@ -83,10 +90,52 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                 top_section.alignment = ft.Alignment.CENTER
                 top_section.expand = True
             else:
+                def toggle_import_mode(mode):
+                    view_state.import_mode = mode
+                    view_state.rebuild()
+
+                # Premium glassmorphic mode selection segmented bar
+                mode_selector = ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.TextButton(
+                                "File Upload",
+                                icon=ft.Icons.UPLOAD_FILE_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    color=theme.PRIMARY if view_state.import_mode == "file" else ft.Colors.ON_SURFACE_VARIANT,
+                                    bgcolor=ft.Colors.with_opacity(0.1, theme.PRIMARY) if view_state.import_mode == "file" else ft.Colors.TRANSPARENT,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                ),
+                                on_click=lambda e: toggle_import_mode("file"),
+                            ),
+                            ft.TextButton(
+                                "SQL Database",
+                                icon=ft.Icons.STORAGE_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    color=theme.PRIMARY if view_state.import_mode == "database" else ft.Colors.ON_SURFACE_VARIANT,
+                                    bgcolor=ft.Colors.with_opacity(0.1, theme.PRIMARY) if view_state.import_mode == "database" else ft.Colors.TRANSPARENT,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                ),
+                                on_click=lambda e: toggle_import_mode("database"),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=12,
+                    ),
+                    margin=ft.Margin(0, 0, 0, 10),
+                )
+
+                import_widget = (
+                    build_file_import_card(on_pick_file, False)
+                    if view_state.import_mode == "file"
+                    else build_db_import_card(view_state)
+                )
+
                 top_section.content = ft.Column(
                     [
                         build_brand_header(show_tagline=True, spacing_below=True),
-                        build_file_import_card(on_pick_file, False),
+                        mode_selector,
+                        import_widget,
                         ft.Container(height=20),
                         ft.Row(
                             [
@@ -170,18 +219,14 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
             blocks_list.controls.clear()
             return
 
-        if len(blocks_list.controls) == len(state.analysis_blocks):
-            blocks_list.controls = [
-                build_block_card(view_state, b, i)
-                for i, b in enumerate(state.analysis_blocks)
-            ]
-        elif len(blocks_list.controls) < len(state.analysis_blocks):
-            for i in range(len(blocks_list.controls), len(state.analysis_blocks)):
-                blocks_list.controls.append(
-                    build_block_card(view_state, state.analysis_blocks[i], i)
-                )
-        else:
-            blocks_list.controls.clear()
+        blocks_list.controls = [
+            build_block_card(view_state, b, i)
+            for i, b in enumerate(state.analysis_blocks)
+        ]
+
+        if state.is_analyzing:
+            from views.analysis.ui_components import build_skeleton_loader
+            blocks_list.controls.append(build_skeleton_loader())
 
     def _update_bottom_sections():
         if state.current_df is None:
