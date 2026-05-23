@@ -407,7 +407,16 @@ class ProjectService:
 
     def _serialize_project(self, proj: dict) -> dict:
         """Prepare project data dict for JSON serialization (encoding bytes)."""
-        copied = json.loads(json.dumps(proj, default=str))
+        import pandas as pd
+
+        copied = json.loads(
+            json.dumps(
+                proj,
+                default=lambda x: (
+                    x.to_dict() if isinstance(x, pd.DataFrame) else str(x)
+                ),
+            )
+        )
 
         # Custom serialize analysis_blocks: convert raw bytes figure_png to base64
         for b in copied.get("analysis_blocks", []):
@@ -446,6 +455,16 @@ class ProjectService:
                 b["figure_png"] = base64.b64decode(b["figure_png_b64"])
             else:
                 b["figure_png"] = None
+
+            # Reconstruct describe_data DataFrame if serialized as dict
+            desc_val = b.get("describe_data")
+            if isinstance(desc_val, dict):
+                import pandas as pd
+
+                try:
+                    b["describe_data"] = pd.DataFrame.from_dict(desc_val)
+                except Exception:
+                    pass
 
         return {
             "id": pid,

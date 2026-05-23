@@ -248,15 +248,17 @@ def build_report_view(
             recording_time=ui_state.recording_time["value"],
             ai_prompt_text=ui_state.ai_prompt_text["value"],
             recording_timer_ref=ui_state.recording_timer_ref,
-            on_delete=lambda: page.run_task(
-                handlers.on_delete_report,
-                page,
-                ui_state,
-                ui_state.active_report["data"]["id"],
-                report_service,
-            )
-            if ui_state.active_report["data"]
-            else None,
+            on_delete=lambda: (
+                page.run_task(
+                    handlers.on_delete_report,
+                    page,
+                    ui_state,
+                    ui_state.active_report["data"]["id"],
+                    report_service,
+                )
+                if ui_state.active_report["data"]
+                else None
+            ),
         )
 
     page.run_task(handlers.load_reports, page, ui_state, report_service)

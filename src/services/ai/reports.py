@@ -13,28 +13,35 @@ logger = logging.getLogger(__name__)
 def _parse_resilient_json(text: str) -> dict | None:
     """Robustly extract and parse a JSON object from raw LLM output."""
     import re
-    from .client import strip_thinking, extract_block_by_pattern
-    
+    from .client import strip_thinking
+
     cleaned = extract_block_by_pattern(text, is_json=True)
     cleaned = strip_thinking(cleaned)
-    
+
     # Locate first { and last }
     first = cleaned.find("{")
     last = cleaned.rfind("}")
     if first != -1 and last != -1 and last >= first:
-        cleaned = cleaned[first:last+1]
-        
+        cleaned = cleaned[first : last + 1]
+
     try:
         return json.loads(cleaned, strict=False)
     except Exception as e:
-        logger.warning("Standard strict=False JSON parsing failed: %s. Attempting custom repairs.", e)
+        logger.warning(
+            "Standard strict=False JSON parsing failed: %s. Attempting custom repairs.",
+            e,
+        )
         # Attempt trailing comma cleanup and other standard JSON formatting issues
         try:
             # Strip trailing commas from object arrays
-            repaired = re.sub(r',\s*([\]}])', r'\1', cleaned)
+            repaired = re.sub(r",\s*([\]}])", r"\1", cleaned)
             return json.loads(repaired, strict=False)
         except Exception as ex:
-            logger.error("All JSON repair attempts failed. Original text length: %d. Error: %s", len(text), ex)
+            logger.error(
+                "All JSON repair attempts failed. Original text length: %d. Error: %s",
+                len(text),
+                ex,
+            )
             raise ex
 
 

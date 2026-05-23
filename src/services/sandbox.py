@@ -229,9 +229,24 @@ def execute_code(
             if any(kw in code for kw in ["to_csv", "save", "df.to_csv"]):
                 modified = True
 
+            res_val = namespace.get("result")
+            if res_val is None:
+                exclude_keys = {"df", "pd", "np", "plt", "math", "datetime", "statistics", "result", "__builtins__"}
+                found_res = None
+                for k, v in list(namespace.items()):
+                    if k in exclude_keys:
+                        continue
+                    if isinstance(v, (pd.DataFrame, pd.Series)):
+                        found_res = v
+                        if any(x in k.lower() for x in ["result", "summary", "missing", "clean", "output"]):
+                            found_res = v
+                            break
+                if found_res is not None:
+                    res_val = found_res
+
             return {
                 "success": True,
-                "result": namespace.get("result"),
+                "result": res_val,
                 "figure": figure,
                 "stdout": captured_output.getvalue(),
                 "error": None,

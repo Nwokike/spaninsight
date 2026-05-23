@@ -67,7 +67,9 @@ def test_load_dataframe_json_success():
 
 
 def test_load_dataframe_xml_success():
-    xml_data = "<data><row><X>100</X><Y>200</Y></row><row><X>300</X><Y>400</Y></row></data>"
+    xml_data = (
+        "<data><row><X>100</X><Y>200</Y></row><row><X>300</X><Y>400</Y></row></data>"
+    )
     with tempfile.NamedTemporaryFile(suffix=".xml", delete=False, mode="w") as f:
         f.write(xml_data)
         temp_name = f.name
@@ -113,20 +115,21 @@ def test_load_dataframe_tsv_success():
 
 def test_load_dataframe_zip_success():
     import zipfile
+
     csv_data = "X,Y\n5,6\n7,8\n"
-    
+
     # Write a zip archive containing a CSV file
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as f:
         temp_name = f.name
-        
+
     csv_temp_path = temp_name + ".csv"
     with open(csv_temp_path, "w") as f_csv:
         f_csv.write(csv_data)
-        
+
     try:
         with zipfile.ZipFile(temp_name, "w") as zf:
             zf.write(csv_temp_path, arcname="dataset.csv")
-            
+
         df = load_dataframe(temp_name)
         assert len(df) == 2
         assert list(df.columns) == ["X", "Y"]

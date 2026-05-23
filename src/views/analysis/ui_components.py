@@ -36,7 +36,11 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
     import numpy as np
 
     if result_val is None:
-        if not stdout_val or not str(stdout_val).strip() or str(stdout_val).strip() == "None":
+        if (
+            not stdout_val
+            or not str(stdout_val).strip()
+            or str(stdout_val).strip() == "None"
+        ):
             return None
         # Monospace terminal block for stdout
         return ft.Container(
@@ -44,7 +48,7 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                 str(stdout_val).strip(),
                 size=11,
                 font_family="RobotoMono",
-                color="#E0E0E0"
+                color="#E0E0E0",
             ),
             padding=12,
             bgcolor="#0D0D1A",
@@ -69,7 +73,12 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
         primitives = {}
         structures = {}
         for k, v in result_val.items():
-            if isinstance(v, (int, float, str, bool)) or isinstance(v, np.number) or (isinstance(v, np.ndarray) and v.ndim == 0):
+            if (
+                isinstance(v, (int, float, str, bool))
+                or isinstance(v, np.number)
+                or (isinstance(v, np.ndarray) and v.ndim == 0)
+                or (isinstance(v, (list, np.ndarray)) and len(v) <= 24 and all(isinstance(x, (int, float, str, bool, np.number)) for x in v))
+            ):
                 primitives[k] = v
             else:
                 structures[k] = v
@@ -80,35 +89,74 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
         if primitives:
             metric_cards = []
             for k, v in primitives.items():
-                if isinstance(v, (float, np.floating)):
-                    val_str = f"{v:.4f}"
-                else:
-                    val_str = str(v)
-                
                 label_text = str(k).replace("_", " ").title()
-                
+
+                if isinstance(v, (list, np.ndarray)):
+                    # Render array of primitives as a horizontal Row of badges
+                    badge_items = []
+                    for x in v:
+                        val_str = f"{x:.4f}" if isinstance(x, (float, np.floating)) else str(x)
+                        badge_items.append(
+                            ft.Container(
+                                content=ft.Text(
+                                    val_str,
+                                    size=9,
+                                    font_family="RobotoMono",
+                                    color=theme.PRIMARY,
+                                ),
+                                padding=ft.Padding(5, 2, 5, 2),
+                                bgcolor=ft.Colors.with_opacity(0.08, theme.PRIMARY),
+                                border_radius=4,
+                            )
+                        )
+                    card_content = ft.Column(
+                        [
+                            ft.Text(
+                                label_text,
+                                size=10,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                weight="w600",
+                                max_lines=1,
+                                overflow="ellipsis",
+                            ),
+                            ft.Row(
+                                badge_items,
+                                spacing=4,
+                                wrap=True,
+                            ),
+                        ],
+                        spacing=4,
+                    )
+                else:
+                    if isinstance(v, (float, np.floating)):
+                        val_str = f"{v:.4f}"
+                    else:
+                        val_str = str(v)
+
+                    card_content = ft.Column(
+                        [
+                            ft.Text(
+                                label_text,
+                                size=10,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                weight="w600",
+                                max_lines=1,
+                                overflow="ellipsis",
+                            ),
+                            ft.Text(
+                                val_str,
+                                size=18,
+                                weight="bold",
+                                color=theme.PRIMARY,
+                            ),
+                        ],
+                        spacing=2,
+                    )
+
                 # Build a premium mini stat card
                 metric_cards.append(
                     ft.Container(
-                        content=ft.Column(
-                            [
-                                ft.Text(
-                                    label_text,
-                                    size=10,
-                                    color=ft.Colors.ON_SURFACE_VARIANT,
-                                    weight="w600",
-                                    max_lines=1,
-                                    overflow="ellipsis",
-                                ),
-                                ft.Text(
-                                    val_str,
-                                    size=18,
-                                    weight="bold",
-                                    color=theme.PRIMARY,
-                                ),
-                            ],
-                            spacing=2,
-                        ),
+                        content=card_content,
                         padding=12,
                         border_radius=8,
                         bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.ON_SURFACE),
@@ -116,7 +164,7 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                         expand=True,
                     )
                 )
-            
+
             # Wrap metric cards in a responsive row
             for c in metric_cards:
                 c.col = {"xs": 6, "sm": 4, "md": 3}
@@ -139,8 +187,17 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                             [
                                 ft.Row(
                                     [
-                                        ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=14, color=theme.ACCENT),
-                                        ft.Text(label_text, size=12, weight="bold", color=theme.ACCENT),
+                                        ft.Icon(
+                                            ft.Icons.QUERY_STATS_ROUNDED,
+                                            size=14,
+                                            color=theme.ACCENT,
+                                        ),
+                                        ft.Text(
+                                            label_text,
+                                            size=12,
+                                            weight="bold",
+                                            color=theme.ACCENT,
+                                        ),
                                     ],
                                     spacing=6,
                                     margin=ft.Margin(0, 4, 0, 2),
@@ -157,7 +214,11 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
     # 4. Handle List or Numpy Array
     if isinstance(result_val, (list, np.ndarray)):
         # Check if list of dicts (render as dataframe)
-        if isinstance(result_val, list) and len(result_val) > 0 and all(isinstance(x, dict) for x in result_val):
+        if (
+            isinstance(result_val, list)
+            and len(result_val) > 0
+            and all(isinstance(x, dict) for x in result_val)
+        ):
             try:
                 df = pd.DataFrame(result_val)
                 return build_data_preview(df)
@@ -167,9 +228,11 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
         items = list(result_val)
         if len(items) == 0:
             return ft.Text("Empty list", size=12, italic=True)
-            
+
         # If small list, render as a nice row of chips
-        if len(items) <= 12 and all(isinstance(x, (int, float, np.number)) for x in items):
+        if len(items) <= 12 and all(
+            isinstance(x, (int, float, np.number)) for x in items
+        ):
             chips = []
             for x in items:
                 val_str = f"{x:.4f}" if isinstance(x, (float, np.floating)) else str(x)
@@ -183,15 +246,14 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                 )
             return ft.Row(chips, spacing=4, wrap=True)
         else:
-            arr_str = ", ".join(f"{x:.4f}" if isinstance(x, float) else str(x) for x in items[:50])
+            arr_str = ", ".join(
+                f"{x:.4f}" if isinstance(x, float) else str(x) for x in items[:50]
+            )
             if len(items) > 50:
                 arr_str += f" ... (+{len(items) - 50} more items)"
             return ft.Container(
                 content=ft.Text(
-                    arr_str,
-                    size=11,
-                    font_family="RobotoMono",
-                    color="#E0E0E0"
+                    arr_str, size=11, font_family="RobotoMono", color="#E0E0E0"
                 ),
                 padding=10,
                 bgcolor="#0D0D1A",
@@ -202,11 +264,9 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
     val_str = str(result_val).strip()
     if not val_str or val_str == "None":
         return None
-        
+
     return ft.Container(
-        content=ft.Text(
-            val_str, size=12, font_family="RobotoMono", color="#E0E0E0"
-        ),
+        content=ft.Text(val_str, size=12, font_family="RobotoMono", color="#E0E0E0"),
         padding=10,
         bgcolor="#0D0D1A",
         border_radius=8,
@@ -280,7 +340,7 @@ def build_terminal(
                                 spacing=4,
                             ),
                             ft.Text("analysis.py", size=10, color="#888888"),
-                             ft.TextButton(
+                            ft.TextButton(
                                 "▶ Run",
                                 icon=ft.Icons.PLAY_ARROW_ROUNDED,
                                 style=ft.ButtonStyle(color="#28C840"),
@@ -371,7 +431,40 @@ def build_block_card(
 
     if is_initial:
         describe_data = block.get("describe_data")
-        if describe_data is not None:
+        import pandas as pd
+
+        # Self-healing: if describe_data is a string/None and the DataFrame is active, regenerate it!
+        if (
+            isinstance(describe_data, str) or describe_data is None
+        ) and state.current_df is not None:
+            try:
+                describe_data = (
+                    state.current_df.describe(include="all").round(2).fillna("")
+                )
+                block["describe_data"] = describe_data
+            except Exception:
+                pass
+
+        # If it was serialized as a JSON string, try to parse it to a dictionary
+        if isinstance(describe_data, str):
+            try:
+                import json
+
+                parsed = json.loads(describe_data)
+                if isinstance(parsed, dict):
+                    describe_data = parsed
+            except Exception:
+                pass
+
+        # Convert dictionary back to pandas DataFrame
+        if isinstance(describe_data, dict):
+            try:
+                describe_data = pd.DataFrame.from_dict(describe_data)
+                block["describe_data"] = describe_data
+            except Exception:
+                pass
+
+        if describe_data is not None and isinstance(describe_data, pd.DataFrame):
             try:
                 desc_cols = [
                     ft.DataColumn(
@@ -525,9 +618,7 @@ def build_block_card(
             if chart_ui:
                 controls.append(chart_ui)
 
-        text_ui = build_text_output_container(
-            block.get("result"), block.get("stdout")
-        )
+        text_ui = build_text_output_container(block.get("result"), block.get("stdout"))
         if text_ui:
             controls.append(text_ui)
 

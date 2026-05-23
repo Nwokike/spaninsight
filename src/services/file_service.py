@@ -116,7 +116,9 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
             try:
                 df = pd.read_csv(file_path)
             except Exception as e:
-                raise FileValidationError(f"Zipped file must contain a valid CSV dataset: {e}")
+                raise FileValidationError(
+                    f"Zipped file must contain a valid CSV dataset: {e}"
+                )
         elif ext in {".pkl", ".pickle"}:
             # NATIVE PARSING: Parse Python Pickle files natively
             df = pd.read_pickle(file_path)

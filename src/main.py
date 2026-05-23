@@ -458,7 +458,7 @@ async def main(page: ft.Page):
                 switcher = build_project_switcher(page, project_service)
 
                 # 2. Color Mode Switch (Theme toggle)
-                async def _global_toggle_theme(e):
+                async def _global_toggle_theme(e=None):
                     is_dark = page.theme_mode == ft.ThemeMode.DARK or (
                         page.theme_mode == ft.ThemeMode.SYSTEM
                         and page.platform_brightness == ft.Brightness.DARK

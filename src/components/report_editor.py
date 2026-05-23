@@ -10,12 +10,12 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
         return None
 
     res_type = ser_res.get("type")
-    
+
     # 1. DataFrame or Series Table
     if res_type in ("dataframe", "series"):
         cols_data = ser_res.get("columns") or []
         rows_data = ser_res.get("data") or []
-        
+
         # Fallback for Series
         if res_type == "series":
             name = ser_res.get("name") or "Value"
@@ -33,7 +33,7 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
             )
             for col in cols_data
         ]
-        
+
         # Build elegant DataRows
         rows = []
         for row in rows_data:
@@ -45,7 +45,12 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
                     val_str = str(cell if cell is not None else "—")
                 cells.append(
                     ft.DataCell(
-                        ft.Text(val_str, size=tokens.FONT_XS - 1, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+                        ft.Text(
+                            val_str,
+                            size=tokens.FONT_XS - 1,
+                            max_lines=1,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                        )
                     )
                 )
             rows.append(ft.DataRow(cells=cells))
@@ -55,7 +60,9 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
             rows=rows,
             border=ft.Border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)),
             border_radius=tokens.RADIUS_MD,
-            horizontal_lines=ft.BorderSide(1, ft.Colors.with_opacity(0.06, ft.Colors.ON_SURFACE)),
+            horizontal_lines=ft.BorderSide(
+                1, ft.Colors.with_opacity(0.06, ft.Colors.ON_SURFACE)
+            ),
             column_spacing=tokens.SPACE_MD,
             heading_row_height=32,
             data_row_max_height=30,
@@ -73,9 +80,14 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
                     border_radius=tokens.RADIUS_MD,
                 ),
                 ft.Container(
-                    content=ft.Text(footer_text, size=tokens.FONT_XS - 2, color=ft.Colors.ON_SURFACE_VARIANT, italic=True),
+                    content=ft.Text(
+                        footer_text,
+                        size=tokens.FONT_XS - 2,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        italic=True,
+                    ),
                     padding=ft.Padding(4, 0, 0, 0),
-                )
+                ),
             ],
             spacing=4,
         )
@@ -99,7 +111,7 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
                     val_str = f"{v:.4f}"
                 else:
                     val_str = str(v if v is not None else "—")
-                
+
                 label_text = str(k).replace("_", " ").title()
                 metric_cards.append(
                     ft.Container(
@@ -149,8 +161,17 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
                             [
                                 ft.Row(
                                     [
-                                        ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=12, color=theme.ACCENT),
-                                        ft.Text(label_text, size=tokens.FONT_XS, weight="bold", color=theme.ACCENT),
+                                        ft.Icon(
+                                            ft.Icons.QUERY_STATS_ROUNDED,
+                                            size=12,
+                                            color=theme.ACCENT,
+                                        ),
+                                        ft.Text(
+                                            label_text,
+                                            size=tokens.FONT_XS,
+                                            weight="bold",
+                                            color=theme.ACCENT,
+                                        ),
                                     ],
                                     spacing=4,
                                 ),
@@ -168,7 +189,7 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
         list_data = ser_res.get("data") or []
         if not list_data:
             return None
-            
+
         if all(isinstance(x, dict) and "type" in x for x in list_data):
             sub_controls = []
             for x in list_data:
@@ -183,7 +204,9 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
                 val_str = f"{x:.4f}" if isinstance(x, float) else str(x)
                 chips.append(
                     ft.Container(
-                        content=ft.Text(val_str, size=tokens.FONT_XS - 1, font_family="RobotoMono"),
+                        content=ft.Text(
+                            val_str, size=tokens.FONT_XS - 1, font_family="RobotoMono"
+                        ),
                         padding=ft.Padding(6, 3, 6, 3),
                         border_radius=4,
                         bgcolor=ft.Colors.with_opacity(0.06, theme.PRIMARY),
@@ -191,11 +214,18 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
                 )
             return ft.Row(chips, spacing=4, wrap=True)
         else:
-            arr_str = ", ".join(f"{x:.4f}" if isinstance(x, float) else str(x) for x in list_data[:50])
+            arr_str = ", ".join(
+                f"{x:.4f}" if isinstance(x, float) else str(x) for x in list_data[:50]
+            )
             if len(list_data) > 50:
                 arr_str += f" ... (+{len(list_data) - 50} more items)"
             return ft.Container(
-                content=ft.Text(arr_str, size=tokens.FONT_XS - 1, font_family="RobotoMono", color="#E0E0E0"),
+                content=ft.Text(
+                    arr_str,
+                    size=tokens.FONT_XS - 1,
+                    font_family="RobotoMono",
+                    color="#E0E0E0",
+                ),
                 padding=8,
                 bgcolor="#0D0D1A",
                 border_radius=tokens.RADIUS_SM,
@@ -239,7 +269,7 @@ def build_report_block_card(
     res_widget = ft.Container(height=0)
     ser_res = block.get("serialized_result")
     stdout_val = block.get("stdout")
-    
+
     if ser_res:
         vis = build_serialized_result_visualizer(ser_res)
         if vis:
@@ -567,7 +597,9 @@ def build_report_editor(
                                 style=ft.ButtonStyle(color=theme.ERROR),
                                 on_click=lambda e: on_delete(),
                                 visible=on_delete is not None,
-                            ) if on_delete is not None else ft.Container(),
+                            )
+                            if on_delete is not None
+                            else ft.Container(),
                         ],
                         spacing=8,
                     ),

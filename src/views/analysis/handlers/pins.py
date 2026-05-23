@@ -21,8 +21,11 @@ def serialize_result_for_report(result_val) -> dict | None:
         return {
             "type": "dataframe",
             "columns": list(result_val.columns),
-            "data": [[None if pd.isna(x) else x for x in row] for row in result_val.head(50).values.tolist()],
-            "total_rows": len(result_val)
+            "data": [
+                [None if pd.isna(x) else x for x in row]
+                for row in result_val.head(50).values.tolist()
+            ],
+            "total_rows": len(result_val),
         }
 
     # Handle Series
@@ -31,16 +34,15 @@ def serialize_result_for_report(result_val) -> dict | None:
             "type": "series",
             "name": str(result_val.name) if result_val.name else "Value",
             "index": list(result_val.index),
-            "data": [None if pd.isna(x) else x for x in result_val.head(50).values.tolist()],
-            "total_rows": len(result_val)
+            "data": [
+                None if pd.isna(x) else x for x in result_val.head(50).values.tolist()
+            ],
+            "total_rows": len(result_val),
         }
 
     # Handle Numpy array
     if isinstance(result_val, np.ndarray):
-        return {
-            "type": "ndarray",
-            "data": result_val.tolist()
-        }
+        return {"type": "ndarray", "data": result_val.tolist()}
 
     # Handle Numpy scalar types
     if isinstance(result_val, (np.integer, np.floating, np.bool_)):
@@ -50,7 +52,9 @@ def serialize_result_for_report(result_val) -> dict | None:
     if isinstance(result_val, dict):
         return {
             "type": "dict",
-            "data": {str(k): serialize_result_for_report(v) for k, v in result_val.items()}
+            "data": {
+                str(k): serialize_result_for_report(v) for k, v in result_val.items()
+            },
         }
 
     # Handle standard list/tuple
@@ -64,7 +68,7 @@ def serialize_result_for_report(result_val) -> dict | None:
                 pass
         return {
             "type": "list",
-            "data": [serialize_result_for_report(v) for v in result_val]
+            "data": [serialize_result_for_report(v) for v in result_val],
         }
 
     # Handle basic types

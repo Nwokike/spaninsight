@@ -61,6 +61,84 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
     view_state.content_column = ft.Ref[ft.Column]()
     view_state.content_column.current = main_column
 
+    # Centered glowing status card inside the overlay
+    autopilot_overlay_card = ft.Container(
+        content=ft.Column(
+            [
+                ft.Row(
+                    [
+                        ft.ProgressRing(
+                            width=22, height=22, stroke_width=3, color=theme.PRIMARY
+                        ),
+                        ft.Text("Autopilot is running...", weight="bold", size=15),
+                    ],
+                    spacing=12,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+                ft.Container(height=4),
+                ft.Text(
+                    "SpanInsight is analyzing your data recursively. Sit back and watch the insights compile in real-time!",
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.Container(
+                    content=ft.Text(
+                        "Status: Initializing...",
+                        size=11,
+                        italic=True,
+                        color=theme.PRIMARY,
+                    ),
+                    alignment=ft.Alignment.CENTER,
+                ),
+                ft.Container(height=8),
+                ft.Row(
+                    [
+                        ft.FilledButton(
+                            "Stop Autopilot",
+                            icon=ft.Icons.STOP_ROUNDED,
+                            style=ft.ButtonStyle(
+                                bgcolor=theme.ERROR,
+                                shape=ft.RoundedRectangleBorder(radius=10),
+                            ),
+                            on_click=lambda e: (
+                                setattr(state, "autopilot_cancelled", True)
+                                or view_state.rebuild()
+                            ),
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+            ],
+            spacing=8,
+            tight=True,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        padding=20,
+        width=340,
+        border_radius=16,
+        bgcolor=theme.GLASS_BG,
+        border=ft.Border.all(1.5, theme.GLASS_BORDER_COLOR),
+        shadow=ft.BoxShadow(
+            blur_radius=25,
+            color=ft.Colors.with_opacity(0.4, ft.Colors.BLACK),
+            offset=ft.Offset(0, 8),
+        ),
+    )
+
+    # Positioned transparent glassmorphic overlay covering the stack
+    autopilot_overlay = ft.Container(
+        top=0,
+        bottom=0,
+        left=0,
+        right=0,
+        bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.BLACK),
+        blur=ft.Blur(sigma_x=1.5, sigma_y=1.5),
+        alignment=ft.Alignment.CENTER,
+        content=autopilot_overlay_card,
+        visible=False,
+    )
+
     def _update_top_section():
         expects_dataset = bool(state.current_df_name)
         has_dataframe = state.current_df is not None
@@ -256,6 +334,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                             ft.IconButton(
                                 ft.Icons.CLOSE_ROUNDED,
                                 on_click=lambda e: on_clear_data(view_state, e),
+                                disabled=state.is_analyzing,
                             ),
                         ]
                     ),
@@ -297,6 +376,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                         0.08, theme.SUCCESS
                                     ),
                                 ),
+                                disabled=state.is_analyzing,
                             ),
                         ],
                         alignment=ft.MainAxisAlignment.CENTER,
@@ -331,32 +411,20 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
         if not expects_dataset and not has_dataframe:
             loading_section.visible = False
             input_section.visible = False
+            autopilot_overlay.visible = False
             return
 
         if state.is_analyzing:
             progress_text = getattr(state, "autopilot_progress", "") or "AI thinking..."
-            controls = [
-                ft.ProgressRing(width=16, height=16),
-                ft.Text(progress_text, size=13, expand=True),
-            ]
-            if getattr(state, "autopilot_progress", ""):
-                controls.append(
-                    ft.TextButton(
-                        "Stop",
-                        icon=ft.Icons.STOP_ROUNDED,
-                        icon_color=theme.ERROR,
-                        on_click=lambda e: (
-                            setattr(state, "autopilot_cancelled", True)
-                            or view_state.rebuild()
-                        ),
-                    )
-                )
-
-            loading_section.content = ft.Row(controls, alignment="center", spacing=10)
-            loading_section.padding = ft.Padding(0, 16, 0, 16)
-            loading_section.visible = True
+            loading_section.visible = False
             input_section.visible = False
+
+            # Show overlay and update its status dynamically
+            autopilot_overlay.visible = True
+            step_text_container = autopilot_overlay_card.content.controls[3]
+            step_text_container.content.value = f"Status: {progress_text}"
         else:
+            autopilot_overlay.visible = False
             loading_section.visible = False
             if not input_section.content:
                 input_section.content = ft.Row(
@@ -478,12 +546,17 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
 
     _rebuild()
 
+    stack = ft.Stack(
+        controls=[main_column, autopilot_overlay],
+        expand=True,
+    )
+
     return ft.View(
         route="/analysis",
         appbar=ft.AppBar(
             title=ft.Text("Analysis Engine", weight="bold"),
             bgcolor=ft.Colors.TRANSPARENT,
         ),
-        controls=[main_column],
+        controls=[stack],
         padding=0,
     )

@@ -260,7 +260,9 @@ async def run_autopilot(view_state):
                             "description": b.get("description", ""),
                             "figure_png_b64": png_b64,
                             "block_type": "chart" if png_b64 else "text",
-                            "serialized_result": serialize_result_for_report(b.get("result")),
+                            "serialized_result": serialize_result_for_report(
+                                b.get("result")
+                            ),
                             "stdout": b.get("stdout", ""),
                         }
                     )
