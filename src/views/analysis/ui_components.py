@@ -114,7 +114,6 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                         bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.ON_SURFACE),
                         border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
                         expand=True,
-                        min_width=120,
                     )
                 )
             

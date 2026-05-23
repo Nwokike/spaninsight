@@ -126,7 +126,6 @@ def build_serialized_result_visualizer(ser_res) -> ft.Control | None:
                         border_radius=tokens.RADIUS_SM,
                         bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.ON_SURFACE),
                         border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
-                        min_width=100,
                         expand=True,
                     )
                 )
