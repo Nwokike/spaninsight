@@ -49,7 +49,6 @@ class ASTSecurityChecker(ast.NodeVisitor):
             "datetime",
             "statistics",
             "shapely",
-            "pymongo",
             "jq",
             "pendulum",
         }
@@ -77,7 +76,7 @@ class ASTSecurityChecker(ast.NodeVisitor):
             base_module = alias.name.split(".")[0]
             if base_module in self.blocked_imports:
                 self._flag_error(
-                    f"Importing '{alias.name}' is not available. Use whitelisted libraries like pandas, numpy, matplotlib, statistics, shapely, pymongo, jq, and pendulum."
+                    f"Importing '{alias.name}' is not available. Use whitelisted libraries like pandas, numpy, matplotlib, statistics, shapely, jq, and pendulum."
                 )
             elif base_module not in self.allowed_imports:
                 self._flag_error(f"Importing '{alias.name}' is prohibited.")
@@ -88,7 +87,7 @@ class ASTSecurityChecker(ast.NodeVisitor):
             base_module = node.module.split(".")[0]
             if base_module in self.blocked_imports:
                 self._flag_error(
-                    f"Importing from '{node.module}' is not available. Use whitelisted libraries like pandas, numpy, matplotlib, statistics, shapely, pymongo, jq, and pendulum."
+                    f"Importing from '{node.module}' is not available. Use whitelisted libraries like pandas, numpy, matplotlib, statistics, shapely, jq, and pendulum."
                 )
             elif base_module not in self.allowed_imports:
                 self._flag_error(f"Importing from '{node.module}' is prohibited.")
@@ -139,7 +138,6 @@ def _safe_import(name, *args, **kwargs):
         "datetime",
         "statistics",
         "shapely",
-        "pymongo",
         "jq",
         "pendulum",
     }
