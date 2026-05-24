@@ -296,16 +296,22 @@ def build_home_view(
                 proj = state.user_projects[pid_item]
                 fpath = proj.get("current_file_path", "")
                 if fpath:
+                    import asyncio
                     import os
                     from services import file_service
 
                     if os.path.exists(fpath):
                         try:
-                            df = file_service.load_dataframe(fpath)
+                            # PERFORMANCE FIX: Reload dataset in a background thread to prevent UI freezing on switch
+                            df = await asyncio.to_thread(
+                                file_service.load_dataframe, fpath
+                            )
                             state.set_dataframe(
                                 df, proj.get("current_df_name", "Dataset")
                             )
-                            state.current_df_summary = file_service.get_data_summary(df)
+                            state.current_df_summary = await asyncio.to_thread(
+                                file_service.get_data_summary, df
+                            )
                         except Exception:
                             state.clear_data()
                     else:

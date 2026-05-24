@@ -78,11 +78,15 @@ class FilePickerService:
             return None
 
     async def _run_data_picker(self):
-        """Async picker logic for CSV/Excel files."""
+        """Async picker logic for CSV/Excel/JSON/XML/Stata/SAS/delimited files."""
         try:
+            from core.constants import ALLOWED_EXTENSIONS
+
+            allowed = [ext.lstrip(".") for ext in ALLOWED_EXTENSIONS]
+
             result = await self._picker.pick_files(
                 allow_multiple=False,
-                allowed_extensions=["csv", "xlsx", "json"],
+                allowed_extensions=allowed,
                 with_data=False,  # We read from path for large data files
             )
 

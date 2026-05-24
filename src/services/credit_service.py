@@ -116,15 +116,20 @@ class CreditService:
         return DAILY_FREE_CREDITS
 
     async def _check_daily_reset(self) -> None:
-        """Reset credits if the date has changed."""
+        """Reset credits if the date has changed, topping up to the daily cap while preserving higher balances."""
         today = date.today().isoformat()
         last_reset = await self._storage.get(STORAGE_LAST_RESET)
         if last_reset != today:
+            current = await self._get_credits()
             daily_cap = await self.get_daily_cap()
-            await self._storage.set(STORAGE_CREDITS, str(daily_cap))
+            new_balance = max(current, daily_cap)
+            await self._storage.set(STORAGE_CREDITS, str(new_balance))
             await self._storage.set(STORAGE_LAST_RESET, today)
             self._reservations.clear()
-            logger.info("Daily credit reset: %d credits granted.", daily_cap)
+            logger.info(
+                "Daily credit reset check: balance topped up/preserved at %d.",
+                new_balance,
+            )
 
     async def _get_credits(self) -> int:
         val = await self._storage.get(STORAGE_CREDITS)

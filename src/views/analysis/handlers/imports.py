@@ -110,7 +110,10 @@ async def process_file(view_state, file):
         )
 
         try:
-            describe_data = df.describe(include="all").round(2).fillna("")
+            # PERFORMANCE FIX: Offload CPU-bound describe call to background thread to maintain UI responsiveness
+            describe_data = await asyncio.to_thread(
+                lambda: df.describe(include="all").round(2).fillna("")
+            )
         except Exception:
             describe_data = None
 
@@ -132,21 +135,19 @@ async def process_file(view_state, file):
             try:
                 success, _ = await view_state.credit_service.spend(COST_SUGGEST)
                 if not success:
-                    state.analysis_blocks[0]["description"] = (
+                    block0["description"] = (
                         "Dataset loaded. AI description unavailable (no credits)."
                     )
-                    state.analysis_blocks[0]["suggestions"] = (
-                        ai_service.fallback_suggestions()
-                    )
+                    block0["suggestions"] = ai_service.fallback_suggestions()
                 else:
                     description = await ai_service.describe_dataset(
                         state.current_df_summary
                     )
-                    state.analysis_blocks[0]["description"] = description
+                    block0["description"] = description
                     view_state.rebuild()
 
                     suggestions = await ai_service.suggest(state.current_df_summary)
-                    state.analysis_blocks[0]["suggestions"] = suggestions
+                    block0["suggestions"] = suggestions
                     state.suggestions = suggestions
 
                 state.credits_remaining = await view_state.credit_service.get_balance()
@@ -157,15 +158,13 @@ async def process_file(view_state, file):
 
             except Exception as e:
                 logger.error("Initial AI load failed: %s", e)
-                state.analysis_blocks[0]["description"] = (
+                block0["description"] = (
                     f"Dataset loaded ({state.current_df_rows:,} rows, "
                     f"{len(state.current_df_columns)} columns). "
                     f"AI is offline — use custom prompts to analyze."
                 )
-                state.analysis_blocks[0]["suggestions"] = (
-                    ai_service.fallback_suggestions()
-                )
-                state.suggestions = state.analysis_blocks[0]["suggestions"]
+                block0["suggestions"] = ai_service.fallback_suggestions()
+                state.suggestions = block0["suggestions"]
                 view_state.rebuild()
 
         view_state.page.run_task(load_initial_ai)
@@ -207,7 +206,10 @@ async def process_db_table(view_state, connection_url: str, table_name: str):
         )
 
         try:
-            describe_data = df.describe(include="all").round(2).fillna("")
+            # PERFORMANCE FIX: Offload CPU-bound describe call to background thread to maintain UI responsiveness
+            describe_data = await asyncio.to_thread(
+                lambda: df.describe(include="all").round(2).fillna("")
+            )
         except Exception:
             describe_data = None
 
@@ -229,21 +231,19 @@ async def process_db_table(view_state, connection_url: str, table_name: str):
             try:
                 success, _ = await view_state.credit_service.spend(COST_SUGGEST)
                 if not success:
-                    state.analysis_blocks[0]["description"] = (
+                    block0["description"] = (
                         "Dataset loaded. AI description unavailable (no credits)."
                     )
-                    state.analysis_blocks[0]["suggestions"] = (
-                        ai_service.fallback_suggestions()
-                    )
+                    block0["suggestions"] = ai_service.fallback_suggestions()
                 else:
                     description = await ai_service.describe_dataset(
                         state.current_df_summary
                     )
-                    state.analysis_blocks[0]["description"] = description
+                    block0["description"] = description
                     view_state.rebuild()
 
                     suggestions = await ai_service.suggest(state.current_df_summary)
-                    state.analysis_blocks[0]["suggestions"] = suggestions
+                    block0["suggestions"] = suggestions
                     state.suggestions = suggestions
 
                 state.credits_remaining = await view_state.credit_service.get_balance()
@@ -254,15 +254,13 @@ async def process_db_table(view_state, connection_url: str, table_name: str):
 
             except Exception as e:
                 logger.error("Initial AI load failed: %s", e)
-                state.analysis_blocks[0]["description"] = (
+                block0["description"] = (
                     f"Dataset loaded ({state.current_df_rows:,} rows, "
                     f"{len(state.current_df_columns)} columns). "
                     f"AI is offline — use custom prompts to analyze."
                 )
-                state.analysis_blocks[0]["suggestions"] = (
-                    ai_service.fallback_suggestions()
-                )
-                state.suggestions = state.analysis_blocks[0]["suggestions"]
+                block0["suggestions"] = ai_service.fallback_suggestions()
+                state.suggestions = block0["suggestions"]
                 view_state.rebuild()
 
         view_state.page.run_task(load_initial_ai)

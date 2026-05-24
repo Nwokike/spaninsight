@@ -79,7 +79,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                 ft.Text(
                     "SpanInsight is analyzing your data recursively. Sit back and watch the insights compile in real-time!",
                     size=12,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
+                    color=ft.Colors.ON_SURFACE,
                     text_align=ft.TextAlign.CENTER,
                 ),
                 ft.Container(
@@ -117,8 +117,8 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
         padding=20,
         width=340,
         border_radius=16,
-        bgcolor=theme.GLASS_BG,
-        border=ft.Border.all(1.5, theme.GLASS_BORDER_COLOR),
+        bgcolor=ft.Colors.SURFACE,
+        border=ft.Border.all(1, ft.Colors.OUTLINE),
         shadow=ft.BoxShadow(
             blur_radius=25,
             color=ft.Colors.with_opacity(0.4, ft.Colors.BLACK),
@@ -414,7 +414,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
             autopilot_overlay.visible = False
             return
 
-        if state.is_analyzing:
+        if state.is_analyzing and getattr(state, "autopilot_running", False):
             progress_text = getattr(state, "autopilot_progress", "") or "AI thinking..."
             loading_section.visible = False
             input_section.visible = False
@@ -483,16 +483,17 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
             is_rec = view_state.is_recording["value"]
             is_trans = view_state.is_transcribing["value"]
             is_missing_local = expects_dataset and not has_dataframe
+            is_loading = state.is_analyzing
 
-            tf.disabled = is_rec or is_trans or is_missing_local
-            send_btn.disabled = is_rec or is_trans or is_missing_local
+            tf.disabled = is_rec or is_trans or is_missing_local or is_loading
+            send_btn.disabled = is_rec or is_trans or is_missing_local or is_loading
 
             action_row.controls[0].visible = is_rec
             action_row.controls[1].visible = is_trans
             mic_btn = action_row.controls[2]
             mic_btn.icon = ft.Icons.STOP_ROUNDED if is_rec else ft.Icons.MIC_ROUNDED
             mic_btn.icon_color = theme.ERROR if is_rec else ft.Colors.ON_SURFACE_VARIANT
-            mic_btn.disabled = is_trans or is_missing_local
+            mic_btn.disabled = is_trans or is_missing_local or is_loading
 
             if is_missing_local:
                 tf.hint_text = (

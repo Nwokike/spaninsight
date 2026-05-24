@@ -24,7 +24,6 @@ import flet as ft
 from core.theme import AppTheme
 from core.state import state
 from services.storage_service import StorageService
-from services.uuid_service import UUIDService
 from services.credit_service import CreditService
 from services.ad_service import AdService
 
@@ -161,18 +160,11 @@ async def main(page: ft.Page):
             await close_client()
         except Exception:
             pass
-        try:
-            from services.mcp_client import mcp_manager
-
-            await mcp_manager.close_all()
-        except Exception:
-            pass
 
     page.on_disconnect = on_disconnect
 
     # ── Initialize Services ─────────────────────────────────
     storage = StorageService(page)
-    uuid_service = UUIDService(page, storage)
     from services.project_service import ProjectService
 
     project_service = ProjectService(page, storage)
@@ -182,9 +174,7 @@ async def main(page: ft.Page):
     # Initialize projects
     await project_service.initialize_projects()
 
-    # Generate or load UUID
-    state.user_uuid = await uuid_service.get_or_create_uuid()
-    logger.info("User UUID: %s", uuid_service.get_masked_uuid(state.user_uuid))
+    # UUID initialization removed since identity is purely project-based
 
     # Load Theme
     from core.constants import STORAGE_THEME
@@ -406,7 +396,6 @@ async def main(page: ft.Page):
 
             view = build_settings_view(
                 page=page,
-                uuid_service=uuid_service,
                 credit_service=credit_service,
                 storage=storage,
             )
@@ -478,15 +467,21 @@ async def main(page: ft.Page):
                             else "dark",
                         )
 
-                    # Re-run route change to ensure all AppBars reflect correct theme and icons
-                    await route_change()
+                    # Update the theme button icon directly and trigger page.update()
+                    # to keep the active view_state and running tasks intact.
+                    theme_btn.icon = (
+                        ft.Icons.LIGHT_MODE_ROUNDED
+                        if page.theme_mode == ft.ThemeMode.DARK
+                        else ft.Icons.DARK_MODE_ROUNDED
+                    )
+                    page.update()
 
                 theme_btn = ft.IconButton(
                     icon=ft.Icons.LIGHT_MODE_ROUNDED
                     if page.theme_mode == ft.ThemeMode.DARK
                     else ft.Icons.DARK_MODE_ROUNDED,
                     tooltip="Toggle Theme",
-                    disabled=getattr(state, "is_analyzing", False),
+                    disabled=False,
                     on_click=lambda e: page.run_task(_global_toggle_theme),
                 )
 

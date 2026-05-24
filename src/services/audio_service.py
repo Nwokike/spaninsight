@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import tempfile
 from pathlib import Path
 
 import flet as ft
@@ -47,7 +46,11 @@ class AudioService:
         self._auto_stop_task: asyncio.Task | None = None
 
         if _HAS_RECORDER:
-            self._output_path = Path(tempfile.mkdtemp()) / "recording.wav"
+            # PERFORMANCE FIX: Store recordings directly in the app's auto-cleaned temp folder to eliminate filesystem directory leaks
+            self._output_path = (
+                Path.home() / ".spaninsight" / "temp" / f"recording_{id(self)}.wav"
+            )
+            self._output_path.parent.mkdir(parents=True, exist_ok=True)
             self._recorder = AudioRecorder(
                 on_state_change=self._on_state_change,
             )
@@ -152,7 +155,9 @@ class AudioService:
                     "Detected browser blob URL: %s. Fetching via JS...", saved_path
                 )
                 try:
-                    from js import fetch, Uint8Array
+                    js = __import__("js")
+                    fetch = js.fetch
+                    Uint8Array = js.Uint8Array
 
                     response = await fetch(saved_path)
                     array_buffer = await response.arrayBuffer()

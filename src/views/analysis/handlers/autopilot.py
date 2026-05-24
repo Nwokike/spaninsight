@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 async def run_autopilot(view_state):
     MAX_ITERATIONS = 8
-    COST_PER_STEP = 2
+    # COST_PER_STEP removed to prevent double-charging the user
 
     if not state.suggestions:
         return
@@ -24,6 +24,7 @@ async def run_autopilot(view_state):
         return
 
     state.is_analyzing = True
+    state.autopilot_running = True
     state.charts.clear()
     state.autopilot_cancelled = False
     state.autopilot_progress = "Initializing agent loop..."
@@ -72,13 +73,9 @@ async def run_autopilot(view_state):
             state.autopilot_progress = f"Step {iteration}/{MAX_ITERATIONS}: {plan.get('label', next_prompt[:60])}"
             view_state.rebuild()
 
-            credits_ok, _ = await view_state.credit_service.check_balance(COST_PER_STEP)
-            if not credits_ok:
-                state.autopilot_progress = "Credits exhausted."
-                show_error(view_state, "Not enough credits to continue autopilot.")
+            # Proceed directly with code generation and execution under the upfront Autopilot credit payment
+            if getattr(state, "autopilot_cancelled", False):
                 break
-
-            tx_id = await view_state.credit_service.reserve(COST_PER_STEP)
 
             max_retries = 2
             retry_count = 0
@@ -117,8 +114,6 @@ async def run_autopilot(view_state):
                         break
 
             if not result or not result["success"]:
-                if tx_id:
-                    await view_state.credit_service.rollback(tx_id)
                 analysis_history.append(
                     {
                         "prompt": next_prompt,
@@ -151,8 +146,7 @@ async def run_autopilot(view_state):
                 view_state.rebuild()
                 continue
 
-            if tx_id:
-                await view_state.credit_service.commit(tx_id)
+            # Step completed successfully
 
             figure_png = None
             raw_figure = result.get("figure")
@@ -206,6 +200,8 @@ async def run_autopilot(view_state):
             )
 
             async def load_block_ai(b, hist_entry):
+                if getattr(state, "autopilot_cancelled", False):
+                    return
                 try:
                     res_data = {
                         "prompt": b["prompt"],
@@ -223,6 +219,9 @@ async def run_autopilot(view_state):
                         state.charts[-1]["description"] = description
                     view_state.rebuild()
 
+                    if getattr(state, "autopilot_cancelled", False):
+                        return
+
                     ctx = build_analysis_context()
 
                     suggestions = await ai_service.suggest(
@@ -236,6 +235,9 @@ async def run_autopilot(view_state):
                     view_state.rebuild()
                 except Exception as e:
                     logger.error("Autopilot block AI failed: %s", e)
+
+            if getattr(state, "autopilot_cancelled", False):
+                break
 
             await load_block_ai(wrapped_block, analysis_history[-1])
 
@@ -279,6 +281,7 @@ async def run_autopilot(view_state):
         show_error(view_state, f"Autopilot interrupted: {e}")
     finally:
         state.is_analyzing = False
+        state.autopilot_running = False
         try:
             state.credits_remaining = await view_state.credit_service.get_balance()
         except Exception:

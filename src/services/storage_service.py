@@ -52,6 +52,7 @@ class StorageService:
             key.startswith("report_")
             or key.startswith("history_")
             or key.startswith("analysis_")
+            or key == "spaninsight_projects"
         )
 
     # ── Web/Pyodide helpers ──────────────────────────────────────────

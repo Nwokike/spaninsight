@@ -98,6 +98,7 @@ class AppState:
     is_analyzing: bool = False  # Loading state for AI calls
     autopilot_enabled: bool = True  # Autopilot toggle state
     autopilot_cancelled: bool = False  # Flag to stop running autopilot loop
+    autopilot_running: bool = False  # True when Autopilot is actively running
     autopilot_progress: str = ""  # Current autopilot step description for UI
     active_report: dict = None
 

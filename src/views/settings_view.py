@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 def build_settings_view(
     page: ft.Page,
-    uuid_service,
     credit_service,
     storage=None,
 ) -> ft.View:
@@ -33,16 +32,7 @@ def build_settings_view(
     async def close_dialog_helper(dialog):
         page.pop_dialog()
 
-    async def on_copy_uuid(e):
-        user_uuid = await uuid_service.get_uuid()
-        if user_uuid:
-            await ft.Clipboard().set(user_uuid)
-            page.snack_bar = ft.SnackBar(
-                content=ft.Text("Device ID copied to clipboard"),
-                duration=2000,
-            )
-            page.snack_bar.open = True
-            page.update()
+    # on_copy_uuid helper removed
 
     async def on_launch_privacy(e):
         await ft.UrlLauncher().launch_url("https://spaninsight.com/privacy.html")
@@ -112,7 +102,7 @@ def build_settings_view(
         )
         show_dialog(dialog)
 
-    masked_uuid = uuid_service.get_masked_uuid(state.user_uuid)
+    # masked_uuid calculation removed
 
     # Project Workspace display details
     active_title = state.active_project.get("title", "My Workspace")
@@ -142,19 +132,8 @@ def build_settings_view(
                 title="Connection Mode",
                 subtitle=display_pin,
             ),
-            # ── Device & Credits Section ───────────────────────────────
-            section_header("Device & AI Credits"),
-            setting_tile(
-                icon=ft.Icons.FINGERPRINT_ROUNDED,
-                title="Device ID",
-                subtitle=masked_uuid,
-                trailing=ft.IconButton(
-                    icon=ft.Icons.COPY_ROUNDED,
-                    icon_size=tokens.ICON_MD,
-                    tooltip="Copy Device ID",
-                    on_click=lambda e: page.run_task(on_copy_uuid, e),
-                ),
-            ),
+            # ── AI Credits Section ──────────────────────────────────────
+            section_header("AI Credits"),
             setting_tile(
                 icon=ft.Icons.BOLT_ROUNDED,
                 title="Daily Credits",
@@ -272,7 +251,7 @@ def build_settings_view(
             setting_tile(
                 icon=ft.Icons.INFO_OUTLINE_ROUNDED,
                 title="Version",
-                subtitle="Spaninsight v1.0.0",
+                subtitle="Spaninsight v2.0.0",
             ),
             setting_tile(
                 icon=ft.Icons.PRIVACY_TIP_OUTLINED,

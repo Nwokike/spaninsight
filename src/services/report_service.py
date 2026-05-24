@@ -31,20 +31,15 @@ class ReportService:
 
     async def _save_all(self, reports: list[dict]) -> None:
         from core.state import state
+        from services.project_service import ProjectService
 
         try:
             state.user_reports = reports
-            # Persist project changes locally
+            # Persist project changes locally using the correct ProjectService serializer
+            proj_svc = ProjectService(None, self._storage)
             safe_copy = {}
             for pid, p in state.user_projects.items():
-                copied = json.loads(json.dumps(p, default=str))
-                for b in copied.get("analysis_blocks", []):
-                    # Retain base64 but clean transient chart objects/figures
-                    if b.get("figure_png_b64"):
-                        pass
-                    b.pop("figure_png", None)
-                    b.pop("figure", None)
-                safe_copy[pid] = copied
+                safe_copy[pid] = proj_svc._serialize_project(p)
             await self._storage.set("spaninsight_projects", json.dumps(safe_copy))
         except Exception as e:
             logger.error("Failed to save reports: %s", e)

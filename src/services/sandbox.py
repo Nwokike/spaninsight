@@ -231,14 +231,27 @@ def execute_code(
 
             res_val = namespace.get("result")
             if res_val is None:
-                exclude_keys = {"df", "pd", "np", "plt", "math", "datetime", "statistics", "result", "__builtins__"}
+                exclude_keys = {
+                    "df",
+                    "pd",
+                    "np",
+                    "plt",
+                    "math",
+                    "datetime",
+                    "statistics",
+                    "result",
+                    "__builtins__",
+                }
                 found_res = None
                 for k, v in list(namespace.items()):
                     if k in exclude_keys:
                         continue
                     if isinstance(v, (pd.DataFrame, pd.Series)):
                         found_res = v
-                        if any(x in k.lower() for x in ["result", "summary", "missing", "clean", "output"]):
+                        if any(
+                            x in k.lower()
+                            for x in ["result", "summary", "missing", "clean", "output"]
+                        ):
                             found_res = v
                             break
                 if found_res is not None:

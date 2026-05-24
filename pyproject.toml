@@ -1,6 +1,6 @@
 [project]
 name = "spaninsight"
-version = "1.0.0"
+version = "2.0.0"
 description = "A high-performance, privacy-first data intelligence platform for smart data collection, analysis and reporting."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -31,7 +31,7 @@ dev = [
 [tool.flet]
 org = "com.spaninsight"
 product = "Spaninsight"
-build_number = 1
+build_number = 2
 
 [tool.flet.app]
 path = "src"

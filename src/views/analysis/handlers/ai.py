@@ -13,7 +13,9 @@ from .base import show_error, build_analysis_context
 logger = logging.getLogger(__name__)
 
 
-async def on_suggestion_selected(view_state, prompt: str, is_autopilot: bool = False):
+async def on_suggestion_selected(
+    view_state, prompt: str, is_autopilot: bool = False, is_custom: bool = False
+):
     if state.current_df is None:
         return
 
@@ -46,7 +48,7 @@ async def on_suggestion_selected(view_state, prompt: str, is_autopilot: bool = F
                 )
                 return
 
-            if not is_autopilot:
+            if not is_autopilot and not is_custom:
                 tx_id = await view_state.credit_service.reserve(COST_SUGGEST)
                 if not tx_id:
                     show_error(view_state, "Not enough credits.")
@@ -99,7 +101,7 @@ async def on_suggestion_selected(view_state, prompt: str, is_autopilot: bool = F
                         break
 
             if not result or not result["success"]:
-                if not is_autopilot and tx_id:
+                if not is_autopilot and not is_custom and tx_id:
                     await view_state.credit_service.rollback(tx_id)
                 block = {
                     "id": "blk_" + str(uuid.uuid4())[:8],
@@ -119,7 +121,7 @@ async def on_suggestion_selected(view_state, prompt: str, is_autopilot: bool = F
                 view_state.rebuild()
                 return
 
-            if not is_autopilot and tx_id:
+            if not is_autopilot and not is_custom and tx_id:
                 await view_state.credit_service.commit(tx_id)
 
             figure_png = None
@@ -238,7 +240,7 @@ async def on_custom_prompt(view_state, e):
 
     view_state.custom_prompt_field.current.value = ""
     view_state.page.update()
-    await on_suggestion_selected(view_state, prompt)
+    await on_suggestion_selected(view_state, prompt, is_custom=True)
 
 
 async def _handle_voice_auto_stop(page: ft.Page, ui_state, result):

@@ -77,7 +77,13 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                 isinstance(v, (int, float, str, bool))
                 or isinstance(v, np.number)
                 or (isinstance(v, np.ndarray) and v.ndim == 0)
-                or (isinstance(v, (list, np.ndarray)) and len(v) <= 24 and all(isinstance(x, (int, float, str, bool, np.number)) for x in v))
+                or (
+                    isinstance(v, (list, np.ndarray))
+                    and len(v) <= 24
+                    and all(
+                        isinstance(x, (int, float, str, bool, np.number)) for x in v
+                    )
+                )
             ):
                 primitives[k] = v
             else:
@@ -95,7 +101,11 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                     # Render array of primitives as a horizontal Row of badges
                     badge_items = []
                     for x in v:
-                        val_str = f"{x:.4f}" if isinstance(x, (float, np.floating)) else str(x)
+                        val_str = (
+                            f"{x:.4f}"
+                            if isinstance(x, (float, np.floating))
+                            else str(x)
+                        )
                         badge_items.append(
                             ft.Container(
                                 content=ft.Text(
