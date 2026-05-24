@@ -77,18 +77,20 @@ def load_dataframe(file_path: str) -> pd.DataFrame:
             except UnicodeDecodeError:
                 df = pd.read_csv(file_path, encoding="latin-1")
         elif ext in {".json", ".jsonl", ".ndjson"}:
-            # PERFORMANCE FIX: Parse JSON/JSON Lines natively using high-performance orjson
-            import orjson
+            # PERFORMANCE FIX: Parse JSON/JSON Lines natively using high-performance msgspec
+            import msgspec
 
             with open(file_path, "rb") as f:
                 content = f.read()
             try:
-                parsed = orjson.loads(content)
+                parsed = msgspec.json.decode(content)
                 df = pd.DataFrame(parsed)
-            except orjson.JSONDecodeError:
+            except msgspec.DecodeError:
                 # Fallback: Parse line-delimited JSON
                 parsed = [
-                    orjson.loads(line) for line in content.split(b"\n") if line.strip()
+                    msgspec.json.decode(line)
+                    for line in content.split(b"\n")
+                    if line.strip()
                 ]
                 df = pd.DataFrame(parsed)
         elif ext == ".xlsx":

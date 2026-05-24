@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 import tempfile
 import os
-import orjson
+import msgspec
 from services.file_service import (
     validate_file,
     load_dataframe,
@@ -55,7 +55,7 @@ def test_load_dataframe_csv_success():
 def test_load_dataframe_json_success():
     data = [{"X": 10, "Y": 20}, {"X": 30, "Y": 40}]
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="wb") as f:
-        f.write(orjson.dumps(data))
+        f.write(msgspec.json.encode(data))
         temp_name = f.name
 
     try:
