@@ -24,6 +24,7 @@ env/
 .flet_build/
 
 # OS
+storage/
 .DS_Store
 Thumbs.db
 desktop.ini
