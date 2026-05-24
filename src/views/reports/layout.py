@@ -230,7 +230,7 @@ def build_report_view(
                                         horizontal_alignment="center",
                                         spacing=4,
                                     ),
-                                    alignment=ft.alignment.center,
+                                    alignment=ft.Alignment.CENTER,
                                     padding=8,
                                     border_radius=12,
                                     bgcolor=theme.GLASS_BG,

@@ -529,7 +529,7 @@ def build_home_view(
                 horizontal_alignment="center",
                 spacing=4,
             ),
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             padding=8,
             border_radius=tokens.RADIUS_LG,
             bgcolor=theme.GLASS_BG,
