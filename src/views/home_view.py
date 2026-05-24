@@ -518,7 +518,7 @@ def build_home_view(
                         size=8,
                         weight=ft.FontWeight.W_700,
                         color=ft.Colors.ON_SURFACE_VARIANT,
-                        letter_spacing=1,
+                        style=ft.TextStyle(letter_spacing=1),
                     ),
                     fta.BannerAd(
                         unit_id="ca-app-pub-5679949845754640/5628404223",

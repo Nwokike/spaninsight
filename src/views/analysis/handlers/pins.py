@@ -223,7 +223,7 @@ def on_pin_block(view_state, index: int):
                                 size=8,
                                 weight=ft.FontWeight.W_700,
                                 color=ft.Colors.ON_SURFACE_VARIANT,
-                                letter_spacing=1,
+                                style=ft.TextStyle(letter_spacing=1),
                             ),
                             utils.get_banner_ad(
                                 unit_id="ca-app-pub-5679949845754640/5628404223",
@@ -303,7 +303,7 @@ def on_pin_block(view_state, index: int):
                                 size=8,
                                 weight=ft.FontWeight.W_700,
                                 color=ft.Colors.ON_SURFACE_VARIANT,
-                                letter_spacing=1,
+                                style=ft.TextStyle(letter_spacing=1),
                             ),
                             utils.get_banner_ad(
                                 unit_id="ca-app-pub-5679949845754640/5628404223",

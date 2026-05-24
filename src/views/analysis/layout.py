@@ -100,7 +100,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                     size=8,
                                     weight=ft.FontWeight.W_700,
                                     color=ft.Colors.ON_SURFACE_VARIANT,
-                                    letter_spacing=1,
+                                    style=ft.TextStyle(letter_spacing=1),
                                 ),
                                 utils.get_banner_ad(
                                     unit_id="ca-app-pub-5679949845754640/5628404223",
@@ -262,7 +262,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                             size=8,
                                             weight=ft.FontWeight.W_700,
                                             color=ft.Colors.ON_SURFACE_VARIANT,
-                                            letter_spacing=1,
+                                            style=ft.TextStyle(letter_spacing=1),
                                         ),
                                         utils.get_banner_ad(
                                             unit_id="ca-app-pub-5679949845754640/5628404223",
@@ -460,8 +460,6 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
         for i, b in enumerate(state.analysis_blocks):
             controls.append(build_block_card(view_state, b, i))
             if is_mobile and (i + 1) % 4 == 0:
-                import flet_ads as fta
-
                 controls.append(
                     ft.Container(
                         content=ft.Column(
@@ -471,9 +469,9 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                     size=8,
                                     weight=ft.FontWeight.W_700,
                                     color=ft.Colors.ON_SURFACE_VARIANT,
-                                    letter_spacing=1,
+                                    style=ft.TextStyle(letter_spacing=1),
                                 ),
-                                fta.BannerAd(
+                                utils.get_banner_ad(
                                     unit_id="ca-app-pub-5679949845754640/5628404223",
                                     width=320,
                                     height=50,
