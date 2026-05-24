@@ -82,8 +82,8 @@ async def suggest(
     """Context-aware suggestions without cost-cutting limits."""
     # MODIFIED: Reduced from 5-8 to exactly 3 suggestions to drastically reduce generation time.
     system_prompt = (
-        "You are an expert data intelligence consultant. Suggest a rich, multi-angle "
-        "suite of exactly 3 distinct, deeply insightful data analysis tracks the user should perform next. "
+        "You are an expert's data intelligence consultant. Suggest a rich, multi-angle "
+        "suite of exactly 5 distinct, deeply insightful data analysis tracks the user should perform next. "
         "Analyze trends, correlations, spatial maps, pivot metrics, and exploratory profiles. Do NOT repeat previous steps.\n\n"
         "CRITICAL EXECUTION CONSTRAINTS:\n"
         "- The execution environment supports: pandas, numpy, matplotlib.pyplot, math, datetime, statistics (Python standard library), shapely, jq, and pendulum.\n"
@@ -110,8 +110,8 @@ async def suggest(
         # MODIFIED: Truncate history to the last 2000 characters.
         # This prevents the prompt from bloating as the analysis session gets longer.
         truncated_history = (
-            analysis_context[-2000:]
-            if len(analysis_context) > 2000
+            analysis_context[-5000:]
+            if len(analysis_context) > 5000
             else analysis_context
         )
         context_parts.append(
