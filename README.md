@@ -10,7 +10,6 @@
 <p align="center">
   <a href="#download"><img src="https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows" /></a>
   <a href="#android"><img src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android" /></a>
-  <a href="#download"><img src="https://img.shields.io/badge/Web-4285F4?style=flat-square&logo=google-chrome&logoColor=white" alt="Web" /></a>
   <br>
   <img src="https://img.shields.io/badge/Built%20with-Flet%200.85-00B0FF?style=flat-square" alt="Built with Flet" />
 </p>
@@ -21,7 +20,6 @@
 
 | Platform | Download | Notes |
 |:--------:|:--------:|:------|
-| 🌐 **Web** | [**app.spaninsight.com**](https://app.spaninsight.com) | Works in any modern browser |
 | 🪟 **Windows** | [**SpanInsight_Setup.exe**](https://github.com/Nwokike/spaninsight/releases/latest/download/SpanInsight_Setup.exe) | Windows 10/11 64-bit Installer |
 
 ### Android
@@ -56,7 +54,9 @@
 - **Editable Code Blocks** — View, edit, and re-run the Python code behind every analysis result.
 - **Local Sandbox** — Built-in Python runtime (`pandas`, `matplotlib`) runs in a restricted environment.
 - **Credit-Based System** — AI tasks use a transparent credit system with generous daily free allowances.
-- **Cross-Platform** — Works on Android, Windows, and Web with the same premium, responsive experience.
+- **Cross-Platform Native** — High-performance, optimized native deployments across Android, Windows, and Desktop devices.
+- **Google AdMob Integration** — Safe, buffered banner and interstitial advertising support for mobile app users.
+- **Resilient Mobile Sandbox** — Hardened client environment utilizing sandboxed directory access (`FLET_APP_STORAGE_DATA`/`TEMP`) for maximum permission security and zero PermissionError crashes.
 
 ---
 

@@ -1,5 +1,5 @@
 import flet as ft
-from core import theme
+from core import theme, utils
 from components.brand_header import build_brand_header
 from .state import FormsState
 
@@ -169,12 +169,40 @@ def build_dashboard_layout(
                     ],
                     spacing=4,
                 ),
-                padding=20,
-                margin=ft.Margin(20, 10, 20, 10),
-                border_radius=16,
                 bgcolor=theme.GLASS_BG,
                 border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
             ),
+            # ── Banner Ad (Mobile Only) ──────────────────────────────────────
+            (
+                lambda: ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                letter_spacing=1,
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
+                        ],
+                        horizontal_alignment="center",
+                        spacing=4,
+                    ),
+                    alignment=ft.alignment.center,
+                    padding=8,
+                    border_radius=12,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(20, 4, 20, 10),
+                )
+            )()
+            if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
+            else ft.Container(),
             ft.Container(
                 content=ft.Row(
                     [

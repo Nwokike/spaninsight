@@ -31,6 +31,22 @@ async def on_export_data(view_state):
     view_state.page.update()
 
     try:
+        if view_state.page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
+            try:
+                import flet_ads as fta
+
+                async def _show_ad(e):
+                    await e.control.show()
+
+                iad = fta.InterstitialAd(
+                    unit_id="ca-app-pub-5679949845754640/6965536622",
+                    on_load=_show_ad,
+                )
+                view_state.page.overlay.append(iad)
+                view_state.page.update()
+            except Exception as ad_err:
+                logger.error("Export Interstitial trigger failed: %s", ad_err)
+
         csv_bytes = await asyncio.to_thread(
             file_service.df_to_csv_bytes, state.current_df
         )

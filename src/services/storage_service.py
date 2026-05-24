@@ -11,13 +11,20 @@ import json
 import logging
 import asyncio
 import time
+import os
 from pathlib import Path
 
 import flet as ft
 
 logger = logging.getLogger(__name__)
 
-_STORAGE_DIR = Path.home() / ".spaninsight"
+# Use Flet sandbox data storage path on Android/iOS mobile to avoid Path.home() permission issues
+storage_env = os.getenv("FLET_APP_STORAGE_DATA")
+if storage_env:
+    _STORAGE_DIR = Path(storage_env)
+else:
+    _STORAGE_DIR = Path.home() / ".spaninsight"
+
 _SETTINGS_FILE = _STORAGE_DIR / "settings.json"
 _HISTORY_FILE = _STORAGE_DIR / "history.json"
 

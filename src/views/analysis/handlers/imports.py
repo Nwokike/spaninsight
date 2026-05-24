@@ -32,8 +32,6 @@ async def process_file(view_state, file):
         view_state.loading_file_size["value"] = fsize
         view_state.rebuild()
 
-        await asyncio.sleep(0.1)
-
         try:
             import matplotlib.pyplot as plt
 
@@ -94,8 +92,6 @@ async def process_file(view_state, file):
     view_state.loading_file_name["value"] = file.name
     view_state.loading_file_size["value"] = fsize
     view_state.rebuild()
-
-    await asyncio.sleep(0.1)
 
     try:
         import matplotlib.pyplot as plt

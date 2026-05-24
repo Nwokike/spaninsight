@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import flet as ft
-from core import theme
+from core import theme, utils
 
 from components.brand_header import build_brand_header
 from components.report_editor import build_report_editor
@@ -210,6 +210,37 @@ def build_report_view(
                                 size=12,
                                 color=ft.Colors.with_opacity(0.5, ft.Colors.ON_SURFACE),
                             ),
+                            (
+                                lambda: ft.Container(
+                                    content=ft.Column(
+                                        [
+                                            ft.Text(
+                                                "SPONSORED",
+                                                size=8,
+                                                weight=ft.FontWeight.W_700,
+                                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                                letter_spacing=1,
+                                            ),
+                                            utils.get_banner_ad(
+                                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                                width=320,
+                                                height=50,
+                                            ),
+                                        ],
+                                        horizontal_alignment="center",
+                                        spacing=4,
+                                    ),
+                                    alignment=ft.alignment.center,
+                                    padding=8,
+                                    border_radius=12,
+                                    bgcolor=theme.GLASS_BG,
+                                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                                    margin=ft.Margin(0, 12, 0, 0),
+                                )
+                            )()
+                            if page.platform
+                            in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
+                            else ft.Container(),
                         ],
                         horizontal_alignment="center",
                         spacing=12,

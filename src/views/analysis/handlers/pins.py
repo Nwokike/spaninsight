@@ -3,7 +3,7 @@ import logging
 import flet as ft
 
 from core.state import state
-from core import theme
+from core import theme, utils
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +213,36 @@ def on_pin_block(view_state, index: int):
             )
         )
 
+        if view_state.page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
+            items.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                letter_spacing=1,
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
+                        ],
+                        horizontal_alignment="center",
+                        spacing=4,
+                    ),
+                    alignment=ft.alignment.center,
+                    padding=8,
+                    border_radius=8,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(0, 10, 0, 10),
+                )
+            )
+
         dlg = ft.AlertDialog(
             title=ft.Text("Pin to Report"),
             content=ft.Container(
@@ -262,6 +292,36 @@ def on_pin_block(view_state, index: int):
                 on_click=lambda e: _pin_new(),
             )
         )
+
+        if view_state.page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
+            items.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                letter_spacing=1,
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
+                        ],
+                        horizontal_alignment="center",
+                        spacing=4,
+                    ),
+                    alignment=ft.alignment.center,
+                    padding=8,
+                    border_radius=8,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(0, 10, 0, 10),
+                )
+            )
 
         dlg = ft.AlertDialog(
             title=ft.Text("Manage Pinned Block"),

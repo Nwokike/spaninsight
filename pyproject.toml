@@ -13,8 +13,6 @@ dependencies = [
     "numpy>=1.26",
     "matplotlib>=3.8",
     "openpyxl>=3.1",
-    "shapely>=2.0.6",
-    "jq>=1.8.0",
     "pendulum>=3.2.0",
     "msgspec>=0.18.6",
     "sqlalchemy>=2.0.49",
@@ -43,7 +41,7 @@ usesCleartextTraffic = "false"
 
 [tool.flet.android.meta_data]
 # [COMPLEX / REQUIRED] Replace this test App ID with your REAL AdMob App ID before production
-"com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-3940256099942544~3347511713"
+"com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-5679949845754640~9586310622"
 
 [tool.flet.android.permission]
 "android.permission.INTERNET" = true

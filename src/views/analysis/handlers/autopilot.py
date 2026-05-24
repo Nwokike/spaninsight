@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import base64
+import flet as ft
 
 from core.state import state
 from core.constants import COST_AUTOPILOT
@@ -276,6 +277,23 @@ async def run_autopilot(view_state):
                 logger.info("Autopilot compiled and saved report: %s", title)
 
         state.autopilot_progress = f"Agent loop finished ({iteration} steps)."
+
+        # ── Interstitial Ad (Mobile Only) ────────────────────────────────
+        if view_state.page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
+            try:
+                import flet_ads as fta
+
+                async def _show_ad(e):
+                    await e.control.show()
+
+                iad = fta.InterstitialAd(
+                    unit_id="ca-app-pub-5679949845754640/6965536622",
+                    on_load=_show_ad,
+                )
+                view_state.page.overlay.append(iad)
+                view_state.page.update()
+            except Exception as ad_err:
+                logger.error("Autopilot InterstitialAd trigger failed: %s", ad_err)
 
     except Exception as e:
         show_error(view_state, f"Autopilot interrupted: {e}")

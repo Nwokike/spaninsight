@@ -1,6 +1,6 @@
 import logging
 import flet as ft
-from core import theme
+from core import theme, utils
 from core.state import state
 from components.file_import_card import build_file_import_card
 from components.stat_card import build_stat_card
@@ -91,6 +91,36 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                     ),
                     alignment=ft.Alignment.CENTER,
                 ),
+                (
+                    lambda: ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text(
+                                    "SPONSORED",
+                                    size=8,
+                                    weight=ft.FontWeight.W_700,
+                                    color=ft.Colors.ON_SURFACE_VARIANT,
+                                    letter_spacing=1,
+                                ),
+                                utils.get_banner_ad(
+                                    unit_id="ca-app-pub-5679949845754640/5628404223",
+                                    width=320,
+                                    height=50,
+                                ),
+                            ],
+                            horizontal_alignment="center",
+                            spacing=4,
+                        ),
+                        alignment=ft.alignment.center,
+                        padding=8,
+                        border_radius=12,
+                        bgcolor=theme.GLASS_BG,
+                        border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                        margin=ft.Margin(0, 4, 0, 4),
+                    )
+                )()
+                if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
+                else ft.Container(),
                 ft.Container(height=8),
                 ft.Row(
                     [
@@ -220,6 +250,37 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                     ft.ProgressRing(width=40, height=40, stroke_width=3),
                     ft.Text(load_msg, size=14, color=ft.Colors.ON_SURFACE_VARIANT),
                 ]
+                if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
+                    loading_controls.append(ft.Container(height=20))
+                    loading_controls.append(
+                        (
+                            lambda: ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Text(
+                                            "SPONSORED",
+                                            size=8,
+                                            weight=ft.FontWeight.W_700,
+                                            color=ft.Colors.ON_SURFACE_VARIANT,
+                                            letter_spacing=1,
+                                        ),
+                                        utils.get_banner_ad(
+                                            unit_id="ca-app-pub-5679949845754640/5628404223",
+                                            width=320,
+                                            height=50,
+                                        ),
+                                    ],
+                                    horizontal_alignment="center",
+                                    spacing=4,
+                                ),
+                                alignment=ft.alignment.center,
+                                padding=8,
+                                border_radius=12,
+                                bgcolor=theme.GLASS_BG,
+                                border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                            )
+                        )()
+                    )
                 if size_mb > 5 and fname.lower().endswith(".xlsx"):
                     loading_controls.append(
                         ft.Text(
@@ -394,10 +455,42 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
             blocks_list.controls.clear()
             return
 
-        blocks_list.controls = [
-            build_block_card(view_state, b, i)
-            for i, b in enumerate(state.analysis_blocks)
-        ]
+        controls = []
+        is_mobile = page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
+        for i, b in enumerate(state.analysis_blocks):
+            controls.append(build_block_card(view_state, b, i))
+            if is_mobile and (i + 1) % 4 == 0:
+                import flet_ads as fta
+
+                controls.append(
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text(
+                                    "SPONSORED",
+                                    size=8,
+                                    weight=ft.FontWeight.W_700,
+                                    color=ft.Colors.ON_SURFACE_VARIANT,
+                                    letter_spacing=1,
+                                ),
+                                fta.BannerAd(
+                                    unit_id="ca-app-pub-5679949845754640/5628404223",
+                                    width=320,
+                                    height=50,
+                                ),
+                            ],
+                            horizontal_alignment="center",
+                            spacing=4,
+                        ),
+                        alignment=ft.alignment.center,
+                        padding=8,
+                        border_radius=12,
+                        bgcolor=theme.GLASS_BG,
+                        border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                        margin=ft.Margin(20, 8, 20, 8),
+                    )
+                )
+        blocks_list.controls = controls
 
         if state.is_analyzing:
             from views.analysis.ui_components import build_skeleton_loader

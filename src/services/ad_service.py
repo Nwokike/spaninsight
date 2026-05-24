@@ -27,15 +27,15 @@ class AdService:
     """Manages AdMob banner and interstitial ads."""
 
     # Set to False before Play Store submission — then replace with real IDs
-    USE_TEST_IDS = True
+    USE_TEST_IDS = False
 
     # Test IDs (Google's official test units)
     BANNER_ID_ANDROID_TEST = "ca-app-pub-3940256099942544/9214589741"
     INTERSTITIAL_ID_ANDROID_TEST = "ca-app-pub-3940256099942544/1033173712"
 
-    # TODO: Replace with real Ad Unit IDs before production release
-    BANNER_ID_ANDROID_PROD = ""
-    INTERSTITIAL_ID_ANDROID_PROD = ""
+    # Real Ad Unit IDs for production release
+    BANNER_ID_ANDROID_PROD = "ca-app-pub-5679949845754640/5628404223"
+    INTERSTITIAL_ID_ANDROID_PROD = "ca-app-pub-5679949845754640/6965536622"
 
     def __init__(self, page: ft.Page):
         # S7 FIX: Fail-fast if USE_TEST_IDS is off but production IDs are empty

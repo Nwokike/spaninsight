@@ -27,8 +27,9 @@ try:
     from flet_audio_recorder import AudioRecorder
 
     _HAS_RECORDER = True
-except ImportError:
-    pass
+except Exception as e:
+    logger.warning("AudioRecorder not available on this platform: %s", e)
+    _HAS_RECORDER = False
 
 
 class AudioService:
@@ -47,10 +48,10 @@ class AudioService:
 
         if _HAS_RECORDER:
             # PERFORMANCE FIX: Store recordings directly in the app's auto-cleaned temp folder to eliminate filesystem directory leaks
-            self._output_path = (
-                Path.home() / ".spaninsight" / "temp" / f"recording_{id(self)}.wav"
-            )
-            self._output_path.parent.mkdir(parents=True, exist_ok=True)
+            from core.utils import get_temp_dir
+
+            temp_dir = get_temp_dir()
+            self._output_path = temp_dir / f"recording_{id(self)}.wav"
             self._recorder = AudioRecorder(
                 on_state_change=self._on_state_change,
             )

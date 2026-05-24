@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+from pathlib import Path
 
 import flet as ft
 
@@ -94,3 +95,45 @@ def figure_to_png_bytes(figure, dpi: int = 150) -> bytes:
 def png_bytes_to_base64(png_bytes: bytes) -> str:
     """Encode PNG bytes as a base64 string for ft.Image(src_base64=...)."""
     return base64.b64encode(png_bytes).decode("utf-8")
+
+
+def get_temp_dir() -> Path:
+    """Resolve a writeable temporary directory safely across desktop and mobile platforms."""
+    import os
+    from pathlib import Path
+
+    # 1. Try Flet's dedicated temporary storage directory environment variable (Android/iOS sandbox)
+    temp_env = os.getenv("FLET_APP_STORAGE_TEMP")
+    if temp_env:
+        path = Path(temp_env)
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        except Exception:
+            pass
+
+    # 2. Fall back to standard OS-specific temporary path or application base path
+    try:
+        path = Path.home() / ".spaninsight" / "temp"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    except Exception:
+        # 3. Absolute last resort fallback (local directory in app space)
+        fallback_path = Path("./.temp_cache")
+        fallback_path.mkdir(parents=True, exist_ok=True)
+        return fallback_path
+
+
+def get_banner_ad(unit_id: str, width: int = 320, height: int = 50) -> ft.Control:
+    """Instantiate flet_ads.BannerAd safely.
+
+    If flet_ads fails to load (e.g. unsupported on Web/PC or dynamic linking issues),
+    gracefully returns an empty ft.Container() instead of crashing the view.
+    """
+    try:
+        import flet_ads as fta
+
+        return fta.BannerAd(unit_id=unit_id, width=width, height=height)
+    except Exception as e:
+        logger.warning("Failed to load BannerAd (using safe fallback Container): %s", e)
+        return ft.Container()

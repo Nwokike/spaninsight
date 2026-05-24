@@ -17,7 +17,6 @@ import json
 import logging
 import sys
 import shutil
-from pathlib import Path
 
 import flet as ft
 
@@ -88,7 +87,9 @@ except Exception as agg_err:
 def cleanup_temp_files():
     """Wipe old imported CSV/Excel files from temp dir on startup to prevent storage bloat."""
     try:
-        temp_dir = Path.home() / ".spaninsight" / "temp"
+        from core.utils import get_temp_dir
+
+        temp_dir = get_temp_dir()
         if temp_dir.exists():
             shutil.rmtree(temp_dir, ignore_errors=True)
         temp_dir.mkdir(parents=True, exist_ok=True)
@@ -514,14 +515,7 @@ async def main(page: ft.Page):
     page.on_view_pop = view_pop
 
     # ── Splash → Home/Onboarding ─────────────────────────────
-    splash_start = asyncio.get_event_loop().time()
-
     async def splash_complete():
-        elapsed = asyncio.get_event_loop().time() - splash_start
-        remaining = max(0, 1.5 - elapsed)
-        if remaining > 0:
-            await asyncio.sleep(remaining)
-
         from core.constants import STORAGE_ONBOARDING_DONE
 
         onboarding_done = await storage.get(STORAGE_ONBOARDING_DONE)

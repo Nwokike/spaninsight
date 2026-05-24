@@ -505,12 +505,45 @@ def build_home_view(
         visible=not state.gateway_online,
     )
 
+    # ── Banner Ad (Mobile Only) ──────────────────────────────────────
+    ad_banner = None
+    if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
+        import flet_ads as fta
+
+        ad_banner = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "SPONSORED",
+                        size=8,
+                        weight=ft.FontWeight.W_700,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        letter_spacing=1,
+                    ),
+                    fta.BannerAd(
+                        unit_id="ca-app-pub-5679949845754640/5628404223",
+                        width=320,
+                        height=50,
+                    ),
+                ],
+                horizontal_alignment="center",
+                spacing=4,
+            ),
+            alignment=ft.alignment.center,
+            padding=8,
+            border_radius=tokens.RADIUS_LG,
+            bgcolor=theme.GLASS_BG,
+            border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+            margin=ft.Margin(tokens.SPACE_LG, 0, tokens.SPACE_LG, tokens.SPACE_LG),
+        )
+
     content = ft.Column(
         controls=[
             offline_banner,
             hero,
             quick_actions,
             recent_section,
+            ad_banner if ad_banner else ft.Container(),
             privacy_banner,
             features,
             how_it_works,
