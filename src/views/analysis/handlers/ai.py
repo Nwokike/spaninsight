@@ -170,22 +170,24 @@ async def on_suggestion_selected(
                         "result": str(b["result"]),
                     }
 
-                    # Fetch Description FIRST
-                    description = await ai_service.describe_result(
-                        block0_desc, res_data
-                    )
-                    b["description"] = description
-                    view_state.rebuild()
-
-                    # Build context AFTER description to avoid stale history
+                    # MODIFIED: Build Context FIRST so both tasks can run concurrently
                     ctx = build_analysis_context()
 
-                    # Fetch Suggestions
-                    suggestions = await ai_service.suggest(
+                    # MODIFIED: Prepare tasks for concurrent execution
+                    desc_task = ai_service.describe_result(block0_desc, res_data)
+                    sugg_task = ai_service.suggest(
                         state.current_df_summary,
                         initial_description=block0_desc,
                         analysis_context=ctx,
                     )
+
+                    # MODIFIED: Fire both network requests to the Cloudflare gateway simultaneously
+                    description, suggestions = await asyncio.gather(
+                        desc_task, sugg_task
+                    )
+
+                    # Bind all results to the block state at once
+                    b["description"] = description
                     b["suggestions"] = suggestions
                     state.suggestions = suggestions
 
@@ -199,6 +201,7 @@ async def on_suggestion_selected(
                             }
                         )
 
+                    # MODIFIED: Only rebuild the UI once after all data is ready
                     view_state.rebuild()
                 except Exception as e:
                     logger.error("Block AI load failed: %s", e)

@@ -80,9 +80,10 @@ async def suggest(
     analysis_context: str = "",
 ) -> list[dict]:
     """Context-aware suggestions without cost-cutting limits."""
+    # MODIFIED: Reduced from 5-8 to exactly 3 suggestions to drastically reduce generation time.
     system_prompt = (
         "You are an expert data intelligence consultant. Suggest a rich, multi-angle "
-        "suite of 5 to 8 distinct, deeply insightful data analysis tracks the user should perform next. "
+        "suite of exactly 3 distinct, deeply insightful data analysis tracks the user should perform next. "
         "Analyze trends, correlations, spatial maps, pivot metrics, and exploratory profiles. Do NOT repeat previous steps.\n\n"
         "CRITICAL EXECUTION CONSTRAINTS:\n"
         "- The execution environment supports: pandas, numpy, matplotlib.pyplot, math, datetime, statistics (Python standard library), shapely, jq, and pendulum.\n"
@@ -96,24 +97,38 @@ async def suggest(
         '- "prompt": full structural instruction used to generate the required execution block\n'
         "Do not include code fences, preamble, or conversational notes outside the JSON array."
     )
+
     ai_schema = dict(schema_json)
     ai_schema.pop("head", None)
     ai_schema.pop("tail", None)
     context_parts = [json.dumps(ai_schema, default=str)]
+
     if initial_description:
         context_parts.append(f"\nDataset Overview: {initial_description}")
+
     if analysis_context:
-        context_parts.append(f"\nAnalysis History (do NOT repeat):\n{analysis_context}")
+        # MODIFIED: Truncate history to the last 2000 characters.
+        # This prevents the prompt from bloating as the analysis session gets longer.
+        truncated_history = (
+            analysis_context[-2000:]
+            if len(analysis_context) > 2000
+            else analysis_context
+        )
+        context_parts.append(
+            f"\nAnalysis History (do NOT repeat):\n...{truncated_history}"
+        )
     elif latest_result:
         context_parts.append(
             f"\nLast analysis step: {latest_result.get('prompt', '')}"
             f"\nExecution Result: {latest_result.get('result', '')}"
             f"\nInsight: {latest_result.get('description', '')}"
         )
+
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": "\n".join(context_parts)},
     ]
+
     try:
         data = await call_gateway(TASK_SUGGEST, messages)
         content = extract_content(data)
@@ -320,6 +335,7 @@ async def analyze_image_for_data(
 
 def fallback_suggestions() -> list[dict]:
     """Return an expanded suite of safe fallbacks if remote channels are offline."""
+    # MODIFIED: Reduced to 3 to match the new lightweight structure
     return [
         {
             "label": "Summary Statistics",
@@ -332,18 +348,8 @@ def fallback_suggestions() -> list[dict]:
             "prompt": "Plot histograms of all numeric columns in a grid layout.",
         },
         {
-            "label": "Correlation Heatmap",
-            "icon": "🔥",
-            "prompt": "Create a correlation heatmap of all numeric columns with annotations.",
-        },
-        {
             "label": "Missing Values Audit",
             "icon": "🔍",
             "prompt": "Calculate percent of missing values in each column and render as a bar plot.",
-        },
-        {
-            "label": "Value Counts Breakdown",
-            "icon": "🗂",
-            "prompt": "Identify categorical columns and show value distribution breakdown profiles.",
         },
     ]
