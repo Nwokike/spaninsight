@@ -39,14 +39,6 @@ path = "src"
 show = true
 message = "Preparing Spaninsight…"
 
-[tool.flet.app.startup_screen]
-show = true
-message = "Loading Spaninsight…"
-
-[tool.flet.splash]
-color = "#0A0B14"
-dark_color = "#0A0B14"
-
 [tool.flet.android]
 bundle_id = "com.spaninsight.app"
 

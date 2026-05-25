@@ -45,6 +45,56 @@
 
 ---
 
+## 🎨 Visual Showcase & Application Tour
+
+<details open>
+  <summary><b>🚀 Core App Experience & Workspace</b></summary>
+  <br/>
+  <p align="center">
+    <img src="screenshots/home_desktop_light.png" alt="Desktop Workspace Home (Light)" width="48%" />
+    <img src="screenshots/home_dark.png" alt="Mobile Workspace Home (Dark)" width="48%" />
+  </p>
+</details>
+
+<details>
+  <summary><b>📋 Smart Surveys (Creation & Collection)</b></summary>
+  <br/>
+  <p align="center">
+    <img src="screenshots/form_tab_mobile_light_with_form_prompt.png" alt="Survey Creation with AI prompt" width="31%" />
+    <img src="screenshots/live_form(f.spaninsight.com)_mobile.png" alt="Live Distributed Survey Webpage" width="31%" />
+    <img src="screenshots/expanded_form_showing_5_live_responses_mobile_dark.png" alt="Live Responses Dashboard" width="31%" />
+  </p>
+</details>
+
+<details>
+  <summary><b>🧠 AI Autopilot & Data Analysis</b></summary>
+  <br/>
+  <p align="center">
+    <img src="screenshots/autopilot_desktop_dark.png" alt="Desktop Autopilot Engine" width="55%" />
+    <img src="screenshots/analyses_mobile_light_showing_block_with_chart_table_description.png" alt="Smart Analysis & Charts" width="38%" />
+  </p>
+</details>
+
+<details>
+  <summary><b>📄 Professional Reporting & Export</b></summary>
+  <br/>
+  <p align="center">
+    <img src="screenshots/live_report_mobile(report.spaninsight.com).png" alt="Interactive Shared Report" width="31%" />
+    <img src="screenshots/save_to_pdf_preview_mobile.png" alt="Export to PDF Preview" width="31%" />
+    <img src="screenshots/shared_ppt_report_mobile.png" alt="Export to PowerPoint" width="31%" />
+  </p>
+</details>
+
+<details>
+  <summary><b>💰 Credits & Monetization</b></summary>
+  <br/>
+  <p align="center">
+    <img src="screenshots/watch_ads_to_add_more_credit_light.png" alt="AdMob & Credits Management" width="45%" />
+  </p>
+</details>
+
+---
+
 ## Features
 
 - **Privacy-First AI** — Analysis runs locally; only AI prompts touch the secure gateway, never your raw dataset files.
