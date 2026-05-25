@@ -422,6 +422,9 @@ def build_report_editor(
     recording_time: int = 0,
     ai_prompt_text: str = "",
     recording_timer_ref: ft.Ref[ft.Text] | None = None,
+    save_btn_ref: ft.Ref[ft.Control] | None = None,
+    share_btn_ref: ft.Ref[ft.Control] | None = None,
+    view_live_btn_ref: ft.Ref[ft.Control] | None = None,
     on_delete=None,
 ) -> list[ft.Control]:
     """Build the full report editor UI. Returns list of controls."""
@@ -578,6 +581,7 @@ def build_report_editor(
                     ft.Row(
                         [
                             ft.FilledButton(
+                                ref=view_live_btn_ref,
                                 content=ft.Row(
                                     [
                                         ft.ProgressRing(
@@ -600,6 +604,7 @@ def build_report_editor(
                                 expand=True,
                             ),
                             ft.FilledButton(
+                                ref=save_btn_ref,
                                 content=ft.Row(
                                     [
                                         ft.ProgressRing(
@@ -626,6 +631,7 @@ def build_report_editor(
                     ft.Row(
                         [
                             ft.OutlinedButton(
+                                ref=share_btn_ref,
                                 content=ft.Row(
                                     [
                                         ft.ProgressRing(
