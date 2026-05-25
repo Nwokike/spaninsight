@@ -51,6 +51,19 @@ class ASTSecurityChecker(ast.NodeVisitor):
             "shapely",
             "jq",
             "pendulum",
+            # Standard library — pure Python, no system/network/filesystem access
+            "re",
+            "collections",
+            "itertools",
+            "functools",
+            "operator",
+            "string",
+            "copy",
+            "random",
+            "json",
+            "textwrap",
+            "typing",
+            "warnings",
         }
 
         self.blocked_imports = {
@@ -144,6 +157,18 @@ def _safe_import(name, *args, **kwargs):
         "shapely",
         "jq",
         "pendulum",
+        "re",
+        "collections",
+        "itertools",
+        "functools",
+        "operator",
+        "string",
+        "copy",
+        "random",
+        "json",
+        "textwrap",
+        "typing",
+        "warnings",
     }
     base = name.split(".")[0]
     if base not in allowed:

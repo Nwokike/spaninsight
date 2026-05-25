@@ -29,6 +29,8 @@ class AnalysisState:
 
         self.rebuild_fn = None
 
+        self.pinning_block_index = -1
+
         # --- DATABASE FORM STATE ---
         self.import_mode = "file"
         self.db_url = ""

@@ -35,6 +35,10 @@ build_number = 1
 [tool.flet.app]
 path = "src"
 
+[tool.flet.app.startup_screen]
+show = true
+message = "Loading Spaninsight…"
+
 [tool.flet.android]
 bundle_id = "com.spaninsight.app"
 

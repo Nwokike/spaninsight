@@ -1,7 +1,8 @@
-"""Splash screen — shown for 2 seconds on startup.
+"""Splash screen — covers the first ~1.5s of startup.
 
 Displays the app icon, name, tagline, and a progress ring.
-Follows the same pattern as AnimePahe TV / Nkiri TV splash.
+The Flet built-in startup screen (configured in pyproject.toml)
+covers the native loading phase before Python code runs.
 """
 
 from __future__ import annotations

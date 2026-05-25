@@ -711,6 +711,7 @@ def build_block_card(
             )
             for r in state.user_reports
         )
+        is_pinning = view_state.pinning_block_index == index
         if not is_failed:
             action_row.append(
                 ft.TextButton(
@@ -722,7 +723,18 @@ def build_block_card(
                     style=ft.ButtonStyle(
                         color=theme.SUCCESS if is_pinned else theme.PRIMARY
                     ),
-                    disabled=state.is_analyzing,
+                    disabled=state.is_analyzing or is_pinning,
+                )
+                if not is_pinning
+                else ft.TextButton(
+                    content=ft.Row(
+                        [
+                            ft.ProgressRing(width=14, height=14, stroke_width=2),
+                            ft.Text(" ", size=14),
+                        ],
+                        spacing=6,
+                    ),
+                    disabled=True,
                 )
             )
         controls.append(ft.Row(action_row, alignment=ft.MainAxisAlignment.END))

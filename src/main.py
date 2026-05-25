@@ -540,6 +540,7 @@ async def main(page: ft.Page):
 
     # ── Splash → Home/Onboarding ─────────────────────────────
     async def splash_complete():
+        await asyncio.sleep(0.5)
         from core.constants import STORAGE_ONBOARDING_DONE
 
         onboarding_done = await storage.get(STORAGE_ONBOARDING_DONE)

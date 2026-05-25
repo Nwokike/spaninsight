@@ -94,6 +94,9 @@ def on_pin_block(view_state, index: int):
 
     is_currently_pinned = len(reports_containing_block) > 0
 
+    view_state.pinning_block_index = index
+    view_state.rebuild()
+
     async def _pin_to_report(report_id=None):
         png_b64 = ""
         if block.get("figure_png"):
@@ -142,6 +145,7 @@ def on_pin_block(view_state, index: int):
             )
 
         view_state.page.snack_bar.open = True
+        view_state.pinning_block_index = -1
         view_state.rebuild()
 
     async def _unpin_from_report(report_id):
@@ -150,7 +154,6 @@ def on_pin_block(view_state, index: int):
         svc = view_state.report_service
         report = await svc.get_report(report_id)
         if report:
-            # Filter out the block from this report
             updated_blocks = [
                 b
                 for b in report.get("blocks", [])
@@ -162,7 +165,8 @@ def on_pin_block(view_state, index: int):
                 duration=2000,
             )
             view_state.page.snack_bar.open = True
-            view_state.rebuild()
+        view_state.pinning_block_index = -1
+        view_state.rebuild()
 
     async def _show_pin_picker():
         if not view_state.report_service:
