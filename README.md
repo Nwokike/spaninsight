@@ -45,53 +45,67 @@
 
 ---
 
-## 🎨 Visual Showcase & Application Tour
+## Screenshots
 
-<details open>
-  <summary><b>🚀 Core App Experience & Workspace</b></summary>
-  <br/>
-  <p align="center">
-    <img src="screenshots/home_desktop_light.png" alt="Desktop Workspace Home (Light)" width="48%" />
-    <img src="screenshots/home_dark.png" alt="Mobile Workspace Home (Dark)" width="48%" />
-  </p>
-</details>
+### Desktop Experience
 
-<details>
-  <summary><b>📋 Smart Surveys (Creation & Collection)</b></summary>
-  <br/>
-  <p align="center">
-    <img src="screenshots/form_tab_mobile_light_with_form_prompt.png" alt="Survey Creation with AI prompt" width="31%" />
-    <img src="screenshots/live_form(f.spaninsight.com)_mobile.png" alt="Live Distributed Survey Webpage" width="31%" />
-    <img src="screenshots/expanded_form_showing_5_live_responses_mobile_dark.png" alt="Live Responses Dashboard" width="31%" />
-  </p>
-</details>
+<p align="center">
+  <img src="screenshots/home_desktop_light.png" width="90%" alt="Workspace Home Screen" />
+</p>
+<p align="center"><em>Workspace Home Screen — seamlessly collaborate and organize project files</em></p>
 
-<details>
-  <summary><b>🧠 AI Autopilot & Data Analysis</b></summary>
-  <br/>
-  <p align="center">
-    <img src="screenshots/autopilot_desktop_dark.png" alt="Desktop Autopilot Engine" width="55%" />
-    <img src="screenshots/analyses_mobile_light_showing_block_with_chart_table_description.png" alt="Smart Analysis & Charts" width="38%" />
-  </p>
-</details>
+<p align="center">
+  <img src="screenshots/autopilot_desktop_dark.png" width="90%" alt="AI Autopilot Engine" />
+</p>
+<p align="center"><em>Autonomous AI Autopilot — multi-pass local analysis orchestration for report generation</em></p>
 
-<details>
-  <summary><b>📄 Professional Reporting & Export</b></summary>
-  <br/>
-  <p align="center">
-    <img src="screenshots/live_report_mobile(report.spaninsight.com).png" alt="Interactive Shared Report" width="31%" />
-    <img src="screenshots/save_to_pdf_preview_mobile.png" alt="Export to PDF Preview" width="31%" />
-    <img src="screenshots/shared_ppt_report_mobile.png" alt="Export to PowerPoint" width="31%" />
-  </p>
-</details>
+### Mobile Experience
 
-<details>
-  <summary><b>💰 Credits & Monetization</b></summary>
-  <br/>
-  <p align="center">
-    <img src="screenshots/watch_ads_to_add_more_credit_light.png" alt="AdMob & Credits Management" width="45%" />
-  </p>
-</details>
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/home_dark.png" width="100%" alt="Home Dashboard" /></td>
+    <td width="50%"><img src="screenshots/watch_ads_to_add_more_credit_light.png" width="100%" alt="AdMob & Credits" /></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Home Dashboard — dark theme optimized for local secure workspace sync</em></td>
+    <td align="center"><em>AdMob & Rewards — watch buffered interstitial ads to top-up daily free credits</em></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="33%"><img src="screenshots/form_tab_mobile_light_with_form_prompt.png" width="100%" alt="Smart Survey Builder" /></td>
+    <td width="33%"><img src="screenshots/live_form(f.spaninsight.com)_mobile.png" width="100%" alt="Public Mobile Survey View" /></td>
+    <td width="33%"><img src="screenshots/expanded_form_showing_5_live_responses_mobile_dark.png" width="100%" alt="Responses Dashboard" /></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Smart Survey Builder — generate forms from voice or text prompts</em></td>
+    <td align="center"><em>Public Web Survey — responsive client interface for fast data collection</em></td>
+    <td align="center"><em>Live Responses — track user feedback in real time with quick-actions</em></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/analyses_mobile_light_showing_block_with_chart_table_description.png" width="100%" alt="Interactive Data Analysis" /></td>
+    <td width="50%"><img src="screenshots/live_report_mobile(report.spaninsight.com).png" width="100%" alt="Interactive Shared Reports" /></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Local Data Analysis — visual charts, tables, and sandboxed execution blocks</em></td>
+    <td align="center"><em>Interactive Shared Reports — public-facing web insights hosted on report.spaninsight.com</em></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/save_to_pdf_preview_mobile.png" width="100%" alt="PDF Print Preview" /></td>
+    <td width="50%"><img src="screenshots/shared_ppt_report_mobile.png" width="100%" alt="PowerPoint Export" /></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Export to PDF — native layout engine with print preview controls</em></td>
+    <td align="center"><em>PowerPoint Slide Generator — export report structures into PPT format</em></td>
+  </tr>
+</table>
 
 ---
 
