@@ -14,6 +14,8 @@ class ReportsState:
         self.is_loading = {"value": True}
         self.is_saving = {"value": False}
         self.is_sharing = {"value": False}
+        self.is_viewing_live = {"value": False}
+        self.is_deleting = {"value": False}
         self.is_arranging = {"value": False}
         self.is_ai_editing = {"value": False}
         self.is_recording = {"value": False}

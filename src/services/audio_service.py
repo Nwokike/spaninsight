@@ -13,8 +13,9 @@ Based on FletBot + Akili Ear production patterns.
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
-from pathlib import Path
+import wave
 
 import flet as ft
 
@@ -24,12 +25,21 @@ logger = logging.getLogger(__name__)
 
 _HAS_RECORDER = False
 try:
-    from flet_audio_recorder import AudioRecorder
+    from flet_audio_recorder import (
+        AudioRecorder,
+        AudioRecorderConfiguration,
+        AudioEncoder,
+        AudioRecorderStreamEvent,
+    )
 
     _HAS_RECORDER = True
 except Exception as e:
     logger.warning("AudioRecorder not available on this platform: %s", e)
     _HAS_RECORDER = False
+
+PCM_SAMPLE_RATE = 44100
+PCM_CHANNELS = 1
+PCM_BYTES_PER_SAMPLE = 2  # 16-bit
 
 
 class AudioService:
@@ -43,17 +53,13 @@ class AudioService:
         self._page = page
         self._recorder: AudioRecorder | None = None
         self._recording = False
-        self._output_path: Path | None = None
+        self._pcm_buffer: bytearray = bytearray()
         self._auto_stop_task: asyncio.Task | None = None
 
         if _HAS_RECORDER:
-            # PERFORMANCE FIX: Store recordings directly in the app's auto-cleaned temp folder to eliminate filesystem directory leaks
-            from core.utils import get_temp_dir
-
-            temp_dir = get_temp_dir()
-            self._output_path = temp_dir / f"recording_{id(self)}.wav"
             self._recorder = AudioRecorder(
                 on_state_change=self._on_state_change,
+                on_stream=self._on_stream,
             )
 
     @property
@@ -65,13 +71,13 @@ class AudioService:
         return self._recording
 
     async def start_recording(self, on_auto_stop=None) -> bool:
-        """Start recording audio. Returns True if started successfully.
+        """Start recording audio via PCM16BITS streaming. Returns True if started.
 
         Args:
             on_auto_stop: Optional callback invoked when recording auto-stops
                           after MAX_VOICE_DURATION_SEC (60s).
         """
-        if not self._recorder or not self._output_path:
+        if not self._recorder:
             self._page.snack_bar = ft.SnackBar(
                 content=ft.Text("Audio recording not available on this platform")
             )
@@ -79,14 +85,19 @@ class AudioService:
             self._page.update()
             return False
 
+        self._pcm_buffer.clear()
+
         try:
             ok = await self._recorder.start_recording(
-                output_path=str(self._output_path)
+                configuration=AudioRecorderConfiguration(
+                    encoder=AudioEncoder.PCM16BITS,
+                    sample_rate=PCM_SAMPLE_RATE,
+                    channels=PCM_CHANNELS,
+                ),
             )
             self._recording = bool(ok)
-            logger.info("Audio recording started → %s (ok=%s)", self._output_path, ok)
+            logger.info("Audio recording started (PCM16BITS streaming, ok=%s)", ok)
 
-            # Schedule auto-stop after 60 seconds
             if self._recording:
                 self._auto_stop_task = asyncio.create_task(
                     self._auto_stop_timer(on_auto_stop)
@@ -134,98 +145,80 @@ class AudioService:
             pass  # Manually stopped before timeout — expected
 
     async def stop_recording(self) -> tuple[bytes, str] | None:
-        """Stop recording and return ``(raw_bytes, mime_type)`` or None."""
+        """Stop recording and return ``(wav_bytes, 'audio/wav')`` or None."""
         if not self._recorder or not self._recording:
             return None
 
-        # Cancel auto-stop timer if user manually stopped early
         if self._auto_stop_task and not self._auto_stop_task.done():
             self._auto_stop_task.cancel()
             self._auto_stop_task = None
 
         try:
-            saved_path = await self._recorder.stop_recording()
+            await self._recorder.stop_recording()
             self._recording = False
-            logger.info("Audio recording stopped, saved to: %s", saved_path)
 
-            data = None
-            # On Flet Web client-side (Pyodide), stop_recording() returns a browser-local Blob URL.
-            # We fetch its content directly within the browser using JS APIs.
-            if saved_path and saved_path.startswith("blob:"):
-                logger.info(
-                    "Detected browser blob URL: %s. Fetching via JS...", saved_path
+            if not self._pcm_buffer:
+                logger.warning("No PCM data collected during recording")
+                self._page.snack_bar = ft.SnackBar(
+                    content=ft.Text("No audio captured. Please try again."),
+                    bgcolor=ft.Colors.ERROR,
                 )
-                try:
-                    js = __import__("js")
-                    fetch = js.fetch
-                    Uint8Array = js.Uint8Array
+                self._page.snack_bar.open = True
+                self._page.update()
+                return None
 
-                    response = await fetch(saved_path)
-                    array_buffer = await response.arrayBuffer()
-                    uint8_array = Uint8Array.new(array_buffer)
-                    try:
-                        data = uint8_array.tobytes()
-                    except AttributeError:
-                        data = bytes(uint8_array)
-                    logger.info(
-                        "Successfully fetched %d bytes from browser blob URL", len(data)
-                    )
-                except ImportError:
-                    logger.error(
-                        "js.fetch not available (not running under Pyodide WASM)"
-                    )
-                except Exception as js_err:
-                    logger.error("Failed to fetch browser blob via Pyodide: %s", js_err)
-            else:
-                # Native desktop/mobile flow
-                file_path = self._output_path
-                if saved_path:
-                    file_path = Path(saved_path)
+            wav_bytes = _pcm_to_wav(
+                bytes(self._pcm_buffer),
+                sample_rate=PCM_SAMPLE_RATE,
+                channels=PCM_CHANNELS,
+                bytes_per_sample=PCM_BYTES_PER_SAMPLE,
+            )
+            logger.info(
+                "Assembled WAV: %d PCM bytes → %d WAV bytes",
+                len(self._pcm_buffer),
+                len(wav_bytes),
+            )
+            self._pcm_buffer.clear()
 
-                logger.info(
-                    "Attempting to read audio data from local path: %s", file_path
+            if len(wav_bytes) > MAX_AUDIO_SIZE_BYTES:
+                logger.warning(
+                    "Audio too large (%d bytes > %d limit)",
+                    len(wav_bytes),
+                    MAX_AUDIO_SIZE_BYTES,
                 )
-                if file_path and file_path.exists():
-                    data = file_path.read_bytes()
-                    logger.info("Read %d bytes of audio data", len(data))
+                self._page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Voice note too large. Please keep it under 25MB."),
+                    bgcolor=ft.Colors.ERROR,
+                )
+                self._page.snack_bar.open = True
+                self._page.update()
+                return None
 
-            if data is not None:
-                # Enforce gateway's 25MB limit
-                if len(data) > MAX_AUDIO_SIZE_BYTES:
-                    logger.warning(
-                        "Audio file too large (%d bytes > %d limit)",
-                        len(data),
-                        MAX_AUDIO_SIZE_BYTES,
-                    )
-                    if not (saved_path and saved_path.startswith("blob:")):
-                        file_path = (
-                            Path(saved_path) if saved_path else self._output_path
-                        )
-                        if file_path and file_path.exists():
-                            file_path.unlink(missing_ok=True)
-                    self._page.snack_bar = ft.SnackBar(
-                        content=ft.Text(
-                            "Voice note too large. Please keep it under 25MB."
-                        ),
-                        bgcolor=ft.Colors.ERROR,
-                    )
-                    self._page.snack_bar.open = True
-                    self._page.update()
-                    return None
-
-                # Clean up local file for native platforms
-                if not (saved_path and saved_path.startswith("blob:")):
-                    file_path = Path(saved_path) if saved_path else self._output_path
-                    if file_path and file_path.exists():
-                        file_path.unlink(missing_ok=True)
-                return (data, "audio/wav")
-            else:
-                logger.error("Audio data could not be retrieved")
+            return (wav_bytes, "audio/wav")
         except Exception as e:
             logger.error("Failed to stop recording: %s", e)
             self._recording = False
-
         return None
+
+    def _on_stream(self, e: AudioRecorderStreamEvent):
+        """Collect PCM16BITS chunks into the buffer."""
+        self._pcm_buffer.extend(e.chunk)
 
     def _on_state_change(self, e):
         logger.info("AudioRecorder state changed: %s", e)
+
+
+def _pcm_to_wav(
+    pcm_data: bytes,
+    sample_rate: int = PCM_SAMPLE_RATE,
+    channels: int = PCM_CHANNELS,
+    bytes_per_sample: int = PCM_BYTES_PER_SAMPLE,
+) -> bytes:
+    """Wrap raw PCM16 bytes in a WAV container."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(channels)
+        wav.setsampwidth(bytes_per_sample)
+        wav.setframerate(sample_rate)
+        wav.writeframes(pcm_data)
+    return buf.getvalue()

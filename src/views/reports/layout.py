@@ -340,6 +340,8 @@ def build_report_view(
             ),
             is_saving=ui_state.is_saving["value"],
             is_sharing=ui_state.is_sharing["value"],
+            is_viewing_live=ui_state.is_viewing_live["value"],
+            is_deleting=ui_state.is_deleting["value"],
             is_recording=ui_state.is_recording["value"],
             is_transcribing=ui_state.is_transcribing["value"],
             is_ai_editing=ui_state.is_ai_editing["value"],

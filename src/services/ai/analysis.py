@@ -132,6 +132,8 @@ async def suggest(
         {"role": "user", "content": "\n".join(context_parts)},
     ]
 
+    data = None
+    content = ""
     try:
         data = await call_gateway(TASK_SUGGEST, messages)
         content = extract_content(data)
@@ -142,7 +144,15 @@ async def suggest(
             return suggestions
         return []
     except Exception as e:
-        logger.error("Suggest failed: %s", e)
+        model_used = (
+            data.get("_spaninsight_model_used", "unknown") if data else "unknown"
+        )
+        logger.error(
+            "Suggest failed (model=%s): %s | raw_snippet=%s",
+            model_used,
+            e,
+            content[:200] if content else "",
+        )
         return fallback_suggestions()
 
 
@@ -184,6 +194,7 @@ async def generate_code(
         "- To select object/string columns with `select_dtypes`, NEVER pass 'object' alone (which triggers a deprecation warning). Instead, explicitly include 'str' as well: `select_dtypes(include=['object', 'str'])` or `select_dtypes(include=['object', 'string'])`.\n"
         "- You are fully free to write any classes, loops, custom calculations, statistics, or spatial algorithms. Build any advanced analysis directly using the allowed whitelisted modules.\n"
         "- For plotting, ALWAYS create a figure explicitly using plt.figure() or plt.subplots().\n"
+        "- IMPORTANT: Use `tick_labels=` instead of `labels=` in plt.boxplot() — the old `labels` parameter was renamed in Matplotlib 3.9.\n"
         "- NEVER call plt.savefig() — figures are automatically captured. savefig just wastes time writing files to disk.\n"
         "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
         "- KEEP CODE EFFICIENT — execution has a 60-second limit. Do not loop over every column creating separate figures. Reuse subplot grids. Avoid generating more than 4–5 total figures per block.\n"
@@ -246,6 +257,7 @@ async def generate_corrected_code(
         "- To select object/string columns with `select_dtypes`, NEVER pass 'object' alone (which triggers a deprecation warning). Instead, explicitly include 'str' as well: `select_dtypes(include=['object', 'str'])` or `select_dtypes(include=['object', 'string'])`.\n"
         "- You are fully free to write any classes, loops, custom calculations, statistics, or spatial algorithms. Build any advanced analysis directly using the allowed whitelisted modules.\n"
         "- For plotting, ALWAYS create a figure explicitly using plt.figure() or plt.subplots().\n"
+        "- IMPORTANT: Use `tick_labels=` instead of `labels=` in plt.boxplot() — the old `labels` parameter was renamed in Matplotlib 3.9.\n"
         "- NEVER call plt.savefig() — figures are automatically captured. savefig just wastes time writing files to disk.\n"
         "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
         "- KEEP CODE EFFICIENT — execution has a 60-second limit. Do not loop over every column creating separate figures. Reuse subplot grids. Avoid generating more than 4–5 total figures per block.\n"

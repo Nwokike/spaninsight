@@ -318,9 +318,9 @@ async def on_ai_edit(page: ft.Page, ui_state, action: str, text: str):
 
 async def _handle_voice_auto_stop(page: ft.Page, ui_state, result):
     ui_state.is_recording["value"] = False
-    ui_state.is_transcribing["value"] = True
-    ui_state.rebuild()
     if result:
+        ui_state.is_transcribing["value"] = True
+        ui_state.rebuild()
         audio_bytes, mime = result
         try:
             transcript = await ai_service.transcribe_audio(audio_bytes, mime)
@@ -328,7 +328,7 @@ async def _handle_voice_auto_stop(page: ft.Page, ui_state, result):
                 ui_state.ai_prompt_text["value"] = transcript
         except Exception as ex:
             logger.error("Voice transcription failed: %s", ex)
-    ui_state.is_transcribing["value"] = False
+        ui_state.is_transcribing["value"] = False
     ui_state.rebuild()
 
 
@@ -350,9 +350,9 @@ async def on_voice_toggle(page: ft.Page, ui_state):
     if ui_state.is_recording["value"]:
         result = await ui_state.audio_svc.stop_recording()
         ui_state.is_recording["value"] = False
-        ui_state.is_transcribing["value"] = True
-        ui_state.rebuild()
         if result:
+            ui_state.is_transcribing["value"] = True
+            ui_state.rebuild()
             audio_bytes, mime = result
             try:
                 transcript = await ai_service.transcribe_audio(audio_bytes, mime)
@@ -360,7 +360,7 @@ async def on_voice_toggle(page: ft.Page, ui_state):
                     ui_state.ai_prompt_text["value"] = transcript
             except Exception as ex:
                 logger.error("Voice transcription failed: %s", ex)
-        ui_state.is_transcribing["value"] = False
+            ui_state.is_transcribing["value"] = False
         ui_state.rebuild()
     else:
         started = await ui_state.audio_svc.start_recording(
@@ -377,14 +377,14 @@ async def on_voice_toggle(page: ft.Page, ui_state):
 
 async def on_view_live(page: ft.Page, ui_state, report_service, ad_service):
     report = ui_state.active_report["data"]
-    if not report:
+    if not report or ui_state.is_viewing_live["value"]:
         return
 
-    # 1. Save current edits
-    ui_state.is_saving["value"] = True
+    ui_state.is_viewing_live["value"] = True
     ui_state.rebuild()
     try:
-        if report_service and report:
+        # Save current edits + generate fresh share link
+        if report_service:
             await report_service.update_report(
                 report["id"],
                 {
@@ -394,32 +394,24 @@ async def on_view_live(page: ft.Page, ui_state, report_service, ad_service):
                     "is_arranged": True,
                 },
             )
-    except Exception as e:
-        logger.error("Save before live failed: %s", e)
-    ui_state.is_saving["value"] = False
-    ui_state.rebuild()
-
-    # 2. Always generate fresh share link
-    ui_state.is_sharing["value"] = True
-    ui_state.rebuild()
-    try:
         if ad_service:
             await ad_service.show_interstitial()
-        if report_service:
-            report["blocks"] = list(ui_state.editor_blocks)
-            report["title"] = ui_state.draft_title["value"]
-            url = await report_service.share_report(report, state.user_uuid)
-            if url:
-                ui_state.active_report["data"]["share_url"] = url
-                await ft.UrlLauncher().launch_url(url)
-            else:
-                page.snack_bar = ft.SnackBar(
-                    ft.Text("Share failed. Try again."), duration=3000
-                )
-                page.snack_bar.open = True
+        report["blocks"] = list(ui_state.editor_blocks)
+        report["title"] = ui_state.draft_title["value"]
+        url = await report_service.share_report(report, state.user_uuid)
+        if url:
+            ui_state.active_report["data"]["share_url"] = url
+            await ft.UrlLauncher().launch_url(url)
+        else:
+            page.snack_bar = ft.SnackBar(
+                ft.Text("View live failed. Try again."), duration=3000
+            )
+            page.snack_bar.open = True
     except Exception as e:
         logger.error("View live failed: %s", e)
-    ui_state.is_sharing["value"] = False
+        page.snack_bar = ft.SnackBar(ft.Text(f"View live failed: {e}"), duration=3000)
+        page.snack_bar.open = True
+    ui_state.is_viewing_live["value"] = False
     ui_state.rebuild()
 
 
@@ -431,9 +423,14 @@ async def on_delete_report(page: ft.Page, ui_state, report_id: str, report_servi
 
     async def _confirm_delete(e=None):
         _close_dlg()
-        if report_service:
-            await report_service.delete_report(report_id)
-        on_back(page, ui_state, report_service)
+        ui_state.is_deleting["value"] = True
+        ui_state.rebuild()
+        try:
+            if report_service:
+                await report_service.delete_report(report_id)
+        finally:
+            ui_state.is_deleting["value"] = False
+            on_back(page, ui_state, report_service)
 
     confirm_dlg = ft.AlertDialog(
         title=ft.Text("Delete Report?"),

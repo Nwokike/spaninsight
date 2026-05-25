@@ -779,15 +779,49 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
         from views.analysis.handlers.ai import execute_pending_blocks
 
         project_service = ProjectService(page, credit_service._storage)
+        consecutive_errors = 0
+        max_consecutive_errors = 5
 
         while page.route == "/analysis":
             project_id = state.active_project_id
             if project_id and not project_id.startswith("loc_"):
                 try:
-                    await project_service.pull_project(project_id)
-                    await execute_pending_blocks(view_state)
+                    status = await project_service.pull_project(project_id)
+                    if status == "deleted":
+                        logger.warning(
+                            "Project %s deleted on server. Stopping poll.", project_id
+                        )
+                        page.snack_bar = ft.SnackBar(
+                            content=ft.Text(
+                                "Workspace no longer available on cloud. "
+                                "Switch projects or re-register."
+                            ),
+                            duration=5000,
+                        )
+                        page.snack_bar.open = True
+                        page.update()
+                        break
+                    if status is True:
+                        await execute_pending_blocks(view_state)
+                    consecutive_errors = 0
                 except Exception as ex:
-                    logger.warning("Auto-polling updates failed: %s", ex)
+                    consecutive_errors += 1
+                    delay = min(5 * (2**consecutive_errors), 60)
+                    logger.warning(
+                        "Auto-polling failed (%d/%d): %s. Next poll in %ds.",
+                        consecutive_errors,
+                        max_consecutive_errors,
+                        ex,
+                        delay,
+                    )
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.error(
+                            "Auto-polling stopped after %d consecutive failures.",
+                            max_consecutive_errors,
+                        )
+                        break
+                    await asyncio.sleep(delay - 5)
+                    continue
             await asyncio.sleep(5)
 
     page.run_task(poll_for_updates)

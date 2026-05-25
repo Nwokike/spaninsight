@@ -414,6 +414,8 @@ def build_report_editor(
     on_voice_toggle,
     is_saving: bool = False,
     is_sharing: bool = False,
+    is_viewing_live: bool = False,
+    is_deleting: bool = False,
     is_recording: bool = False,
     is_transcribing: bool = False,
     is_ai_editing: bool = False,
@@ -572,44 +574,131 @@ def build_report_editor(
                         visible=is_transcribing or is_ai_editing,
                     ),
                     ft.Divider(height=1, color=theme.GLASS_BORDER_COLOR),
+                    # Row 1 — Primary actions
                     ft.Row(
                         [
                             ft.FilledButton(
-                                "View Live Report",
-                                icon=ft.Icons.OPEN_IN_NEW_ROUNDED,
+                                content=ft.Row(
+                                    [
+                                        ft.ProgressRing(
+                                            width=12,
+                                            height=12,
+                                            stroke_width=2,
+                                            color="white",
+                                        ),
+                                        ft.Text("Opening...", size=12),
+                                    ],
+                                    spacing=6,
+                                )
+                                if is_viewing_live
+                                else None,
+                                text="View Live Report"
+                                if not is_viewing_live
+                                else None,
+                                icon=ft.Icons.OPEN_IN_NEW_ROUNDED
+                                if not is_viewing_live
+                                else None,
                                 on_click=lambda e: on_view_live(),
+                                disabled=is_viewing_live or is_ai_editing,
+                                expand=True,
                             ),
                             ft.FilledButton(
-                                "Save",
-                                icon=ft.Icons.SAVE_ROUNDED,
+                                content=ft.Row(
+                                    [
+                                        ft.ProgressRing(
+                                            width=12,
+                                            height=12,
+                                            stroke_width=2,
+                                            color="white",
+                                        ),
+                                        ft.Text("Saving...", size=12),
+                                    ],
+                                    spacing=6,
+                                )
+                                if is_saving
+                                else None,
+                                text="Save" if not is_saving else None,
+                                icon=ft.Icons.SAVE_ROUNDED if not is_saving else None,
                                 on_click=lambda e: on_save(),
                                 disabled=is_saving or is_ai_editing,
+                                expand=True,
                             ),
+                        ],
+                        spacing=8,
+                        wrap=True,
+                    ),
+                    # Row 2 — Secondary actions
+                    ft.Row(
+                        [
                             ft.OutlinedButton(
-                                "Share",
-                                icon=ft.Icons.SHARE_ROUNDED,
+                                content=ft.Row(
+                                    [
+                                        ft.ProgressRing(
+                                            width=12, height=12, stroke_width=2
+                                        ),
+                                        ft.Text("Sharing...", size=12),
+                                    ],
+                                    spacing=6,
+                                )
+                                if is_sharing
+                                else None,
+                                text="Share" if not is_sharing else None,
+                                icon=ft.Icons.SHARE_ROUNDED if not is_sharing else None,
                                 on_click=lambda e: on_share(),
                                 disabled=is_sharing or is_ai_editing,
                             ),
                             ft.OutlinedButton(
-                                "Back",
-                                icon=ft.Icons.ARROW_BACK_ROUNDED,
+                                content=ft.Row(
+                                    [
+                                        ft.ProgressRing(
+                                            width=12, height=12, stroke_width=2
+                                        ),
+                                        ft.Text("Back...", size=12),
+                                    ],
+                                    spacing=6,
+                                )
+                                if is_deleting
+                                else None,
+                                text="Back" if not is_deleting else None,
+                                icon=ft.Icons.ARROW_BACK_ROUNDED
+                                if not is_deleting
+                                else None,
                                 on_click=lambda e: on_back(),
+                                disabled=is_deleting,
                             ),
                             ft.OutlinedButton(
-                                "Delete Report",
-                                icon=ft.Icons.DELETE_FOREVER_ROUNDED,
+                                content=ft.Row(
+                                    [
+                                        ft.ProgressRing(
+                                            width=12,
+                                            height=12,
+                                            stroke_width=2,
+                                            color=theme.ERROR,
+                                        ),
+                                        ft.Text(
+                                            "Deleting...", size=12, color=theme.ERROR
+                                        ),
+                                    ],
+                                    spacing=6,
+                                )
+                                if is_deleting
+                                else None,
+                                text="Delete Report" if not is_deleting else None,
+                                icon=ft.Icons.DELETE_FOREVER_ROUNDED
+                                if not is_deleting
+                                else None,
                                 icon_color=theme.ERROR,
                                 style=ft.ButtonStyle(color=theme.ERROR),
                                 on_click=lambda e: on_delete(),
+                                disabled=is_deleting or is_ai_editing,
                                 visible=on_delete is not None,
                             )
                             if on_delete is not None
                             else ft.Container(),
                         ],
                         spacing=8,
+                        wrap=True,
                     ),
-                    ft.ProgressBar(visible=is_saving or is_sharing),
                 ],
                 spacing=8,
             ),

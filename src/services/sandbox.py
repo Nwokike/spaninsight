@@ -237,12 +237,16 @@ def execute_code(
         }
 
     import matplotlib
+    import warnings
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
 
+    # FIX: Suppress Matplotlib <3.9 deprecation warnings for AI-generated code
+    warnings.filterwarnings("ignore", message="The 'labels' parameter of boxplot")
+    warnings.filterwarnings("ignore", message="The 'labels' parameter of *_box")
     # FIX: Safely mock plt.show() so it doesn't open GUI windows or trigger AST blocks
     plt.show = lambda *args, **kwargs: None
 

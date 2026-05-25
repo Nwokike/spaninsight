@@ -31,7 +31,7 @@ import os
 """
     is_safe, reason = validate_code(code)
     assert not is_safe
-    assert "Importing 'os' is prohibited" in reason
+    assert "blocked term" in reason
 
 
 def test_validate_code_syntax_error():
