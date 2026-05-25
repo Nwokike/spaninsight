@@ -95,16 +95,21 @@ def extract_block_by_pattern(text: str, is_json: bool = False) -> str:
     cleaned = strip_thinking(text)
 
     if is_json:
-        # First try finding the first '{' and the last '}' (for json objects)
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            return cleaned[start : end + 1].strip()
-        # Fallback to finding the first '[' and the last ']' (for json arrays)
-        start_arr = cleaned.find("[")
-        end_arr = cleaned.rfind("]")
-        if start_arr != -1 and end_arr != -1 and end_arr > start_arr:
-            return cleaned[start_arr : end_arr + 1].strip()
+        # Check which bracket comes first to determine the outermost structure (object or array)
+        first_brace = cleaned.find("{")
+        first_bracket = cleaned.find("[")
+
+        if first_bracket != -1 and (first_brace == -1 or first_bracket < first_brace):
+            # Outer-most is an array
+            end_bracket = cleaned.rfind("]")
+            if end_bracket != -1 and end_bracket > first_bracket:
+                return cleaned[first_bracket : end_bracket + 1].strip()
+
+        if first_brace != -1:
+            # Outer-most is an object
+            end_brace = cleaned.rfind("}")
+            if end_brace != -1 and end_brace > first_brace:
+                return cleaned[first_brace : end_brace + 1].strip()
 
         match = _JSON_BLOCK_RE.search(cleaned)
         if match:
