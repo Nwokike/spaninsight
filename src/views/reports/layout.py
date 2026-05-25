@@ -54,7 +54,9 @@ def build_report_view(
                     title=ui_state.draft_title["value"],
                     description=ui_state.draft_desc["value"],
                     on_blocks_changed=_rebuild,
-                    on_title_changed=lambda v: ui_state.draft_title.update({"value": v}),
+                    on_title_changed=lambda v: ui_state.draft_title.update(
+                        {"value": v}
+                    ),
                     on_desc_changed=lambda v: ui_state.draft_desc.update({"value": v}),
                     on_save=lambda: page.run_task(
                         handlers.on_save, page, ui_state, report_service
@@ -63,7 +65,11 @@ def build_report_view(
                         handlers.on_share, page, ui_state, report_service, ad_service
                     ),
                     on_view_live=lambda: page.run_task(
-                        handlers.on_view_live, page, ui_state, report_service, ad_service
+                        handlers.on_view_live,
+                        page,
+                        ui_state,
+                        report_service,
+                        ad_service,
                     ),
                     on_back=lambda: handlers.on_back(page, ui_state, report_service),
                     on_import=lambda: handlers.on_import(page, ui_state),
@@ -108,7 +114,7 @@ def build_report_view(
         """Updates just the list of reports dynamically without rebuilding headers."""
         if not ui_state.user_reports_column_ref.current:
             return
-            
+
         controls = []
         if ui_state.is_loading["value"]:
             controls.append(
@@ -130,7 +136,9 @@ def build_report_view(
                             ft.Icon(
                                 ft.Icons.ASSESSMENT_OUTLINED,
                                 size=64,
-                                color=ft.Colors.with_opacity(0.15, ft.Colors.ON_SURFACE),
+                                color=ft.Colors.with_opacity(
+                                    0.15, ft.Colors.ON_SURFACE
+                                ),
                             ),
                             ft.Text(
                                 "No reports yet",
@@ -148,7 +156,9 @@ def build_report_view(
                             ft.FilledButton(
                                 "Start Analysis",
                                 icon=ft.Icons.ANALYTICS_ROUNDED,
-                                on_click=lambda _: page.run_task(page.push_route, "/analysis"),
+                                on_click=lambda _: page.run_task(
+                                    page.push_route, "/analysis"
+                                ),
                             ),
                         ],
                         horizontal_alignment="center",
@@ -270,13 +280,28 @@ def build_report_view(
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Text("SPONSORED", size=8, weight=ft.FontWeight.W_700, color=ft.Colors.ON_SURFACE_VARIANT, style=ft.TextStyle(letter_spacing=1)),
-                            utils.get_banner_ad(unit_id="ca-app-pub-5679949845754640/5628404223", width=320, height=50),
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                style=ft.TextStyle(letter_spacing=1),
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
                         ],
-                        horizontal_alignment="center", spacing=4,
+                        horizontal_alignment="center",
+                        spacing=4,
                     ),
-                    alignment=ft.Alignment.CENTER, padding=8, border_radius=12,
-                    bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR), margin=ft.Margin(20, 10, 20, 10),
+                    alignment=ft.Alignment.CENTER,
+                    padding=8,
+                    border_radius=12,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(20, 10, 20, 10),
                 )
             )
 
@@ -288,13 +313,28 @@ def build_report_view(
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Text("SPONSORED", size=8, weight=ft.FontWeight.W_700, color=ft.Colors.ON_SURFACE_VARIANT, style=ft.TextStyle(letter_spacing=1)),
-                            utils.get_banner_ad(unit_id="ca-app-pub-5679949845754640/5628404223", width=320, height=50),
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                style=ft.TextStyle(letter_spacing=1),
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
                         ],
-                        horizontal_alignment="center", spacing=4,
+                        horizontal_alignment="center",
+                        spacing=4,
                     ),
-                    alignment=ft.Alignment.CENTER, padding=8, border_radius=12,
-                    bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR), margin=ft.Margin(20, 8, 20, 8),
+                    alignment=ft.Alignment.CENTER,
+                    padding=8,
+                    border_radius=12,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(20, 8, 20, 8),
                 )
             )
 
@@ -316,22 +356,37 @@ def build_report_view(
                 color=ft.Colors.with_opacity(0.5, ft.Colors.ON_SURFACE),
             ),
         ]
-        
+
         if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
             controls.append(
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Text("SPONSORED", size=8, weight=ft.FontWeight.W_700, color=ft.Colors.ON_SURFACE_VARIANT, style=ft.TextStyle(letter_spacing=1)),
-                            utils.get_banner_ad(unit_id="ca-app-pub-5679949845754640/5628404223", width=320, height=50),
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                style=ft.TextStyle(letter_spacing=1),
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
                         ],
-                        horizontal_alignment="center", spacing=4,
+                        horizontal_alignment="center",
+                        spacing=4,
                     ),
-                    alignment=ft.Alignment.CENTER, padding=8, border_radius=12,
-                    bgcolor=theme.GLASS_BG, border=ft.Border.all(1, theme.GLASS_BORDER_COLOR), margin=ft.Margin(0, 12, 0, 0),
+                    alignment=ft.Alignment.CENTER,
+                    padding=8,
+                    border_radius=12,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(0, 12, 0, 0),
                 )
             )
-            
+
         return ft.Container(
             content=ft.Column(controls, horizontal_alignment="center", spacing=12),
             expand=True,
@@ -353,18 +408,20 @@ def build_report_view(
                     ft.Container(
                         ref=ui_state.dashboard_container_ref,
                         visible=True,
-                        content=ft.Column(_build_dashboard_layout(), scroll="auto", expand=True)
+                        content=ft.Column(
+                            _build_dashboard_layout(), scroll="auto", expand=True
+                        ),
                     ),
                     ft.Container(
                         ref=ui_state.editor_container_ref,
                         visible=False,
-                        content=ft.Column()
+                        content=ft.Column(),
                     ),
                     ft.Container(
                         ref=ui_state.arranger_overlay_ref,
                         visible=False,
-                        content=_build_arranger_layout()
-                    )
+                        content=_build_arranger_layout(),
+                    ),
                 ],
                 scroll="auto",
                 expand=True,

@@ -87,7 +87,7 @@ async def on_save(page: ft.Page, ui_state, report_service):
     if ui_state.save_btn_ref.current:
         ui_state.save_btn_ref.current.disabled = True
         ui_state.save_btn_ref.current.update()
-        
+
     try:
         if report_service and ui_state.active_report["data"]:
             await report_service.update_report(
@@ -127,12 +127,12 @@ async def on_share(page: ft.Page, ui_state, report_service, ad_service):
 
     if not ui_state.active_report["data"] or ui_state.is_sharing["value"]:
         return
-        
+
     ui_state.is_sharing["value"] = True
     if ui_state.share_btn_ref.current:
         ui_state.share_btn_ref.current.disabled = True
         ui_state.share_btn_ref.current.update()
-        
+
     try:
         if ad_service:
             await ad_service.show_interstitial()
@@ -214,7 +214,9 @@ async def on_import(page: ft.Page, ui_state):
         elif block.get("figure"):
             try:
                 # IMPORTANT FIX: Offload synchronous Matplotlib call to background thread!
-                png_bytes = await asyncio.to_thread(figure_to_png_bytes, block["figure"], dpi=150)
+                png_bytes = await asyncio.to_thread(
+                    figure_to_png_bytes, block["figure"], dpi=150
+                )
                 png_b64 = base64.b64encode(png_bytes).decode("utf-8")
             except Exception as e:
                 logger.error("Async figure conversion failed: %s", e)
@@ -405,7 +407,7 @@ async def on_view_live(page: ft.Page, ui_state, report_service, ad_service):
     if ui_state.view_live_btn_ref.current:
         ui_state.view_live_btn_ref.current.disabled = True
         ui_state.view_live_btn_ref.current.update()
-        
+
     try:
         # Save current edits + generate fresh share link
         if report_service:

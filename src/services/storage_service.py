@@ -95,23 +95,29 @@ class StorageService:
     # ── Native file helpers ──────────────────────────────────────────
 
     def _load(self) -> None:
-        loaded = False
+        _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+        self._settings = self._load_file(_SETTINGS_FILE, "settings")
+        self._history = self._load_file(_HISTORY_FILE, "history")
+
+    @staticmethod
+    def _load_file(path: Path, label: str) -> dict:
+        """Read and decode a JSON file, recovering from corruption gracefully."""
+        if not path.exists():
+            return {}
         try:
-            _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-            if _SETTINGS_FILE.exists():
-                self._settings = msgspec.json.decode(_SETTINGS_FILE.read_bytes())
-                loaded = True
-            if _HISTORY_FILE.exists():
-                self._history = msgspec.json.decode(_HISTORY_FILE.read_bytes())
+            raw = path.read_bytes()
+            if not raw:
+                return {}
+            return msgspec.json.decode(raw)
         except Exception as e:
-            logger.warning("StorageService._load filesystem read failed: %s", e)
-
-        if not loaded:
-            # No existing data — fresh start
-            self._settings, self._history = {}, {}
-
-        if not loaded and self._is_web:
-            self._load_web()  # Fallback
+            logger.warning("Storage %s corrupted (%s) — resetting", label, e)
+            try:
+                backup = path.with_suffix(f".{label}.corrupted")
+                path.rename(backup)
+                logger.info("Backed up corrupted %s to %s", label, backup)
+            except Exception:
+                path.unlink(missing_ok=True)
+            return {}
 
     def _write_files_sync(
         self, settings_copy, history_copy, write_settings, write_history

@@ -38,49 +38,48 @@ logger = logging.getLogger("spaninsight")
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-# Monkeypatch Matplotlib WebAgg backend to prevent KeyError on unmount
-try:
-    import matplotlib.backends.backend_webagg_core as webagg
 
-    for cls_name in ["FigureManager", "FigureManagerWebAgg"]:
-        if hasattr(webagg, cls_name):
-            cls = getattr(webagg, cls_name)
-            if hasattr(cls, "remove_web_socket"):
-                original_remove = cls.remove_web_socket
+def _patch_matplotlib():
+    """Monkeypatch matplotlib — deferred to avoid blocking startup."""
+    try:
+        import matplotlib.backends.backend_webagg_core as webagg
 
-                def make_safe_remove(orig):
-                    def safe_remove(self, web_socket):
-                        try:
-                            self.web_sockets.discard(web_socket)
-                        except Exception:
+        for cls_name in ["FigureManager", "FigureManagerWebAgg"]:
+            if hasattr(webagg, cls_name):
+                cls = getattr(webagg, cls_name)
+                if hasattr(cls, "remove_web_socket"):
+                    original_remove = cls.remove_web_socket
+
+                    def make_safe_remove(orig):
+                        def safe_remove(self, web_socket):
                             try:
-                                orig(self, web_socket)
-                            except KeyError:
-                                pass
+                                self.web_sockets.discard(web_socket)
+                            except Exception:
+                                try:
+                                    orig(self, web_socket)
+                                except KeyError:
+                                    pass
 
-                    return safe_remove
+                        return safe_remove
 
-                cls.remove_web_socket = make_safe_remove(original_remove)
-except Exception as monkey_err:
-    logger.warning(
-        "Failed to monkeypatch matplotlib FigureManager remove_web_socket: %s",
-        monkey_err,
-    )
+                    cls.remove_web_socket = make_safe_remove(original_remove)
+    except Exception as monkey_err:
+        logger.warning(
+            "Failed to monkeypatch matplotlib FigureManager: %s",
+            monkey_err,
+        )
 
-# Monkeypatch FigureManagerBase to stub WebAgg methods that flet_charts expects.
-try:
-    import matplotlib.backend_bases as _mb
+    try:
+        import matplotlib.backend_bases as _mb
 
-    if not hasattr(_mb.FigureManagerBase, "add_web_socket"):
-        _mb.FigureManagerBase.add_web_socket = lambda self, ws: None
-    if not hasattr(_mb.FigureManagerBase, "remove_web_socket"):
-        _mb.FigureManagerBase.remove_web_socket = lambda self, ws: None
-    if not hasattr(_mb.FigureManagerBase, "handle_json"):
-        _mb.FigureManagerBase.handle_json = lambda self, msg: None
-except Exception as agg_err:
-    logger.warning(
-        "Failed to monkeypatch FigureManagerBase for flet_charts: %s", agg_err
-    )
+        if not hasattr(_mb.FigureManagerBase, "add_web_socket"):
+            _mb.FigureManagerBase.add_web_socket = lambda self, ws: None
+        if not hasattr(_mb.FigureManagerBase, "remove_web_socket"):
+            _mb.FigureManagerBase.remove_web_socket = lambda self, ws: None
+        if not hasattr(_mb.FigureManagerBase, "handle_json"):
+            _mb.FigureManagerBase.handle_json = lambda self, msg: None
+    except Exception as agg_err:
+        logger.warning("Failed to monkeypatch FigureManagerBase: %s", agg_err)
 
 
 # ── Housekeeping (Audit Fix) ─────────────────────────────────────────
@@ -123,14 +122,6 @@ async def main(page: ft.Page):
     page.padding = 0
     page.spacing = 0
 
-    # ── Asset Validation ────────────────────────────────────────────
-    import os
-
-    assets_dir = os.path.join(os.path.dirname(__file__), "assets")
-    for asset in ("icon.png", "logo.png"):
-        if not os.path.exists(os.path.join(assets_dir, asset)):
-            logger.warning("Missing asset: %s — app may display incorrectly", asset)
-
     # ── Error Handler ───────────────────────────────────────────────
     def on_error(e):
         logger.error("Page error: %s", e.data)
@@ -148,21 +139,22 @@ async def main(page: ft.Page):
 
     page.on_error = on_error
 
-    # ── Shutdown Handler ────────────────────────────────────────────
-    async def on_disconnect(e=None):
-        """Flush storage and close HTTP client on app close."""
-        try:
-            await storage.flush()
-        except Exception:
-            pass
-        try:
-            from services.api_client import close_client
+    # ── Show Splash IMMEDIATELY (before any heavy init) ──────
+    from views.splash_view import build_splash_view
 
-            await close_client()
-        except Exception:
-            pass
+    page.views.append(build_splash_view())
+    page.update()
 
-    page.on_disconnect = on_disconnect
+    # ── Deferred heavy import (matplotlib) ───────────────────
+    _patch_matplotlib()
+
+    # ── Asset Validation ────────────────────────────────────────────
+    import os
+
+    assets_dir = os.path.join(os.path.dirname(__file__), "assets")
+    for asset in ("icon.png", "logo.png"):
+        if not os.path.exists(os.path.join(assets_dir, asset)):
+            logger.warning("Missing asset: %s — app may display incorrectly", asset)
 
     # ── Initialize Services ─────────────────────────────────
     storage = StorageService(page)
@@ -198,7 +190,23 @@ async def main(page: ft.Page):
     # Preload interstitial ad
     page.run_task(ad_service.preload_interstitial)
 
-    # ── Gateway Health Check (I8) + Version Check (P9) ──────────
+    # ── Shutdown Handler ────────────────────────────────────────────
+    async def on_disconnect(e=None):
+        """Flush storage and close HTTP client on app close."""
+        try:
+            await storage.flush()
+        except Exception:
+            pass
+        try:
+            from services.api_client import close_client
+
+            await close_client()
+        except Exception:
+            pass
+
+    page.on_disconnect = on_disconnect
+
+    # ── Gateway Health Check + Version Check (non-blocking) ──
     async def _startup_checks():
         from services import ai as ai_service
 
@@ -237,7 +245,7 @@ async def main(page: ft.Page):
         except Exception:
             pass
 
-    await _startup_checks()
+    page.run_task(_startup_checks)  # Non-blocking — no longer blocks splash!
 
     # ── Navigation Bar ──────────────────────────────────────────────
     nav_bar = ft.NavigationBar(
@@ -549,7 +557,6 @@ async def main(page: ft.Page):
         else:
             await navigate("/onboarding")
 
-    await navigate("/splash")
     page.run_task(splash_complete)
 
 
