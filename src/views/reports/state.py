@@ -11,6 +11,7 @@ class ReportsState:
         self.editor_blocks: list[dict] = []
         self.draft_title = {"value": ""}
         self.draft_desc = {"value": ""}
+        
         self.is_loading = {"value": True}
         self.is_saving = {"value": False}
         self.is_sharing = {"value": False}
@@ -24,12 +25,22 @@ class ReportsState:
         self.recording_time = {"value": 0}
         self.editor_active = {"value": False}
 
-        self.recording_timer_ref = ft.Ref[ft.Text]()
+        # View Layer Refs to prevent nuclear rebuilds (toggle visibility instead)
         self.content_column = ft.Ref[ft.Column]()
+        self.dashboard_container_ref = ft.Ref[ft.Container]()
+        self.editor_container_ref = ft.Ref[ft.Container]()
+        self.user_reports_column_ref = ft.Ref[ft.Column]()
+        self.arranger_overlay_ref = ft.Ref[ft.Container]()
+
+        # Component Refs for targeted updates (preventing UI freeze on clicks)
+        self.recording_timer_ref = ft.Ref[ft.Text]()
+        self.save_btn_ref = ft.Ref[ft.Control]()
+        self.share_btn_ref = ft.Ref[ft.Control]()
+        self.view_live_btn_ref = ft.Ref[ft.Control]()
+        
         self.rebuild_fn = None
 
         from services.audio_service import AudioService
-
         self.audio_svc = AudioService(page)
 
     def rebuild(self):
