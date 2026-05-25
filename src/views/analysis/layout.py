@@ -7,6 +7,7 @@ from components.stat_card import build_stat_card
 from components.data_preview import build_data_preview
 from components.brand_header import build_brand_header
 from services.file_picker_service import FilePickerService
+from services.file_service import detect_spatial_columns
 from views.analysis.state import AnalysisState
 from views.analysis.handlers import (
     process_file,
@@ -457,10 +458,10 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                     ft.Row(
                         [
                             ft.OutlinedButton(
-                                "Download Cleaned Dataset",
+                                "Download CSV",
                                 icon=ft.Icons.DOWNLOAD_ROUNDED,
                                 on_click=lambda e: page.run_task(
-                                    on_export_data, view_state
+                                    on_export_data, view_state, "csv"
                                 ),
                                 style=ft.ButtonStyle(
                                     shape=ft.RoundedRectangleBorder(radius=12),
@@ -471,16 +472,103 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                 ),
                                 disabled=state.is_analyzing,
                             ),
+                            ft.OutlinedButton(
+                                "Download Excel (Styled)",
+                                icon=ft.Icons.TABLE_CHART_ROUNDED,
+                                on_click=lambda e: page.run_task(
+                                    on_export_data, view_state, "xlsx"
+                                ),
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    color=theme.PRIMARY,
+                                    overlay_color=ft.Colors.with_opacity(
+                                        0.08, theme.PRIMARY
+                                    ),
+                                ),
+                                disabled=state.is_analyzing,
+                            ),
                         ],
                         alignment=ft.MainAxisAlignment.CENTER,
+                        wrap=True,
                         visible=state.dataset_modified,
                     ),
                     build_data_preview(state.current_df),
+                    *([] if state.current_df is None else _build_spatial_card()),
                 ],
                 spacing=15,
             )
             top_section.padding = ft.Padding(20, 10, 20, 10)
             top_section.expand = False
+
+    def _build_spatial_card() -> list[ft.Control]:
+        """Build a spatial insights card if the dataset has lat/lon columns."""
+        if state.current_df is None:
+            return []
+        try:
+            spatial = detect_spatial_columns(state.current_df)
+        except Exception:
+            spatial = None
+        if spatial is None:
+            return []
+
+        return [
+            ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.Icon(ft.Icons.MAP_ROUNDED, color=theme.ACCENT, size=18),
+                                ft.Text("Spatial Data Detected", weight="bold", size=14),
+                            ],
+                            spacing=8,
+                        ),
+                        ft.Container(height=4),
+                        ft.Text(
+                            f"{spatial['point_count']:,} coordinate points "
+                            f"in ({spatial['lat_col']}, {spatial['lon_col']})",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                        ft.Row(
+                            [
+                                ft.Container(
+                                    content=ft.Column(
+                                        [
+                                            ft.Text("Centroid", size=10, weight="w600", color=ft.Colors.ON_SURFACE_VARIANT),
+                                            ft.Text(f"{spatial['centroid_lat']}, {spatial['centroid_lon']}", size=12),
+                                        ],
+                                        spacing=2,
+                                        horizontal_alignment="center",
+                                    ),
+                                    expand=True,
+                                ),
+                                ft.Container(
+                                    content=ft.Column(
+                                        [
+                                            ft.Text("Bounds", size=10, weight="w600", color=ft.Colors.ON_SURFACE_VARIANT),
+                                            ft.Text(
+                                                f"{spatial['bounds']['min_lat']}, {spatial['bounds']['min_lon']} "
+                                                f"→ {spatial['bounds']['max_lat']}, {spatial['bounds']['max_lon']}",
+                                                size=10,
+                                            ),
+                                        ],
+                                        spacing=2,
+                                        horizontal_alignment="center",
+                                    ),
+                                    expand=True,
+                                ),
+                            ],
+                            spacing=8,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                padding=16,
+                border_radius=14,
+                bgcolor=ft.Colors.with_opacity(0.05, theme.ACCENT),
+                border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.ACCENT)),
+            )
+        ]
 
     def _update_blocks():
         if state.current_df is None:

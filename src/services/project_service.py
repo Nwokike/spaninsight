@@ -7,10 +7,10 @@ Synchronizes project state with D1/R2 gateway via Delta Sync.
 from __future__ import annotations
 
 import base64
-import datetime
 import hashlib
 import json
 import logging
+import pendulum
 import uuid
 
 
@@ -123,7 +123,7 @@ class ProjectService:
                 # Replace local temporary ID with server generated Secure ID
                 state.user_projects.pop(temp_id, None)
                 proj["id"] = server_id
-                proj["synced_at"] = datetime.datetime.now().timestamp()
+                proj["synced_at"] = pendulum.now().timestamp()
                 state.user_projects[server_id] = proj
 
                 state.active_project_id = server_id
@@ -170,7 +170,7 @@ class ProjectService:
 
                     state.user_projects.pop(project_id, None)
                     proj["id"] = server_id
-                    proj["synced_at"] = datetime.datetime.now().timestamp()
+                    proj["synced_at"] = pendulum.now().timestamp()
                     state.user_projects[server_id] = proj
 
                     if state.active_project_id == project_id:
@@ -213,7 +213,7 @@ class ProjectService:
                     logger.warning("Failed to sync block %s: %s", block.get("id"), e)
 
         if success_count > 0:
-            proj["synced_at"] = datetime.datetime.now().timestamp()
+            proj["synced_at"] = pendulum.now().timestamp()
             await self._persist_local_projects()
             logger.info("Delta Sync: Pushed %d new blocks.", success_count)
             return True
@@ -287,7 +287,7 @@ class ProjectService:
             # Format last synced time to ISO 8601 for the query
             last_sync = proj.get("synced_at", 0)
             since_iso = (
-                datetime.datetime.fromtimestamp(last_sync).strftime(
+                pendulum.from_timestamp(last_sync).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 )
                 if last_sync > 0
@@ -332,7 +332,7 @@ class ProjectService:
                         added = True
 
                 if added:
-                    proj["synced_at"] = datetime.datetime.now().timestamp()
+                    proj["synced_at"] = pendulum.now().timestamp()
                     await self._persist_local_projects()
                     logger.info(
                         "Delta Pull: Appended %d remote blocks.", len(new_blocks)

@@ -19,13 +19,13 @@ def on_clear_data(view_state, e):
     view_state.rebuild()
 
 
-async def on_export_data(view_state):
+async def on_export_data(view_state, export_format: str = "csv"):
     if state.current_df is None:
         show_error(view_state, "No active dataset to export.")
         return
 
     view_state.page.snack_bar = ft.SnackBar(
-        ft.Text("Preparing dataset export..."), duration=2000
+        ft.Text(f"Preparing {export_format.upper()} export..."), duration=2000
     )
     view_state.page.snack_bar.open = True
     view_state.page.update()
@@ -38,7 +38,6 @@ async def on_export_data(view_state):
                 async def _show_ad(e):
                     await e.control.show()
 
-                # Instantiate service in-memory. DO NOT append to page.overlay.
                 fta.InterstitialAd(
                     unit_id="ca-app-pub-5679949845754640/6965536622",
                     on_load=lambda e: view_state.page.run_task(_show_ad, e),
@@ -49,29 +48,34 @@ async def on_export_data(view_state):
             except Exception as ad_err:
                 logger.error("Export Interstitial trigger failed: %s", ad_err)
 
-        csv_bytes = await asyncio.to_thread(
-            file_service.df_to_csv_bytes, state.current_df
-        )
-
         base_name = state.current_df_name or "cleaned_dataset"
-        if base_name.lower().endswith(".csv"):
-            suggested_name = base_name.replace(".csv", "_cleaned.csv")
-        elif base_name.lower().endswith(".xlsx"):
-            suggested_name = base_name.replace(".xlsx", "_cleaned.csv")
-        elif base_name.lower().endswith(".json"):
-            suggested_name = base_name.replace(".json", "_cleaned.csv")
-        else:
+        base_name = base_name.rsplit(".", 1)[0]
+
+        if export_format == "csv":
+            file_bytes = await asyncio.to_thread(
+                file_service.df_to_csv_bytes, state.current_df
+            )
             suggested_name = f"{base_name}_cleaned.csv"
+            allowed_ext = ["csv"]
+        elif export_format == "xlsx":
+            file_bytes = await asyncio.to_thread(
+                file_service.df_to_styled_excel_bytes, state.current_df, base_name
+            )
+            suggested_name = f"{base_name}_styled.xlsx"
+            allowed_ext = ["xlsx"]
+        else:
+            show_error(view_state, f"Unsupported export format: {export_format}")
+            return
 
         res = await view_state.file_picker_svc.save_file_async(
             file_name=suggested_name,
-            allowed_extensions=["csv"],
-            src_bytes=csv_bytes,
+            allowed_extensions=allowed_ext,
+            src_bytes=file_bytes,
         )
 
         if res:
             view_state.page.snack_bar = ft.SnackBar(
-                ft.Text("✓ Cleaned dataset saved successfully!"),
+                ft.Text(f"✓ {export_format.upper()} saved successfully!"),
                 bgcolor=theme.SUCCESS,
                 duration=3000,
             )

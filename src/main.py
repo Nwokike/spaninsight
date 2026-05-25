@@ -12,8 +12,8 @@ Architecture mirrors Akili flet-rewrite (production) patterns:
 from __future__ import annotations
 
 import asyncio
-import datetime
 import json
+import pendulum
 import logging
 import sys
 import shutil
@@ -301,7 +301,7 @@ async def main(page: ft.Page):
                     "df_cols": len(state.current_df_columns)
                     if state.current_df_columns
                     else 0,
-                    "timestamp": datetime.datetime.now().timestamp(),
+                    "timestamp": pendulum.now().timestamp(),
                     "chart_count": len(getattr(state, "charts", [])),
                 },
             )

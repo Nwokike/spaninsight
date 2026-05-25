@@ -7,11 +7,11 @@ Uses a split local JSON file approach for desktop/mobile persistence
 
 from __future__ import annotations
 
-import json
 import logging
 import asyncio
 import time
 import os
+import msgspec
 from pathlib import Path
 
 import flet as ft
@@ -69,8 +69,8 @@ class StorageService:
             cs = self._page.client_storage
             raw_s = cs.get("spaninsight_settings")
             raw_h = cs.get("spaninsight_history")
-            self._settings = json.loads(raw_s) if raw_s else {}
-            self._history = json.loads(raw_h) if raw_h else {}
+            self._settings = msgspec.json.decode(raw_s) if raw_s else {}
+            self._history = msgspec.json.decode(raw_h) if raw_h else {}
         except Exception as e:
             logger.warning("StorageService._load_web failed: %s", e)
             self._settings, self._history = {}, {}
@@ -79,10 +79,10 @@ class StorageService:
         try:
             cs = self._page.client_storage
             if self._settings_dirty:
-                cs.set("spaninsight_settings", json.dumps(self._settings))
+                cs.set("spaninsight_settings", msgspec.json.encode(self._settings).decode())
                 self._settings_dirty = False
             if self._history_dirty:
-                cs.set("spaninsight_history", json.dumps(self._history))
+                cs.set("spaninsight_history", msgspec.json.encode(self._history).decode())
                 self._history_dirty = False
             self._last_write = time.monotonic()
         except Exception as e:
@@ -95,32 +95,16 @@ class StorageService:
         try:
             _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
             if _SETTINGS_FILE.exists():
-                self._settings = json.loads(_SETTINGS_FILE.read_text(encoding="utf-8"))
+                self._settings = msgspec.json.decode(_SETTINGS_FILE.read_bytes())
                 loaded = True
             if _HISTORY_FILE.exists():
-                self._history = json.loads(_HISTORY_FILE.read_text(encoding="utf-8"))
+                self._history = msgspec.json.decode(_HISTORY_FILE.read_bytes())
         except Exception as e:
             logger.warning("StorageService._load filesystem read failed: %s", e)
 
-        if not loaded and not _SETTINGS_FILE.exists() and not _HISTORY_FILE.exists():
-            # Attempt to migrate from legacy single-file system if it exists
-            legacy_file = _STORAGE_DIR / "storage.json"
-            if legacy_file.exists():
-                logger.info("Migrating legacy storage.json to split architecture...")
-                try:
-                    legacy_data = json.loads(legacy_file.read_text(encoding="utf-8"))
-                    for k, v in legacy_data.items():
-                        if self._is_history_key(k):
-                            self._history[k] = v
-                        else:
-                            self._settings[k] = v
-                    self._settings_dirty = True
-                    self._history_dirty = True
-                    self._save_now()
-                    legacy_file.unlink()  # Cleanup old file
-                    loaded = True
-                except Exception:
-                    pass
+        if not loaded:
+            # No existing data — fresh start
+            self._settings, self._history = {}, {}
 
         if not loaded and self._is_web:
             self._load_web()  # Fallback
@@ -130,12 +114,12 @@ class StorageService:
     ) -> None:
         _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
         if write_settings:
-            _SETTINGS_FILE.write_text(
-                json.dumps(settings_copy, indent=2), encoding="utf-8"
+            _SETTINGS_FILE.write_bytes(
+                msgspec.json.encode(settings_copy),
             )
         if write_history:
-            _HISTORY_FILE.write_text(
-                json.dumps(history_copy, indent=2), encoding="utf-8"
+            _HISTORY_FILE.write_bytes(
+                msgspec.json.encode(history_copy),
             )
 
     async def _save_now_async(self) -> None:
@@ -174,13 +158,13 @@ class StorageService:
         try:
             _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
             if self._settings_dirty:
-                _SETTINGS_FILE.write_text(
-                    json.dumps(self._settings, indent=2), encoding="utf-8"
+                _SETTINGS_FILE.write_bytes(
+                    msgspec.json.encode(self._settings),
                 )
                 self._settings_dirty = False
             if self._history_dirty:
-                _HISTORY_FILE.write_text(
-                    json.dumps(self._history, indent=2), encoding="utf-8"
+                _HISTORY_FILE.write_bytes(
+                    msgspec.json.encode(self._history),
                 )
                 self._history_dirty = False
             self._last_write = time.monotonic()

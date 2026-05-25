@@ -34,11 +34,11 @@ def build_report_view(
 
     def _build_report_card(report: dict) -> ft.Container:
         block_count = len(report.get("blocks", []))
-        import datetime
+        import pendulum
 
         try:
-            dt = datetime.datetime.fromtimestamp(report.get("created_at", 0))
-            time_str = dt.strftime("%b %d, %Y")
+            dt = pendulum.from_timestamp(report.get("created_at", 0))
+            time_str = dt.format("MMM DD, YYYY")
         except Exception:
             time_str = ""
 

@@ -7,10 +7,10 @@ from .state import FormsState
 def build_form_card(form: dict, on_view_form, page: ft.Page) -> ft.Container:
     is_expired = False
     try:
-        from datetime import datetime
+        import pendulum
 
-        exp = datetime.fromisoformat(form["expires_at"].replace("Z", "+00:00"))
-        is_expired = exp < datetime.now(exp.tzinfo)
+        exp = pendulum.parse(form["expires_at"])
+        is_expired = exp < pendulum.now()
     except Exception:
         pass
     status_color = theme.ERROR if is_expired else theme.SUCCESS

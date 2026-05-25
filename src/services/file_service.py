@@ -176,6 +176,7 @@ def get_data_summary(df: pd.DataFrame) -> dict:
         "describe": safe_describe,
         "head": [],
         "tail": [],
+        "spatial": detect_spatial_columns(df),
     }
 
     # Safe head + tail — truncate long strings
@@ -205,6 +206,129 @@ def get_data_summary(df: pd.DataFrame) -> dict:
 def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
     """Serialize a DataFrame to CSV bytes for download."""
     return df.to_csv(index=False).encode("utf-8")
+
+
+def df_to_styled_excel_bytes(df: pd.DataFrame, title: str = "Export") -> bytes:
+    """Export a DataFrame to a styled Excel workbook using openpyxl directly.
+
+    Features: teal header row, auto-adjusted column widths, auto-filter,
+    number formatting for numeric columns, and a title sheet name.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = title[:31]
+
+    header_fill = PatternFill(start_color="0D9488", end_color="0D9488", fill_type="solid")
+    header_font = Font(name="Outfit", bold=True, color="FFFFFF", size=11)
+    cell_font = Font(name="Outfit", size=10)
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+
+    for col_idx, col_name in enumerate(df.columns, 1):
+        cell = ws.cell(row=1, column=col_idx, value=str(col_name))
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+
+    for row_idx, (_, row) in enumerate(df.iterrows(), 2):
+        for col_idx, col_name in enumerate(df.columns, 1):
+            val = row[col_name]
+            if isinstance(val, (int, float)) and pd.isna(val):
+                val = None
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.font = cell_font
+            cell.border = thin_border
+            if isinstance(val, float):
+                cell.number_format = "#,##0.00"
+            elif isinstance(val, int):
+                cell.number_format = "#,##0"
+
+    for col_idx, col_name in enumerate(df.columns, 1):
+        max_len = max(
+            df[col_name].astype(str).map(len).max() if len(df) > 0 else 0,
+            len(str(col_name)),
+        )
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 4, 60)
+
+    if len(df.columns) > 0 and len(df) > 0:
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(df.columns))}{len(df) + 1}"
+
+    ws.freeze_panes = "A2"
+
+    from io import BytesIO
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+def detect_spatial_columns(df: pd.DataFrame) -> dict | None:
+    """Detect latitude/longitude column pairs in a DataFrame using shapely.
+
+    Returns a dict with 'lat_col', 'lon_col', 'point_count', 'bounds'
+    if a valid spatial column pair is found, or None otherwise.
+    """
+    lat_candidates = [c for c in df.columns if any(k in c.lower() for k in ("lat", "latitude", "ycoord", "y_coord"))]
+    lon_candidates = [c for c in df.columns if any(k in c.lower() for k in ("lon", "long", "longitude", "xcoord", "x_coord"))]
+    if not lat_candidates or not lon_candidates:
+        return None
+
+    lat_col = lat_candidates[0]
+    lon_col = lon_candidates[0]
+    lat_vals = df[lat_col].dropna()
+    lon_vals = df[lon_col].dropna()
+    if len(lat_vals) < 2 or len(lon_vals) < 2:
+        return None
+
+    from shapely.geometry import Point, MultiPoint
+    from shapely import wkt
+
+    points = [Point(x, y) for x, y in zip(lon_vals, lat_vals) if pd.notna(x) and pd.notna(y)]
+    if len(points) < 2:
+        return None
+
+    multi = MultiPoint(points)
+    centroid = multi.centroid
+    bounds = multi.bounds
+
+    return {
+        "lat_col": lat_col,
+        "lon_col": lon_col,
+        "point_count": len(points),
+        "centroid_lat": round(centroid.y, 6),
+        "centroid_lon": round(centroid.x, 6),
+        "bounds": {
+            "min_lat": round(bounds[1], 6),
+            "min_lon": round(bounds[0], 6),
+            "max_lat": round(bounds[3], 6),
+            "max_lon": round(bounds[2], 6),
+        },
+    }
+
+
+def transform_json_with_jq(content: str | bytes, jq_filter: str) -> str:
+    """Transform JSON content using a jq filter expression.
+
+    Raises ValueError if the filter is invalid or the content cannot be parsed.
+    """
+    import jq
+
+    if isinstance(content, bytes):
+        content = content.decode("utf-8")
+
+    import json as _json
+    parsed = _json.loads(content)
+    result = jq.compile(jq_filter).input(parsed).all()
+    return _json.dumps(result, indent=2, default=str)
 
 
 def generate_dataset_fingerprint(df: pd.DataFrame) -> str:

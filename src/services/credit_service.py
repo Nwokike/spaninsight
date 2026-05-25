@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import pendulum
 import uuid
-from datetime import date
 
 import flet as ft
 
@@ -125,7 +125,7 @@ class CreditService:
 
     async def _check_daily_reset(self) -> None:
         """Reset credits if the date has changed, topping up to the daily cap while preserving higher balances."""
-        today = date.today().isoformat()
+        today = pendulum.today().to_date_string()
         last_reset = await self._storage.get(STORAGE_LAST_RESET)
         if last_reset != today:
             current = await self._get_credits()
