@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import asyncio
 import flet as ft
 
 from core.state import state
@@ -52,7 +53,6 @@ async def on_open_report(page: ft.Page, ui_state, report: dict, report_service):
                     if 0 <= orig_idx < len(ui_state.editor_blocks):
                         b = ui_state.editor_blocks[orig_idx].copy()
                         b["prompt"] = ai_block.get("prompt", b.get("prompt", ""))
-                        # Retain original block-level description — AI auto-arranger should not touch it!
                         new_blocks.append(b)
                 if len(new_blocks) == len(ui_state.editor_blocks):
                     ui_state.editor_blocks.clear()
@@ -83,7 +83,11 @@ async def on_save(page: ft.Page, ui_state, report_service):
     from core import theme
 
     ui_state.is_saving["value"] = True
-    ui_state.rebuild()
+    # Targeted update: Disable the save button without rebuilding the DOM
+    if ui_state.save_btn_ref.current:
+        ui_state.save_btn_ref.current.disabled = True
+        ui_state.save_btn_ref.current.update()
+        
     try:
         if report_service and ui_state.active_report["data"]:
             await report_service.update_report(
@@ -101,6 +105,7 @@ async def on_save(page: ft.Page, ui_state, report_service):
                 duration=2000,
             )
             page.snack_bar.open = True
+            page.update()
     except Exception as e:
         logger.error("Save failed: %s", e)
         page.snack_bar = ft.SnackBar(
@@ -108,8 +113,13 @@ async def on_save(page: ft.Page, ui_state, report_service):
             duration=3000,
         )
         page.snack_bar.open = True
-    ui_state.is_saving["value"] = False
-    ui_state.rebuild()
+        page.update()
+    finally:
+        ui_state.is_saving["value"] = False
+        # Re-enable the button
+        if ui_state.save_btn_ref.current:
+            ui_state.save_btn_ref.current.disabled = False
+            ui_state.save_btn_ref.current.update()
 
 
 async def on_share(page: ft.Page, ui_state, report_service, ad_service):
@@ -117,8 +127,12 @@ async def on_share(page: ft.Page, ui_state, report_service, ad_service):
 
     if not ui_state.active_report["data"] or ui_state.is_sharing["value"]:
         return
+        
     ui_state.is_sharing["value"] = True
-    ui_state.rebuild()
+    if ui_state.share_btn_ref.current:
+        ui_state.share_btn_ref.current.disabled = True
+        ui_state.share_btn_ref.current.update()
+        
     try:
         if ad_service:
             await ad_service.show_interstitial()
@@ -162,10 +176,14 @@ async def on_share(page: ft.Page, ui_state, report_service, ad_service):
                     ft.Text("Share failed. Try again."), duration=3000
                 )
                 page.snack_bar.open = True
+            page.update()
     except Exception as e:
         logger.error("Share failed: %s", e)
-    ui_state.is_sharing["value"] = False
-    ui_state.rebuild()
+    finally:
+        ui_state.is_sharing["value"] = False
+        if ui_state.share_btn_ref.current:
+            ui_state.share_btn_ref.current.disabled = False
+            ui_state.share_btn_ref.current.update()
 
 
 def on_back(page: ft.Page, ui_state, report_service):
@@ -175,7 +193,7 @@ def on_back(page: ft.Page, ui_state, report_service):
     page.run_task(load_reports, page, ui_state, report_service)
 
 
-def on_import(page: ft.Page, ui_state):
+async def on_import(page: ft.Page, ui_state):
     from core import theme
 
     if not state.analysis_blocks:
@@ -187,17 +205,19 @@ def on_import(page: ft.Page, ui_state):
         page.update()
         return
 
-    def on_select_block(idx):
+    # Make inner function async to offload Matplotlib rendering
+    async def on_select_block(idx):
         block = state.analysis_blocks[idx]
         png_b64 = ""
         if block.get("figure_png"):
             png_b64 = base64.b64encode(block["figure_png"]).decode("utf-8")
         elif block.get("figure"):
             try:
-                png_bytes = figure_to_png_bytes(block["figure"], dpi=150)
+                # IMPORTANT FIX: Offload synchronous Matplotlib call to background thread!
+                png_bytes = await asyncio.to_thread(figure_to_png_bytes, block["figure"], dpi=150)
                 png_b64 = base64.b64encode(png_bytes).decode("utf-8")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("Async figure conversion failed: %s", e)
 
         new_block = {
             "source_block_id": block.get("id"),
@@ -238,7 +258,7 @@ def on_import(page: ft.Page, ui_state):
                     size=11,
                     color=ft.Colors.ON_SURFACE_VARIANT,
                 ),
-                on_click=lambda e, idx=i: on_select_block(idx),
+                on_click=lambda e, idx=i: page.run_task(on_select_block, idx),
                 disabled=block.get("failed", False),
             )
         )
@@ -312,6 +332,7 @@ async def on_ai_edit(page: ft.Page, ui_state, action: str, text: str):
             logger.error("AI edit failed: %s", e)
             page.snack_bar = ft.SnackBar(ft.Text(f"AI edit failed: {e}"), duration=3000)
             page.snack_bar.open = True
+            page.update()
         ui_state.is_ai_editing["value"] = False
         ui_state.rebuild()
 
@@ -381,7 +402,10 @@ async def on_view_live(page: ft.Page, ui_state, report_service, ad_service):
         return
 
     ui_state.is_viewing_live["value"] = True
-    ui_state.rebuild()
+    if ui_state.view_live_btn_ref.current:
+        ui_state.view_live_btn_ref.current.disabled = True
+        ui_state.view_live_btn_ref.current.update()
+        
     try:
         # Save current edits + generate fresh share link
         if report_service:
@@ -407,12 +431,17 @@ async def on_view_live(page: ft.Page, ui_state, report_service, ad_service):
                 ft.Text("View live failed. Try again."), duration=3000
             )
             page.snack_bar.open = True
+            page.update()
     except Exception as e:
         logger.error("View live failed: %s", e)
         page.snack_bar = ft.SnackBar(ft.Text(f"View live failed: {e}"), duration=3000)
         page.snack_bar.open = True
-    ui_state.is_viewing_live["value"] = False
-    ui_state.rebuild()
+        page.update()
+    finally:
+        ui_state.is_viewing_live["value"] = False
+        if ui_state.view_live_btn_ref.current:
+            ui_state.view_live_btn_ref.current.disabled = False
+            ui_state.view_live_btn_ref.current.update()
 
 
 async def on_delete_report(page: ft.Page, ui_state, report_id: str, report_service):
