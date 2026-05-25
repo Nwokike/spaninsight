@@ -46,7 +46,7 @@ bundle_id = "com.spaninsight.app"
 usesCleartextTraffic = "false"
 
 [tool.flet.android.meta_data]
-"com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-5679949845754640~9586310622"
+"com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-5679949845754640~8438792639"
 
 [tool.flet.android.permission]
 "android.permission.INTERNET" = true
