@@ -327,6 +327,9 @@ def build_report_view(
             on_share=lambda: page.run_task(
                 handlers.on_share, page, ui_state, report_service, ad_service
             ),
+            on_view_live=lambda: page.run_task(
+                handlers.on_view_live, page, ui_state, report_service, ad_service
+            ),
             on_back=lambda: handlers.on_back(page, ui_state, report_service),
             on_import=lambda: handlers.on_import(page, ui_state),
             on_ai_edit=lambda action, text: page.run_task(

@@ -375,6 +375,54 @@ async def on_voice_toggle(page: ft.Page, ui_state):
             page.run_task(_update_timer, page, ui_state)
 
 
+async def on_view_live(page: ft.Page, ui_state, report_service, ad_service):
+    report = ui_state.active_report["data"]
+    if not report:
+        return
+
+    # 1. Save current edits
+    ui_state.is_saving["value"] = True
+    ui_state.rebuild()
+    try:
+        if report_service and report:
+            await report_service.update_report(
+                report["id"],
+                {
+                    "title": ui_state.draft_title["value"],
+                    "description": ui_state.draft_desc["value"],
+                    "blocks": list(ui_state.editor_blocks),
+                    "is_arranged": True,
+                },
+            )
+    except Exception as e:
+        logger.error("Save before live failed: %s", e)
+    ui_state.is_saving["value"] = False
+    ui_state.rebuild()
+
+    # 2. Always generate fresh share link
+    ui_state.is_sharing["value"] = True
+    ui_state.rebuild()
+    try:
+        if ad_service:
+            await ad_service.show_interstitial()
+        if report_service:
+            report["blocks"] = list(ui_state.editor_blocks)
+            report["title"] = ui_state.draft_title["value"]
+            url = await report_service.share_report(report, state.user_uuid)
+            if url:
+                ui_state.active_report["data"]["share_url"] = url
+                await ft.UrlLauncher().launch_url(url)
+            else:
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("Share failed. Try again."), duration=3000
+                )
+                page.snack_bar.open = True
+    except Exception as e:
+        logger.error("View live failed: %s", e)
+    ui_state.is_sharing["value"] = False
+    ui_state.rebuild()
+
+
 async def on_delete_report(page: ft.Page, ui_state, report_id: str, report_service):
     from core import theme
 

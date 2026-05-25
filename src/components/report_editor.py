@@ -407,6 +407,7 @@ def build_report_editor(
     on_desc_changed,
     on_save,
     on_share,
+    on_view_live,
     on_back,
     on_import,
     on_ai_edit,
@@ -573,6 +574,11 @@ def build_report_editor(
                     ft.Divider(height=1, color=theme.GLASS_BORDER_COLOR),
                     ft.Row(
                         [
+                            ft.FilledButton(
+                                "View Live Report",
+                                icon=ft.Icons.OPEN_IN_NEW_ROUNDED,
+                                on_click=lambda e: on_view_live(),
+                            ),
                             ft.FilledButton(
                                 "Save",
                                 icon=ft.Icons.SAVE_ROUNDED,
