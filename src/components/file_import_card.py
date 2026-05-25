@@ -87,6 +87,7 @@ def build_file_import_card(
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     spacing=tokens.SPACE_SM,
+                    wrap=True,
                 ),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
