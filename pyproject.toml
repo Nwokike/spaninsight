@@ -54,7 +54,6 @@ bundle_id = "com.spaninsight.app"
 usesCleartextTraffic = "false"
 
 [tool.flet.android.meta_data]
-# [COMPLEX / REQUIRED] Replace this test App ID with your REAL AdMob App ID before production
 "com.google.android.gms.ads.APPLICATION_ID" = "ca-app-pub-5679949845754640~9586310622"
 
 [tool.flet.android.permission]
