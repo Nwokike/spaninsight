@@ -271,7 +271,7 @@ async def main(page: ft.Page):
         ],
         bgcolor=ft.Colors.SURFACE,
         indicator_color=ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY),
-        label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
+        label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_HIDE,
     )
 
     TAB_ROUTES = ["/home", "/forms", "/analysis", "/reports", "/settings"]
@@ -496,7 +496,8 @@ async def main(page: ft.Page):
                     on_click=lambda e: show_credits_dialog(page, credit_service),
                 )
 
-                top_view.appbar.actions = [switcher, theme_btn, badge_container]
+                top_view.appbar.title = switcher
+                top_view.appbar.actions = [theme_btn, badge_container]
                 top_view.appbar.center_title = False
                 top_view.appbar.bgcolor = ft.Colors.TRANSPARENT
 
