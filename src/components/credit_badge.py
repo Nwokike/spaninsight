@@ -128,7 +128,7 @@ def show_credits_dialog(page: ft.Page, credit_service):
 
         # Trigger parent view updates globally
         try:
-            page.go(page.route)
+            await page.push_route(page.route)
         except Exception:
             pass
 

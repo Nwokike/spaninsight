@@ -83,7 +83,7 @@ def build_settings_view(
                     )
                     page.snack_bar.open = True
                     page.update()
-                    page.go("/splash")
+                    await page.push_route("/onboarding")
 
             return _close
 

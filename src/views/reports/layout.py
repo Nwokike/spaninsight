@@ -201,7 +201,9 @@ def build_report_view(
                             ft.FilledButton(
                                 "Start Analysis",
                                 icon=ft.Icons.ANALYTICS_ROUNDED,
-                                on_click=lambda _: page.go("/analysis"),
+                                on_click=lambda _: page.run_task(
+                                    page.push_route, "/analysis"
+                                ),
                             ),
                         ],
                         horizontal_alignment="center",

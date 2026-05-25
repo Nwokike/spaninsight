@@ -378,7 +378,7 @@ def build_forms_view(page: ft.Page) -> ft.View:
         df = pd.DataFrame(rows)
         state.set_dataframe(df, f"{form['title']}_responses")
         state.current_df_summary = file_service.get_data_summary(df)
-        page.go("/analysis")
+        await page.push_route("/analysis")
 
     # ── Helpers ───────────────────────────────────────────────────
     def _show_error(msg: str):

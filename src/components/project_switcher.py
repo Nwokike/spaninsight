@@ -106,7 +106,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
         await project_service.rename_project(state.active_project_id, new_name)
 
         _close_dialog()
-        page.go(page.route)  # Force full view redraw
+        await page.push_route(page.route)  # Force full view redraw
 
     async def _on_register_project(e):
         sync_status_text.value = "Registering on Cloud..."
@@ -121,7 +121,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
             )
 
         _close_dialog()
-        page.go(page.route)
+        await page.push_route(page.route)
 
     async def _on_create_project(e):
         if not new_field.current or not new_field.current.value.strip():
@@ -135,7 +135,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
         await project_service.create_project(title)
 
         _close_dialog()
-        page.go(page.route)
+        await page.push_route(page.route)
 
     async def _on_join_project(e):
         if not join_field.current or not join_field.current.value.strip():
@@ -152,7 +152,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
         sync_spinner.visible = False
         if res:
             _close_dialog()
-            page.go(page.route)
+            await page.push_route(page.route)
         else:
             sync_status_text.value = "Invalid Seed Phrase."
             sync_status_text.color = theme.ERROR
@@ -189,7 +189,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                         bgcolor=theme.SUCCESS,
                     )
                     page.snack_bar.open = True
-                page.go(page.route)
+                await page.push_route(page.route)
 
             async def _on_make_local_only(e):
                 _close_recover_dlg()
@@ -222,7 +222,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                         bgcolor=theme.SUCCESS,
                     )
                     page.snack_bar.open = True
-                page.go(page.route)
+                await page.push_route(page.route)
 
             async def _on_delete_from_recover(e):
                 _close_recover_dlg()
@@ -282,7 +282,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
             state.clear_data()
 
         _close_dialog()
-        page.go(page.route)
+        await page.push_route(page.route)
 
     async def _on_delete_project(pid):
         # Prevent deletion if it's the last workspace
@@ -296,7 +296,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
             return
         await project_service.delete_project(pid)
         _close_dialog()
-        page.go(page.route)
+        await page.push_route(page.route)
 
     # ── 1. Render Project Switcher List ──────────────────────────────
     project_items = []
