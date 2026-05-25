@@ -23,7 +23,7 @@ import threading
 import traceback
 from typing import Any
 
-from core.constants import SANDBOX_TIMEOUT_SEC
+from core.constants import BLOCKED_TERMS, SANDBOX_TIMEOUT_SEC
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +95,13 @@ class ASTSecurityChecker(ast.NodeVisitor):
 
 
 def validate_code(code: str) -> tuple[bool, str]:
-    """Parse code into an AST and validate imports."""
+    """Parse code into an AST and validate imports, also check against blocked terms."""
     if code.count("\n") > 200:
         return False, "Code exceeds 200 lines — too complex for execution."
+
+    for term in BLOCKED_TERMS:
+        if term in code:
+            return False, f"Code contains blocked term '{term}' — remove it and retry."
 
     try:
         tree = ast.parse(code)
@@ -196,6 +200,17 @@ def execute_code(
     df: Any,
 ) -> dict:
     """Execute validated Python code in a restricted namespace."""
+    # Pre-check code with AST validation to block forbidden imports upfront
+    is_safe, reason = validate_code(code)
+    if not is_safe:
+        return {
+            "success": False,
+            "result": None,
+            "figure": None,
+            "stdout": "",
+            "error": f"Code validation failed: {reason}",
+        }
+
     import matplotlib
 
     matplotlib.use("Agg")
@@ -213,7 +228,7 @@ def execute_code(
     except Exception:
         pass
 
-    # 2. Build execution namespace
+    # Build execution namespace
     # With Copy-on-Write enabled, passing a direct reference is O(1) time and memory,
     # yet still guarantees the AI cannot permanently corrupt the master Flet state.
     namespace = {

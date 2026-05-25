@@ -129,11 +129,9 @@ BLOCKED_TERMS = [
     "np.save(",
     "np.savetxt(",
     "np.loadtxt(",
-    # Matplotlib file I/O
-    "plt.savefig(",
 ]
 
-SANDBOX_TIMEOUT_SEC = 10
+SANDBOX_TIMEOUT_SEC = 60
 
 # ── Storage Keys (for SecureStorage) ────────────────────────────────
 STORAGE_UUID = "spaninsight_uuid"
