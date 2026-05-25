@@ -3,8 +3,7 @@
 </p>
 
 <p align="center">
-  Autonomous data intelligence platform — smart data collection, collaborative analysis, and secure reporting for everyone.
-  Built with Python and Flet.
+  A high-performance, privacy-first data intelligence platform for smart data collection, analysis and reporting
 </p>
 
 <p align="center">
