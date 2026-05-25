@@ -176,8 +176,12 @@ def get_data_summary(df: pd.DataFrame) -> dict:
         "describe": safe_describe,
         "head": [],
         "tail": [],
-        "spatial": detect_spatial_columns(df),
     }
+
+    try:
+        summary["spatial"] = detect_spatial_columns(df)
+    except Exception:
+        summary["spatial"] = None
 
     # Safe head + tail — truncate long strings
     def _safe_rows(sub_df):
