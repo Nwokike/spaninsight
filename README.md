@@ -116,8 +116,8 @@ Spaninsight is designed with a **Privacy-First** philosophy.
 
 ## Changelog
 
-<details>
-<summary><b>v1.0.0</b> — Initial Release <i>(expand)</i></summary>
+<details open>
+<summary><b>v1.0.0</b> — Initial Release</summary>
 
 <br>
 
