@@ -122,7 +122,7 @@ class StorageService:
                 except Exception:
                     pass
 
-        if not loaded:
+        if not loaded and self._is_web:
             self._load_web()  # Fallback
 
     def _write_files_sync(

@@ -99,6 +99,9 @@ class AppTheme:
                 outline=DARK_BORDER,
                 surface_container_highest=DARK_SURFACE_2,
             ),
+            navigation_bar_theme=ft.NavigationBarTheme(
+                label_text_style=ft.TextStyle(size=10, weight=ft.FontWeight.W_500)
+            ),
             visual_density=ft.VisualDensity.COMFORTABLE,
         )
 
@@ -116,6 +119,9 @@ class AppTheme:
                 on_secondary=ft.Colors.BLACK,
                 outline=LIGHT_BORDER,
                 surface_container_highest=LIGHT_SURFACE_2,
+            ),
+            navigation_bar_theme=ft.NavigationBarTheme(
+                label_text_style=ft.TextStyle(size=10, weight=ft.FontWeight.W_500)
             ),
             visual_density=ft.VisualDensity.COMFORTABLE,
         )
