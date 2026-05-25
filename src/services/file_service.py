@@ -294,7 +294,6 @@ def detect_spatial_columns(df: pd.DataFrame) -> dict | None:
         return None
 
     from shapely.geometry import Point, MultiPoint
-    from shapely import wkt
 
     points = [Point(x, y) for x, y in zip(lon_vals, lat_vals) if pd.notna(x) and pd.notna(y)]
     if len(points) < 2:
