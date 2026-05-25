@@ -490,37 +490,42 @@ def build_home_view(
         visible=not state.gateway_online,
     )
 
-    # ── Banner Ad (Mobile Only) ──────────────────────────────────────
-    ad_banner = None
-    if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
-        import flet_ads as fta
+    # Helper to instantiate distinct banner ads on mobile
+    def _create_home_ad() -> ft.Control:
+        if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
+            import flet_ads as fta
 
-        ad_banner = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Text(
-                        "SPONSORED",
-                        size=8,
-                        weight=ft.FontWeight.W_700,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                        style=ft.TextStyle(letter_spacing=1),
-                    ),
-                    fta.BannerAd(
-                        unit_id="ca-app-pub-5679949845754640/5628404223",
-                        width=320,
-                        height=50,
-                    ),
-                ],
-                horizontal_alignment="center",
-                spacing=4,
-            ),
-            alignment=ft.Alignment.CENTER,
-            padding=8,
-            border_radius=tokens.RADIUS_LG,
-            bgcolor=theme.GLASS_BG,
-            border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
-            margin=ft.Margin(tokens.SPACE_LG, 0, tokens.SPACE_LG, tokens.SPACE_LG),
-        )
+            return ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "SPONSORED",
+                            size=8,
+                            weight=ft.FontWeight.W_700,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            style=ft.TextStyle(letter_spacing=1),
+                        ),
+                        fta.BannerAd(
+                            unit_id="ca-app-pub-5679949845754640/5628404223",
+                            width=320,
+                            height=50,
+                        ),
+                    ],
+                    horizontal_alignment="center",
+                    spacing=4,
+                ),
+                alignment=ft.Alignment.CENTER,
+                padding=8,
+                border_radius=tokens.RADIUS_LG,
+                bgcolor=theme.GLASS_BG,
+                border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                margin=ft.Margin(tokens.SPACE_LG, 0, tokens.SPACE_LG, tokens.SPACE_LG),
+            )
+        return ft.Container()
+
+    ad_banner1 = _create_home_ad()
+    ad_banner2 = _create_home_ad()
+    ad_banner3 = _create_home_ad()
 
     content = ft.Column(
         controls=[
@@ -528,10 +533,12 @@ def build_home_view(
             hero,
             quick_actions,
             recent_section,
-            ad_banner if ad_banner else ft.Container(),
+            ad_banner1,
             privacy_banner,
             features,
+            ad_banner2,
             how_it_works,
+            ad_banner3,
             credits_info,
             ft.Container(height=80),
         ],

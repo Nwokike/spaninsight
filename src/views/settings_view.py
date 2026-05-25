@@ -144,6 +144,42 @@ def build_settings_view(
                 subtitle=f"{state.credits_remaining} remaining today",
                 on_click=lambda e: _show_credits(),
             ),
+            # Banner Ad (Mobile Only) - Middle Page
+            (
+                lambda: ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                style=ft.TextStyle(letter_spacing=1),
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
+                        ],
+                        horizontal_alignment="center",
+                        spacing=4,
+                    ),
+                    alignment=ft.Alignment.CENTER,
+                    padding=8,
+                    border_radius=tokens.RADIUS_LG,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(
+                        tokens.SPACE_LG,
+                        tokens.SPACE_XS,
+                        tokens.SPACE_LG,
+                        tokens.SPACE_XS,
+                    ),
+                )
+            )()
+            if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
+            else ft.Container(),
             # ── Appearance Section ──────────────────────────────
             section_header("Appearance"),
             ft.Container(

@@ -130,6 +130,37 @@ def build_report_view(
             )
         )
 
+        # Top Banner Ad Placement (Mobile Only)
+        if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
+            controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                style=ft.TextStyle(letter_spacing=1),
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
+                        ],
+                        horizontal_alignment="center",
+                        spacing=4,
+                    ),
+                    alignment=ft.Alignment.CENTER,
+                    padding=8,
+                    border_radius=12,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(20, 10, 20, 10),
+                )
+            )
+
         if ui_state.is_loading["value"]:
             controls.append(
                 ft.Container(
