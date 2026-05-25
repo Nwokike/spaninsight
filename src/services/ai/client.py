@@ -95,6 +95,17 @@ def extract_block_by_pattern(text: str, is_json: bool = False) -> str:
     cleaned = strip_thinking(text)
 
     if is_json:
+        # First try finding the first '{' and the last '}' (for json objects)
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return cleaned[start : end + 1].strip()
+        # Fallback to finding the first '[' and the last ']' (for json arrays)
+        start_arr = cleaned.find("[")
+        end_arr = cleaned.rfind("]")
+        if start_arr != -1 and end_arr != -1 and end_arr > start_arr:
+            return cleaned[start_arr : end_arr + 1].strip()
+
         match = _JSON_BLOCK_RE.search(cleaned)
         if match:
             return match.group(1).strip()
