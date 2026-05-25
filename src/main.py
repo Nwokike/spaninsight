@@ -496,22 +496,29 @@ async def main(page: ft.Page):
                     on_click=lambda e: show_credits_dialog(page, credit_service),
                 )
 
-                app_icon = ft.Container(
-                    content=ft.Image(
-                        src="icon.png",
-                        width=24,
-                        height=24,
-                        border_radius=6,
-                        fit=ft.BoxFit.CONTAIN,
+                page_tags = {
+                    "/home": "Home",
+                    "/forms": "Forms",
+                    "/analysis": "Analysis",
+                    "/reports": "Reports",
+                    "/settings": "Settings",
+                }
+                tag_text = page_tags.get(route, "Workspace")
+                page_tag = ft.Container(
+                    content=ft.Text(
+                        tag_text,
+                        size=14,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE,
                     ),
-                    padding=ft.Padding(12, 0, 0, 0),
+                    padding=ft.Padding(16, 0, 0, 0),
                     alignment=ft.Alignment.CENTER_LEFT,
                 )
-                top_view.appbar.leading = app_icon
-                top_view.appbar.leading_width = 44
+                top_view.appbar.leading = page_tag
+                top_view.appbar.leading_width = 100
                 top_view.appbar.title = switcher
                 top_view.appbar.actions = [theme_btn, badge_container]
-                top_view.appbar.center_title = False
+                top_view.appbar.center_title = True
                 top_view.appbar.bgcolor = ft.Colors.TRANSPARENT
 
         page.update()
