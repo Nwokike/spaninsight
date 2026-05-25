@@ -82,12 +82,20 @@ def show_credits_dialog(page: ft.Page, credit_service):
         disabled=False,
     )
 
+    dialog_open = True
+
     def _close_dialog(e=None):
+        nonlocal dialog_open
+        dialog_open = False
         page.pop_dialog()
+
+    def _on_dismiss(e):
+        nonlocal dialog_open
+        dialog_open = False
 
     async def _update_timer_loop():
         # A loop that updates the countdown in real-time while the dialog is visible
-        while page.dialog and page.dialog.open:
+        while dialog_open and dlg.open:
             now = time.time()
             remaining = int(state.ad_cooldown_end - now)
             if remaining > 0:
@@ -196,6 +204,7 @@ def show_credits_dialog(page: ft.Page, credit_service):
             padding=10,
         ),
         actions=[ft.TextButton("Close", on_click=_close_dialog)],
+        on_dismiss=_on_dismiss,
     )
 
     page.show_dialog(dlg)
