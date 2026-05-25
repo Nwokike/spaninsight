@@ -8,8 +8,22 @@ from core import theme, utils
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_numpy(val):
+    """Replace NaN/Infinity with None recursively in lists/dicts."""
+    import math
+
+    if isinstance(val, list):
+        return [_sanitize_numpy(v) for v in val]
+    if isinstance(val, dict):
+        return {k: _sanitize_numpy(v) for k, v in val.items()}
+    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+        return None
+    return val
+
+
 def serialize_result_for_report(result_val) -> dict | None:
     """Recursively convert pandas, numpy, and python collections to serializable JSON-friendly dictionary."""
+    import math
     import pandas as pd
     import numpy as np
 
@@ -42,11 +56,14 @@ def serialize_result_for_report(result_val) -> dict | None:
 
     # Handle Numpy array
     if isinstance(result_val, np.ndarray):
-        return {"type": "ndarray", "data": result_val.tolist()}
+        return {"type": "ndarray", "data": _sanitize_numpy(result_val.tolist())}
 
     # Handle Numpy scalar types
     if isinstance(result_val, (np.integer, np.floating, np.bool_)):
-        return result_val.item()
+        val = result_val.item()
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+            return None
+        return val
 
     # Handle standard dictionary
     if isinstance(result_val, dict):
@@ -73,6 +90,10 @@ def serialize_result_for_report(result_val) -> dict | None:
 
     # Handle basic types
     if isinstance(result_val, (int, float, str, bool)):
+        if isinstance(result_val, float) and (
+            math.isnan(result_val) or math.isinf(result_val)
+        ):
+            return None
         return result_val
 
     # Fallback to string

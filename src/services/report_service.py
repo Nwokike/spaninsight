@@ -18,6 +18,19 @@ from services.api_client import request_with_retry
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_json_value(val):
+    """Recursively replace NaN/Infinity with None for JSON-safe serialization."""
+    import math
+
+    if isinstance(val, list):
+        return [_sanitize_json_value(v) for v in val]
+    if isinstance(val, dict):
+        return {k: _sanitize_json_value(v) for k, v in val.items()}
+    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+        return None
+    return val
+
+
 class ReportService:
     """Local-first report management with optional R2 sharing."""
 
@@ -120,7 +133,9 @@ class ReportService:
             item = {
                 "prompt": block.get("prompt", ""),
                 "description": block.get("description", ""),
-                "serialized_result": block.get("serialized_result"),
+                "serialized_result": _sanitize_json_value(
+                    block.get("serialized_result")
+                ),
                 "stdout": block.get("stdout"),
             }
             if block.get("figure_png_b64"):

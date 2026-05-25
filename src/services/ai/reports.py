@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 def _parse_resilient_json(text: str) -> dict | None:
     """Robustly extract and parse a JSON object from raw LLM output."""
-    import re
     from .client import strip_thinking
 
     # First attempt to extract everything from first { to last } from the raw 'text' string.
@@ -34,17 +33,9 @@ def _parse_resilient_json(text: str) -> dict | None:
             "Standard strict=False JSON parsing failed: %s. Attempting custom repairs.",
             e,
         )
-        # Attempt progressive repairs
+
+        repaired = _repair_json(cleaned)
         try:
-            # 1. Insert missing commas between objects/arrays
-            repaired = re.sub(r"\}\s*\{", "}, {", cleaned)
-            repaired = re.sub(r"\]\s*\[", "], [", repaired)
-            repaired = re.sub(r"\}\s*\[", "}, [", repaired)
-            repaired = re.sub(r"\]\s*\{", "], {", repaired)
-
-            # 2. Strip trailing commas from object arrays
-            repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
-
             return json.loads(repaired, strict=False)
         except Exception as ex:
             logger.error(
@@ -54,6 +45,40 @@ def _parse_resilient_json(text: str) -> dict | None:
             )
             logger.error("Raw cleaned text that failed to parse: %s", cleaned)
             raise ex
+
+
+def _repair_json(text: str) -> str:
+    """Apply progressive repairs to malformed JSON."""
+    import re
+
+    repaired = text
+
+    # 1. Strip single-line and multi-line comments
+    repaired = re.sub(r"//[^\n]*", "", repaired)
+    repaired = re.sub(r"/\*.*?\*/", "", repaired, flags=re.DOTALL)
+
+    # 2. Replace single quotes with double quotes (but not within double-quoted strings)
+    repaired = re.sub(r"(?<=[{,]\s*)'([^']*?)'(?=\s*[:,\}])", r'"\1"', repaired)
+    repaired = re.sub(r"(?<=:)\s*'([^']*?)'(?=\s*[,}])", r'"\1"', repaired)
+
+    # 3. Replace bare NaN, Infinity, -Infinity with null
+    repaired = re.sub(r"\bNaN\b", "null", repaired)
+    repaired = re.sub(r"\bInfinity\b", "null", repaired)
+    repaired = re.sub(r"\b-Infinity\b", "null", repaired)
+
+    # 4. Insert missing commas between objects/arrays
+    repaired = re.sub(r"\}\s*\{", "}, {", repaired)
+    repaired = re.sub(r"\]\s*\[", "], [", repaired)
+    repaired = re.sub(r"\}\s*\[", "}, [", repaired)
+    repaired = re.sub(r"\]\s*\{", "], {", repaired)
+
+    # 5. Strip trailing commas before closing brackets/braces
+    repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+
+    # 6. Remove trailing comma before end of string before closing brace
+    repaired = re.sub(r",\s*$", "", repaired)
+
+    return repaired
 
 
 async def arrange_report(blocks: list[dict], dataset_name: str = "") -> dict | None:

@@ -659,35 +659,40 @@ def build_report_editor(
                                 on_click=lambda e: on_back(),
                                 disabled=is_deleting,
                             ),
-                            ft.OutlinedButton(
-                                content=ft.Row(
-                                    [
-                                        ft.ProgressRing(
-                                            width=12,
-                                            height=12,
-                                            stroke_width=2,
-                                            color=theme.ERROR,
-                                        ),
-                                        ft.Text(
-                                            "Deleting...", size=12, color=theme.ERROR
-                                        ),
-                                    ],
-                                    spacing=6,
+                        ]
+                        + (
+                            [
+                                ft.OutlinedButton(
+                                    content=ft.Row(
+                                        [
+                                            ft.ProgressRing(
+                                                width=12,
+                                                height=12,
+                                                stroke_width=2,
+                                                color=theme.ERROR,
+                                            ),
+                                            ft.Text(
+                                                "Deleting...",
+                                                size=12,
+                                                color=theme.ERROR,
+                                            ),
+                                        ],
+                                        spacing=6,
+                                    )
+                                    if is_deleting
+                                    else "Delete Report",
+                                    icon=ft.Icons.DELETE_FOREVER_ROUNDED
+                                    if not is_deleting
+                                    else None,
+                                    icon_color=theme.ERROR,
+                                    style=ft.ButtonStyle(color=theme.ERROR),
+                                    on_click=lambda e: on_delete(),
+                                    disabled=is_deleting or is_ai_editing,
                                 )
-                                if is_deleting
-                                else "Delete Report",
-                                icon=ft.Icons.DELETE_FOREVER_ROUNDED
-                                if not is_deleting
-                                else None,
-                                icon_color=theme.ERROR,
-                                style=ft.ButtonStyle(color=theme.ERROR),
-                                on_click=lambda e: on_delete(),
-                                disabled=is_deleting or is_ai_editing,
-                                visible=on_delete is not None,
-                            )
+                            ]
                             if on_delete is not None
-                            else ft.Container(),
-                        ],
+                            else []
+                        ),
                         spacing=8,
                         wrap=True,
                     ),
