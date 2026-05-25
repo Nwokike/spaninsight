@@ -15,14 +15,17 @@ def _parse_resilient_json(text: str) -> dict | None:
     import re
     from .client import strip_thinking
 
-    cleaned = extract_block_by_pattern(text, is_json=True)
-    cleaned = strip_thinking(cleaned)
-
-    # Locate first { and last }
-    first = cleaned.find("{")
-    last = cleaned.rfind("}")
+    # First attempt to extract everything from first { to last } from the raw 'text' string.
+    # Since we always expect a JSON object for reports, this completely avoids being tricked
+    # by a leading '[' from LLM conversational reasoning (e.g. "[0,1,3,2,4,5,6,7] would follow...").
+    first = text.find("{")
+    last = text.rfind("}")
     if first != -1 and last != -1 and last >= first:
-        cleaned = cleaned[first : last + 1]
+        cleaned = text[first : last + 1]
+    else:
+        cleaned = extract_block_by_pattern(text, is_json=True)
+
+    cleaned = strip_thinking(cleaned)
 
     try:
         return json.loads(cleaned, strict=False)
@@ -31,10 +34,17 @@ def _parse_resilient_json(text: str) -> dict | None:
             "Standard strict=False JSON parsing failed: %s. Attempting custom repairs.",
             e,
         )
-        # Attempt trailing comma cleanup and other standard JSON formatting issues
+        # Attempt progressive repairs
         try:
-            # Strip trailing commas from object arrays
-            repaired = re.sub(r",\s*([\]}])", r"\1", cleaned)
+            # 1. Insert missing commas between objects/arrays
+            repaired = re.sub(r"\}\s*\{", "}, {", cleaned)
+            repaired = re.sub(r"\]\s*\[", "], [", repaired)
+            repaired = re.sub(r"\}\s*\[", "}, [", repaired)
+            repaired = re.sub(r"\]\s*\{", "], {", repaired)
+
+            # 2. Strip trailing commas from object arrays
+            repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+
             return json.loads(repaired, strict=False)
         except Exception as ex:
             logger.error(
@@ -42,27 +52,26 @@ def _parse_resilient_json(text: str) -> dict | None:
                 len(text),
                 ex,
             )
+            logger.error("Raw cleaned text that failed to parse: %s", cleaned)
             raise ex
 
 
 async def arrange_report(blocks: list[dict], dataset_name: str = "") -> dict | None:
     """AI auto-arranges report blocks into optimal order with polished descriptions."""
     system_prompt = (
-        "You are an expert data report editor. Given analysis blocks, arrange them into "
-        "a cohesive professional report.\n\n"
-        "RULES:\n"
-        "- Reorder blocks in logical flow (overview → distributions → correlations → anomalies → conclusions)\n"
-        "- Generate a concise, polished report title and a beautiful, consumer-friendly 1-2 sentence executive summary description (focused on business impact and overview of findings, avoiding raw technical/analytical descriptions)\n"
-        "- IMPORTANT: Reformat the title/prompt of each block to be a beautiful, concise, and professional section header "
-        "(e.g., 'Data Ingestion & Loading' instead of 'import necessary libraries and load the asset', "
-        "'Missing Data Imputation' instead of 'clean the dataset, input missing values in age using the median'). "
-        "Never leave a block title as a task instruction, python description, or raw question. "
-        "Make it read like a premium executive slide title!\n"
-        "- CRITICAL: You MUST NOT modify, edit, or touch the block-level descriptions at all! Return them exactly identical to how you received them in the input list so that the user's custom edits are fully preserved.\n"
-        "- Return the SAME number of blocks you received\n\n"
-        "OUTPUT — return ONLY raw JSON, no markdown fences:\n"
-        '{"title":"...", "description":"...", "blocks":[{"prompt":"...", "description":"...", "original_index": 0}]}\n'
-        "original_index = 0-based index in the input list."
+        "You are an expert report formatter. Given a list of analysis blocks, "
+        "format them into a professional, publication-ready report.\n\n"
+        "YOUR TASKS:\n"
+        "1. Generate a concise, polished report title (focused on business insights).\n"
+        "2. Generate a premium, consumer-friendly 1-2 sentence executive summary description of the overall findings.\n"
+        "3. Rewrite the title/prompt of each block to be a beautiful, highly professional slide/section header "
+        "(e.g., 'Data Ingestion & Loading' instead of 'load dataset', 'Missing Data Imputation' instead of 'clean missing values'). "
+        "Make every block title read like a premium executive slide header!\n"
+        "4. Keep all block-level descriptions exactly identical to how you received them.\n\n"
+        "CRITICAL: Return ONLY valid raw JSON starting with '{' and ending with '}'. "
+        "Do NOT write any explanations, reasoning, thoughts, or preamble. Any conversational text will cause a system crash!\n\n"
+        "OUTPUT FORMAT:\n"
+        '{"title":"...", "description":"...", "blocks":[{"prompt":"Concise Section Header", "description":"(preserved original description)", "original_index": 0}]}'
     )
 
     blocks_summary = [
@@ -109,16 +118,15 @@ async def edit_report_with_ai(
         "You are an expert report editor. Apply the user's edit instruction to the report.\n\n"
         "RULES:\n"
         "- You may reorder blocks, edit report titles, and update the report-level description.\n"
-        "- Generate a beautiful, concise report-level description as an executive summary of the findings (not analytical or technical, but focused on business impact and overview of findings).\n"
-        "- You MUST NOT modify, edit, or touch any block-level descriptions unless the user's edit instruction explicitly requests it (e.g., 'rewrite the descriptions to be shorter', 'change description of block 2'). If not explicitly specified by the user, return all block-level descriptions exactly identical to how you received them in the input list.\n"
-        "- You MUST NOT delete any blocks — return the same count\n"
-        "- You MUST NOT change underlying data or metrics\n"
-        "- IMPORTANT: Ensure all block titles/prompts are concise, professional section headers "
-        "(e.g., 'Target Variable Correlation' instead of 'check correlation with target variable'). "
-        "Never leave a block title as a task instruction, python description, or raw question.\n\n"
-        "OUTPUT — return ONLY raw JSON, no markdown fences:\n"
-        '{"title":"...", "description":"...", "blocks":[{"prompt":"...", "description":"...", "original_index": 0}]}\n'
-        "original_index = 0-based index in the INPUT list."
+        "- Generate a beautiful, concise report-level description as an executive summary of the findings.\n"
+        "- You MUST NOT modify, edit, or touch any block-level descriptions unless the user's edit instruction explicitly requests it. "
+        "Otherwise, return all block-level descriptions exactly identical to how you received them.\n"
+        "- You MUST NOT delete any blocks — return the same count.\n"
+        "- Reformat block titles to be highly professional, concise section headers.\n\n"
+        "CRITICAL: Return ONLY valid raw JSON starting with '{' and ending with '}'. "
+        "Do NOT write any explanations, reasoning, thoughts, or preamble. Any conversational text will cause a system crash!\n\n"
+        "OUTPUT FORMAT:\n"
+        '{"title":"...", "description":"...", "blocks":[{"prompt":"...", "description":"...", "original_index": 0}]}'
     )
 
     blocks_summary = [

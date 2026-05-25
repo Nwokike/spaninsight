@@ -591,10 +591,7 @@ def build_report_editor(
                                     spacing=6,
                                 )
                                 if is_viewing_live
-                                else None,
-                                text="View Live Report"
-                                if not is_viewing_live
-                                else None,
+                                else "View Live Report",
                                 icon=ft.Icons.OPEN_IN_NEW_ROUNDED
                                 if not is_viewing_live
                                 else None,
@@ -616,8 +613,7 @@ def build_report_editor(
                                     spacing=6,
                                 )
                                 if is_saving
-                                else None,
-                                text="Save" if not is_saving else None,
+                                else "Save",
                                 icon=ft.Icons.SAVE_ROUNDED if not is_saving else None,
                                 on_click=lambda e: on_save(),
                                 disabled=is_saving or is_ai_editing,
@@ -625,7 +621,6 @@ def build_report_editor(
                             ),
                         ],
                         spacing=8,
-                        wrap=True,
                     ),
                     # Row 2 — Secondary actions
                     ft.Row(
@@ -641,8 +636,7 @@ def build_report_editor(
                                     spacing=6,
                                 )
                                 if is_sharing
-                                else None,
-                                text="Share" if not is_sharing else None,
+                                else "Share",
                                 icon=ft.Icons.SHARE_ROUNDED if not is_sharing else None,
                                 on_click=lambda e: on_share(),
                                 disabled=is_sharing or is_ai_editing,
@@ -658,8 +652,7 @@ def build_report_editor(
                                     spacing=6,
                                 )
                                 if is_deleting
-                                else None,
-                                text="Back" if not is_deleting else None,
+                                else "Back",
                                 icon=ft.Icons.ARROW_BACK_ROUNDED
                                 if not is_deleting
                                 else None,
@@ -682,8 +675,7 @@ def build_report_editor(
                                     spacing=6,
                                 )
                                 if is_deleting
-                                else None,
-                                text="Delete Report" if not is_deleting else None,
+                                else "Delete Report",
                                 icon=ft.Icons.DELETE_FOREVER_ROUNDED
                                 if not is_deleting
                                 else None,
