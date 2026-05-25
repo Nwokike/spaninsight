@@ -212,25 +212,24 @@ async def run_autopilot(view_state):
                         "result": str(b["result"]),
                     }
 
-                    description = await ai_service.describe_result(
-                        block0_desc, res_data
-                    )
-                    b["description"] = description
-                    hist_entry["description"] = description
-                    if state.charts:
-                        state.charts[-1]["description"] = description
-                    view_state.rebuild()
-
-                    if getattr(state, "autopilot_cancelled", False):
-                        return
-
                     ctx = build_analysis_context()
 
-                    suggestions = await ai_service.suggest(
+                    # Run remote AI tasks concurrently to eliminate sequential waiting latency
+                    desc_task = ai_service.describe_result(block0_desc, res_data)
+                    sugg_task = ai_service.suggest(
                         state.current_df_summary,
                         initial_description=block0_desc,
                         analysis_context=ctx,
                     )
+
+                    description, suggestions = await asyncio.gather(
+                        desc_task, sugg_task
+                    )
+
+                    b["description"] = description
+                    hist_entry["description"] = description
+                    if state.charts:
+                        state.charts[-1]["description"] = description
 
                     b["suggestions"] = suggestions
                     state.suggestions = suggestions
@@ -287,12 +286,14 @@ async def run_autopilot(view_state):
                 async def _show_ad(e):
                     await e.control.show()
 
-                # Instantiate service in-memory. DO NOT append to page.overlay.
-                fta.InterstitialAd(
+                # Store active ad reference on view_state to prevent immediate GC cleanup
+                view_state._autopilot_ad = fta.InterstitialAd(
                     unit_id="ca-app-pub-5679949845754640/6965536622",
                     on_load=lambda e: view_state.page.run_task(_show_ad, e),
-                    on_error=lambda e: logger.error(
-                        "Autopilot Interstitial error: %s", e.data
+                    on_close=lambda e: setattr(view_state, "_autopilot_ad", None),
+                    on_error=lambda e: (
+                        logger.error("Autopilot Interstitial error: %s", e.data)
+                        or setattr(view_state, "_autopilot_ad", None)
                     ),
                 )
             except Exception as ad_err:

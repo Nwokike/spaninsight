@@ -77,12 +77,13 @@ def build_settings_view(
                     state.user_uuid = ""
                     page.snack_bar = ft.SnackBar(
                         content=ft.Text(
-                            "All local workspaces & settings cleared. Credits retained."
+                            "All local workspaces & settings cleared. Restarting session..."
                         ),
                         duration=2000,
                     )
                     page.snack_bar.open = True
                     page.update()
+                    page.go("/splash")
 
             return _close
 

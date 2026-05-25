@@ -81,7 +81,7 @@ async def suggest(
     analysis_context: str = "",
 ) -> list[dict]:
     """Context-aware suggestions without cost-cutting limits."""
-    # MODIFIED: Reduced from 5-8 to exactly 3 suggestions to drastically reduce generation time.
+    # Ensure exactly 5 suggestions are generated to match user consistency requirements.
     system_prompt = (
         "You are an expert's data intelligence consultant. Suggest a rich, multi-angle "
         "suite of exactly 5 distinct, deeply insightful data analysis tracks the user should perform next. "
@@ -342,7 +342,7 @@ async def analyze_image_for_data(
 
 def fallback_suggestions() -> list[dict]:
     """Return an expanded suite of safe fallbacks if remote channels are offline."""
-    # MODIFIED: Reduced to 3 to match the new lightweight structure
+    # Consistently return exactly 5 fallbacks to match the standard suggester count.
     return [
         {
             "label": "Summary Statistics",
@@ -358,5 +358,15 @@ def fallback_suggestions() -> list[dict]:
             "label": "Missing Values Audit",
             "icon": "🔍",
             "prompt": "Calculate percent of missing values in each column and render as a bar plot.",
+        },
+        {
+            "label": "Correlation Heatmap",
+            "icon": "🔗",
+            "prompt": "Calculate and plot the correlation matrix of all numeric columns to identify relationships.",
+        },
+        {
+            "label": "Outlier Detection",
+            "icon": "🚨",
+            "prompt": "Identify potential outliers in numeric columns using the Interquartile Range (IQR) method and show as box plots.",
         },
     ]

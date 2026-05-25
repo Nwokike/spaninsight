@@ -125,6 +125,51 @@ class StorageService:
         if not loaded:
             self._load_web()  # Fallback
 
+    def _write_files_sync(
+        self, settings_copy, history_copy, write_settings, write_history
+    ) -> None:
+        _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+        if write_settings:
+            _SETTINGS_FILE.write_text(
+                json.dumps(settings_copy, indent=2), encoding="utf-8"
+            )
+        if write_history:
+            _HISTORY_FILE.write_text(
+                json.dumps(history_copy, indent=2), encoding="utf-8"
+            )
+
+    async def _save_now_async(self) -> None:
+        if self._is_web:
+            self._save_now_web()
+            return
+        try:
+            write_settings = self._settings_dirty
+            write_history = self._history_dirty
+
+            if write_settings or write_history:
+                settings_copy = dict(self._settings) if write_settings else None
+                history_copy = dict(self._history) if write_history else None
+
+                await asyncio.to_thread(
+                    self._write_files_sync,
+                    settings_copy,
+                    history_copy,
+                    write_settings,
+                    write_history,
+                )
+
+                if write_settings:
+                    self._settings_dirty = False
+                if write_history:
+                    self._history_dirty = False
+
+            self._last_write = time.monotonic()
+        except Exception as e:
+            logger.warning(
+                "StorageService._save_now_async failed, falling back to web: %s", e
+            )
+            self._save_now_web()
+
     def _save_now(self) -> None:
         try:
             _STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -146,7 +191,11 @@ class StorageService:
     def _schedule_write(self) -> None:
         elapsed = time.monotonic() - self._last_write
         if elapsed >= _WRITE_DEBOUNCE_SEC:
-            self._save_now() if not self._is_web else self._save_now_web()
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._save_now_async())
+            except RuntimeError:
+                self._save_now() if not self._is_web else self._save_now_web()
         else:
             if self._pending_write_task is None or self._pending_write_task.done():
                 try:
@@ -158,7 +207,7 @@ class StorageService:
     async def _deferred_write(self) -> None:
         await asyncio.sleep(_WRITE_DEBOUNCE_SEC)
         if self._settings_dirty or self._history_dirty:
-            self._save_now() if not self._is_web else self._save_now_web()
+            await self._save_now_async()
 
     # ── Public API ───────────────────────────────────────────────────
 
@@ -191,4 +240,6 @@ class StorageService:
     async def flush(self) -> None:
         async with self._lock:
             if self._settings_dirty or self._history_dirty:
-                self._save_now() if not self._is_web else self._save_now_web()
+                await (
+                    self._save_now_async()
+                ) if not self._is_web else self._save_now_web()

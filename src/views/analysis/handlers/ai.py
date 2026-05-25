@@ -133,8 +133,9 @@ async def on_suggestion_selected(
                 )
                 return
 
-            if not is_autopilot and not is_custom:
-                tx_id = await view_state.credit_service.reserve(COST_SUGGEST)
+            if not is_autopilot:
+                cost = COST_CUSTOM_PROMPT if is_custom else COST_SUGGEST
+                tx_id = await view_state.credit_service.reserve(cost)
                 if not tx_id:
                     show_error(view_state, "Not enough credits.")
                     return
@@ -186,7 +187,7 @@ async def on_suggestion_selected(
                         break
 
             if not result or not result["success"]:
-                if not is_autopilot and not is_custom and tx_id:
+                if not is_autopilot and tx_id:
                     await view_state.credit_service.rollback(tx_id)
                 block = {
                     "id": "blk_" + str(uuid.uuid4())[:8],
@@ -216,7 +217,7 @@ async def on_suggestion_selected(
                 )
                 return
 
-            if not is_autopilot and not is_custom and tx_id:
+            if not is_autopilot and tx_id:
                 await view_state.credit_service.commit(tx_id)
 
             figure_png = None
@@ -334,11 +335,6 @@ async def on_custom_prompt(view_state, e):
         return
     prompt = view_state.custom_prompt_field.current.value.strip()
     if not prompt:
-        return
-
-    success, _ = await view_state.credit_service.spend(COST_CUSTOM_PROMPT)
-    if not success:
-        show_error(view_state, "Not enough credits for custom analysis.")
         return
 
     view_state.custom_prompt_field.current.value = ""

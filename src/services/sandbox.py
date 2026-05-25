@@ -147,21 +147,44 @@ def _safe_import(name, *args, **kwargs):
     return __import__(name, *args, **kwargs)
 
 
+class TimeoutException(BaseException):
+    """BaseException ensures it cannot be caught by standard 'except Exception:' blocks."""
+
+    pass
+
+
 def _exec_with_timeout(code: str, namespace: dict, timeout_sec: int) -> None:
-    """Execute code in a separate thread with a hard timeout."""
+    """Execute code in a separate thread with a hard timeout and runaway thread tracing."""
+    import time
+    import sys
+
     exc_info: list = [None]
+    start_time = time.monotonic()
 
     def _target():
+        def timeout_trace(frame, event, arg):
+            if time.monotonic() - start_time > timeout_sec:
+                raise TimeoutException(
+                    f"Code execution exceeded {timeout_sec}s time limit."
+                )
+            return timeout_trace
+
+        sys.settrace(timeout_trace)
         try:
             exec(code, namespace)
+        except TimeoutException as te:
+            exc_info[0] = _TimeoutError(str(te))
         except Exception as e:
             exc_info[0] = e
+        finally:
+            sys.settrace(None)
 
     thread = threading.Thread(target=_target, daemon=True)
     thread.start()
-    thread.join(timeout=timeout_sec)
+    thread.join(timeout=timeout_sec + 1.0)  # Add buffer for join
 
     if thread.is_alive():
+        # Raised in case the trace hook hasn't fired yet or the thread is blocked in an un-traceable C function
         raise _TimeoutError(f"Code execution exceeded {timeout_sec}s time limit.")
 
     if exc_info[0] is not None:

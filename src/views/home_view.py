@@ -292,30 +292,15 @@ def build_home_view(
                 state.active_project_id = pid_item
                 await storage.set("spaninsight_active_project_id", pid_item)
 
-                # Auto trigger background DataFrame reload if file path is available
+                # Set session to restore so that the Analysis View load pipeline
+                # can load the file asynchronously with a proper loading spinner.
                 proj = state.user_projects[pid_item]
                 fpath = proj.get("current_file_path", "")
                 if fpath:
-                    import asyncio
-                    import os
-                    from services import file_service
-
-                    if os.path.exists(fpath):
-                        try:
-                            # PERFORMANCE FIX: Reload dataset in a background thread to prevent UI freezing on switch
-                            df = await asyncio.to_thread(
-                                file_service.load_dataframe, fpath
-                            )
-                            state.set_dataframe(
-                                df, proj.get("current_df_name", "Dataset")
-                            )
-                            state.current_df_summary = await asyncio.to_thread(
-                                file_service.get_data_summary, df
-                            )
-                        except Exception:
-                            state.clear_data()
-                    else:
-                        state.clear_data()
+                    state.session_to_restore = {
+                        "file_path": fpath,
+                        "df_name": proj.get("current_df_name", "Dataset"),
+                    }
                 else:
                     state.clear_data()
 

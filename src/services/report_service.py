@@ -39,7 +39,7 @@ class ReportService:
             proj_svc = ProjectService(None, self._storage)
             safe_copy = {}
             for pid, p in state.user_projects.items():
-                safe_copy[pid] = proj_svc._serialize_project(p)
+                safe_copy[pid] = proj_svc._serialize_local_project(p)
             await self._storage.set("spaninsight_projects", json.dumps(safe_copy))
         except Exception as e:
             logger.error("Failed to save reports: %s", e)

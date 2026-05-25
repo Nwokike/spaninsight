@@ -137,13 +137,14 @@ class AdService:
                 await e.control.show()
 
             async def _close(e):
+                self._active_rewarded_ad = None  # Clean reference to prevent leaks
                 if asyncio.iscoroutinefunction(on_close):
                     await on_close()
                 else:
                     on_close()
 
-            # Instantiate service in-memory. DO NOT append to page.overlay.
-            fta.InterstitialAd(
+            # Store a strong reference to prevent immediate python garbage collection
+            self._active_rewarded_ad = fta.InterstitialAd(
                 unit_id=self.interstitial_id,
                 on_load=lambda e: self.page.run_task(_show, e),
                 on_close=lambda e: self.page.run_task(_close, e),
@@ -154,4 +155,9 @@ class AdService:
             return True
         except Exception as err:
             logger.error("Failed to trigger rewarded interstitial: %s", err)
+            # Sim fallback in case of errors on unsupported platforms
+            if asyncio.iscoroutinefunction(on_close):
+                await on_close()
+            else:
+                on_close()
             return False
