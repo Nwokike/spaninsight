@@ -226,7 +226,9 @@ def df_to_styled_excel_bytes(df: pd.DataFrame, title: str = "Export") -> bytes:
     ws = wb.active
     ws.title = title[:31]
 
-    header_fill = PatternFill(start_color="0D9488", end_color="0D9488", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="0D9488", end_color="0D9488", fill_type="solid"
+    )
     header_font = Font(name="Outfit", bold=True, color="FFFFFF", size=11)
     cell_font = Font(name="Outfit", size=10)
     thin_border = Border(
@@ -269,6 +271,7 @@ def df_to_styled_excel_bytes(df: pd.DataFrame, title: str = "Export") -> bytes:
     ws.freeze_panes = "A2"
 
     from io import BytesIO
+
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -281,8 +284,18 @@ def detect_spatial_columns(df: pd.DataFrame) -> dict | None:
     Returns a dict with 'lat_col', 'lon_col', 'point_count', 'bounds'
     if a valid spatial column pair is found, or None otherwise.
     """
-    lat_candidates = [c for c in df.columns if any(k in c.lower() for k in ("lat", "latitude", "ycoord", "y_coord"))]
-    lon_candidates = [c for c in df.columns if any(k in c.lower() for k in ("lon", "long", "longitude", "xcoord", "x_coord"))]
+    lat_candidates = [
+        c
+        for c in df.columns
+        if any(k in c.lower() for k in ("lat", "latitude", "ycoord", "y_coord"))
+    ]
+    lon_candidates = [
+        c
+        for c in df.columns
+        if any(
+            k in c.lower() for k in ("lon", "long", "longitude", "xcoord", "x_coord")
+        )
+    ]
     if not lat_candidates or not lon_candidates:
         return None
 
@@ -295,7 +308,9 @@ def detect_spatial_columns(df: pd.DataFrame) -> dict | None:
 
     from shapely.geometry import Point, MultiPoint
 
-    points = [Point(x, y) for x, y in zip(lon_vals, lat_vals) if pd.notna(x) and pd.notna(y)]
+    points = [
+        Point(x, y) for x, y in zip(lon_vals, lat_vals) if pd.notna(x) and pd.notna(y)
+    ]
     if len(points) < 2:
         return None
 
@@ -329,6 +344,7 @@ def transform_json_with_jq(content: str | bytes, jq_filter: str) -> str:
         content = content.decode("utf-8")
 
     import json as _json
+
     parsed = _json.loads(content)
     result = jq.compile(jq_filter).input(parsed).all()
     return _json.dumps(result, indent=2, default=str)

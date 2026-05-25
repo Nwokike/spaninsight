@@ -79,10 +79,14 @@ class StorageService:
         try:
             cs = self._page.client_storage
             if self._settings_dirty:
-                cs.set("spaninsight_settings", msgspec.json.encode(self._settings).decode())
+                cs.set(
+                    "spaninsight_settings", msgspec.json.encode(self._settings).decode()
+                )
                 self._settings_dirty = False
             if self._history_dirty:
-                cs.set("spaninsight_history", msgspec.json.encode(self._history).decode())
+                cs.set(
+                    "spaninsight_history", msgspec.json.encode(self._history).decode()
+                )
                 self._history_dirty = False
             self._last_write = time.monotonic()
         except Exception as e:

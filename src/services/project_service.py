@@ -287,9 +287,7 @@ class ProjectService:
             # Format last synced time to ISO 8601 for the query
             last_sync = proj.get("synced_at", 0)
             since_iso = (
-                pendulum.from_timestamp(last_sync).strftime(
-                    "%Y-%m-%dT%H:%M:%SZ"
-                )
+                pendulum.from_timestamp(last_sync).strftime("%Y-%m-%dT%H:%M:%SZ")
                 if last_sync > 0
                 else "1970-01-01T00:00:00Z"
             )

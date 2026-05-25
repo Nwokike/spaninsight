@@ -517,8 +517,12 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                     [
                         ft.Row(
                             [
-                                ft.Icon(ft.Icons.MAP_ROUNDED, color=theme.ACCENT, size=18),
-                                ft.Text("Spatial Data Detected", weight="bold", size=14),
+                                ft.Icon(
+                                    ft.Icons.MAP_ROUNDED, color=theme.ACCENT, size=18
+                                ),
+                                ft.Text(
+                                    "Spatial Data Detected", weight="bold", size=14
+                                ),
                             ],
                             spacing=8,
                         ),
@@ -534,8 +538,16 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                 ft.Container(
                                     content=ft.Column(
                                         [
-                                            ft.Text("Centroid", size=10, weight="w600", color=ft.Colors.ON_SURFACE_VARIANT),
-                                            ft.Text(f"{spatial['centroid_lat']}, {spatial['centroid_lon']}", size=12),
+                                            ft.Text(
+                                                "Centroid",
+                                                size=10,
+                                                weight="w600",
+                                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                            ),
+                                            ft.Text(
+                                                f"{spatial['centroid_lat']}, {spatial['centroid_lon']}",
+                                                size=12,
+                                            ),
                                         ],
                                         spacing=2,
                                         horizontal_alignment="center",
@@ -545,7 +557,12 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                                 ft.Container(
                                     content=ft.Column(
                                         [
-                                            ft.Text("Bounds", size=10, weight="w600", color=ft.Colors.ON_SURFACE_VARIANT),
+                                            ft.Text(
+                                                "Bounds",
+                                                size=10,
+                                                weight="w600",
+                                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                            ),
                                             ft.Text(
                                                 f"{spatial['bounds']['min_lat']}, {spatial['bounds']['min_lon']} "
                                                 f"→ {spatial['bounds']['max_lat']}, {spatial['bounds']['max_lon']}",
