@@ -41,7 +41,7 @@
 | **Recipe Re-execution** | Data residency is guaranteed. Raw datasets remain local to each collaborator. Shared analysis steps are processed as recipes that re-execute inside local sandboxes. |
 | **Smart Surveys** | Natural language survey generation (Text/Voice) with real-time preview — great for student research and customer feedback. |
 | **Autopilot Engine** | Multi-pass analysis orchestration for comprehensive automated report generation. |
-| **Professional Export** | Export reports as PDF and PowerPoint via the web viewer with secure cloud sharing via ephemeral links. |
+| **Professional Export** | Export reports as PDF and PowerPoint with secure cloud sharing via ephemeral links. |
 | **Local Security** | Sandbox-restricted Python execution environment ensuring 100% data residency. |
 
 ---
@@ -54,7 +54,7 @@
 - **Editable Code Blocks** — View, edit, and re-run the Python code behind every analysis result.
 - **Local Sandbox** — Built-in Python runtime (`pandas`, `matplotlib`) runs in a restricted environment.
 - **Credit-Based System** — AI tasks use a transparent credit system with generous daily free allowances.
-- **Cross-Platform Native** — High-performance, optimized native deployments across Android, Windows, and Desktop devices.
+- **Native Desktop & Mobile** — High-performance, optimized deployments across Windows and Android devices.
 - **Google AdMob Integration** — Safe, buffered banner and interstitial advertising support for mobile app users.
 - **Resilient Mobile Sandbox** — Hardened client environment utilizing sandboxed directory access (`FLET_APP_STORAGE_DATA`/`TEMP`) for maximum permission security and zero PermissionError crashes.
 
@@ -81,14 +81,14 @@ graph TB
         UI --> Runtime
     end
 
-    subgraph CLOUDFLARE_GATEWAY ["🔒 SECURE EDGE GATEWAY NODE (api.spaninsight.com)"]
+    subgraph SECURE_EDGE_GATEWAY ["🔒 SECURE EDGE GATEWAY (api.spaninsight.com)"]
         Inference["🤖 Autonomous AI Inference Engine"]
-        D1["💾 Secure Edge Database (D1 Store)"]
-        R2["📦 Ephemeral Storage Bucket (R2 Share)"]
+        D1["💾 Secure Edge Database"]
+        R2["📦 Ephemeral Storage Bucket"]
         Verify["🔑 Cryptographic Challenge Verification"]
     end
 
-    Runtime ==>|HTTPS TLS 1.3| CLOUDFLARE_GATEWAY
+    Runtime ==>|HTTPS TLS 1.3| SECURE_EDGE_GATEWAY
 ```
 
 ---
