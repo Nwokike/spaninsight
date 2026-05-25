@@ -37,6 +37,21 @@ async def process_file(view_state, file):
 
             plt.close("all")
             df = await asyncio.to_thread(file_service.load_dataframe, file.path)
+
+            # --- NEW: DATASET FINGERPRINT VALIDATION ---
+            active_proj = state.user_projects.get(state.active_project_id, {})
+            expected_fingerprint = active_proj.get("dataset_fingerprint")
+
+            if expected_fingerprint:
+                actual_fingerprint = await asyncio.to_thread(
+                    file_service.generate_dataset_fingerprint, df
+                )
+                if actual_fingerprint != expected_fingerprint:
+                    raise FileValidationError(
+                        "Dataset mismatch. You must upload the exact file used to create this workspace."
+                    )
+            # -------------------------------------------
+
             state.set_dataframe(df, file.name)
             state.current_file_path = file.path
 
@@ -98,6 +113,17 @@ async def process_file(view_state, file):
 
         plt.close("all")
         df = await asyncio.to_thread(file_service.load_dataframe, file.path)
+
+        # --- NEW: GENERATE & STORE DATASET FINGERPRINT ---
+        actual_fingerprint = await asyncio.to_thread(
+            file_service.generate_dataset_fingerprint, df
+        )
+        if state.active_project_id and state.active_project_id in state.user_projects:
+            state.user_projects[state.active_project_id]["dataset_fingerprint"] = (
+                actual_fingerprint
+            )
+        # -------------------------------------------------
+
         state.set_dataframe(df, file.name)
         state.current_file_path = file.path
 
@@ -193,6 +219,16 @@ async def process_db_table(view_state, connection_url: str, table_name: str):
         df = await asyncio.to_thread(
             DatabaseService.load_table, connection_url, table_name
         )
+
+        # --- NEW: GENERATE & STORE DATASET FINGERPRINT ---
+        actual_fingerprint = await asyncio.to_thread(
+            file_service.generate_dataset_fingerprint, df
+        )
+        if state.active_project_id and state.active_project_id in state.user_projects:
+            state.user_projects[state.active_project_id]["dataset_fingerprint"] = (
+                actual_fingerprint
+            )
+        # -------------------------------------------------
 
         state.set_dataframe(df, f"{table_name} (SQL)")
         state.current_file_path = f"sql://{table_name}"

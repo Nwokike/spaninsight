@@ -189,67 +189,46 @@ async def test_pull_project_behaviors():
         status = await project_svc.pull_project("123456")
         assert status == "deleted"
 
-    # 3. Successful merge (200 with newer timestamp) -> returns True
+    # 3. Successful merge (200 with new blocks) -> returns True
     with patch("services.project_service.get_client") as mock_client:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "id": "123456",
-            "title": "Cloud Workspace Updated",
-            "description": "desc updated",
-            "updated_at": "2026-05-23 15:00:00",  # Newer SQLite datetime format
-            "project_json": {
-                "phrase": "phrase",
-                "phrase_hash": "hash",
-                "current_df_name": "server_wants_to_change.csv",  # Server changes this, but client should retain local!
-                "current_file_path": "/server/path.csv",
-                "analysis_blocks": [{"prompt": "Step 1"}],
-                "user_reports": [],
-                "forms": [],
-                "synced_at": 200.0,
-            },
+            "blocks": [
+                {
+                    "id": "new_block_id_1",
+                    "prompt": "Step 1",
+                    "code": "print('Step 1')",
+                    "description": "First block description",
+                }
+            ]
         }
         mock_client.return_value.get = AsyncMock(return_value=mock_resp)
 
         status = await project_svc.pull_project("123456")
         assert status is True
 
-        # Verify local details are updated
+        # Verify local blocks are updated
         updated_proj = state.user_projects["123456"]
-        assert updated_proj["title"] == "Cloud Workspace Updated"
         assert len(updated_proj["analysis_blocks"]) == 1
+        assert updated_proj["analysis_blocks"][0]["id"] == "new_block_id_1"
+        assert updated_proj["analysis_blocks"][0]["needs_execution"] is True
 
         # Verify device-specific dataset path is retained!
         assert updated_proj["current_df_name"] == "local_file.csv"
         assert updated_proj["current_file_path"] == "/path/to/local_file.csv"
 
-    # 4. No-op (200 with older server timestamp) -> returns False
+    # 4. No-op (200 with no new blocks) -> returns False
     with patch("services.project_service.get_client") as mock_client:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "id": "123456",
-            "title": "Cloud Workspace Stale",
-            "description": "desc stale",
-            "updated_at": "2026-05-23 12:00:00",  # Older timestamp
-            "project_json": {
-                "phrase": "phrase",
-                "phrase_hash": "hash",
-                "analysis_blocks": [],
-                "user_reports": [],
-                "forms": [],
-                "synced_at": 50.0,
-            },
-        }
+        mock_resp.json.return_value = {"blocks": []}
         mock_client.return_value.get = AsyncMock(return_value=mock_resp)
-
-        # Set synced_at to a large future value locally
-        state.user_projects["123456"]["synced_at"] = 9999999999.0
 
         status = await project_svc.pull_project("123456")
         assert status is False
         assert (
-            state.user_projects["123456"]["title"] == "Cloud Workspace Updated"
+            state.user_projects["123456"]["title"] == "Cloud Workspace"
         )  # Retains current title (no merge)
 
 

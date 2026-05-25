@@ -38,12 +38,14 @@ async def on_export_data(view_state):
                 async def _show_ad(e):
                     await e.control.show()
 
-                iad = fta.InterstitialAd(
+                # Instantiate service in-memory. DO NOT append to page.overlay.
+                fta.InterstitialAd(
                     unit_id="ca-app-pub-5679949845754640/6965536622",
-                    on_load=_show_ad,
+                    on_load=lambda e: view_state.page.run_task(_show_ad, e),
+                    on_error=lambda e: logger.error(
+                        "Export Interstitial error: %s", e.data
+                    ),
                 )
-                view_state.page.overlay.append(iad)
-                view_state.page.update()
             except Exception as ad_err:
                 logger.error("Export Interstitial trigger failed: %s", ad_err)
 

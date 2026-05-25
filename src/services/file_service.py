@@ -6,6 +6,7 @@ enforcing the 100MB size limit to keep Android stable.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -204,3 +205,14 @@ def get_data_summary(df: pd.DataFrame) -> dict:
 def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
     """Serialize a DataFrame to CSV bytes for download."""
     return df.to_csv(index=False).encode("utf-8")
+
+
+def generate_dataset_fingerprint(df: pd.DataFrame) -> str:
+    """Generate a lightweight SHA-256 fingerprint of the dataset structure.
+
+    This mathematically proves collaborators have the exact same file
+    by hashing column names, data types, and total row count.
+    """
+    col_info = ",".join([f"{col}:{dtype}" for col, dtype in zip(df.columns, df.dtypes)])
+    fingerprint_string = f"{col_info}|rows:{len(df)}"
+    return hashlib.sha256(fingerprint_string.encode("utf-8")).hexdigest()

@@ -15,7 +15,7 @@ def build_project_switcher(page: ft.Page, project_service) -> ft.Container:
 
     active_title = state.active_project.get("title", "My Workspace")
     is_local = state.active_project_id.startswith("loc_")
-    display_id = "Local Only" if is_local else f"PIN: {state.active_project_id}"
+    display_id = "Local Only" if is_local else f"ID: {state.active_project_id}"
 
     # Outer pill wrapper
     is_disabled = getattr(state, "is_analyzing", False)
@@ -146,19 +146,15 @@ def _show_switcher_dialog(page: ft.Page, project_service):
         sync_spinner.visible = True
         page.update()
 
-        # Check if 6-digit numeric PIN vs 12-word recovery phrase
-        is_pin = token.isdigit() and len(token) == 6
-        if is_pin:
-            res = await project_service.join_project_by_pin(token)
-        else:
-            res = await project_service.join_project_by_phrase(token)
+        # ONLY use 12-word recovery phrase for joining now
+        res = await project_service.join_project_by_phrase(token)
 
         sync_spinner.visible = False
         if res:
             _close_dialog()
             page.go(page.route)
         else:
-            sync_status_text.value = "Invalid PIN or Seed Phrase."
+            sync_status_text.value = "Invalid Seed Phrase."
             sync_status_text.color = theme.ERROR
             page.update()
 
@@ -175,11 +171,11 @@ def _show_switcher_dialog(page: ft.Page, project_service):
 
             async def _on_re_register(e):
                 _close_recover_dlg()
-                # Promote local details to a new cloud PIN
+                # Promote local details to a new cloud ID
                 active_local = state.user_projects.get(pid)
                 if active_local:
                     page.snack_bar = ft.SnackBar(
-                        ft.Text("Registering workspace under a new PIN...")
+                        ft.Text("Registering workspace under a new Cloud ID...")
                     )
                     page.snack_bar.open = True
                     page.update()
@@ -238,7 +234,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                     content=ft.Text(
                         "A collaborator has removed this project from the gateway node. "
                         "You still have all your local history and recipes on this device.\n\n"
-                        "Would you like to register it under a new PIN to restore it, "
+                        "Would you like to register it under a new ID to restore it, "
                         "convert it to local-only to work offline, or delete it permanently?",
                         size=13,
                     ),
@@ -252,7 +248,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                     ),
                     ft.TextButton("Keep Local-Only", on_click=_on_make_local_only),
                     ft.FilledButton(
-                        "Register New PIN",
+                        "Register New ID",
                         bgcolor=theme.PRIMARY,
                         color=ft.Colors.WHITE,
                         on_click=_on_re_register,
@@ -314,7 +310,7 @@ def _show_switcher_dialog(page: ft.Page, project_service):
         if pid.startswith("loc_"):
             details += " · ⚠️ Local only"
         else:
-            details += f" · PIN: {pid}"
+            details += f" · ID: {pid[:8]}..."
 
         project_items.append(
             ft.Container(
@@ -414,41 +410,6 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                         ],
                         spacing=6,
                     ),
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Column(
-                                    [
-                                        ft.Text(
-                                            "SHARE PIN",
-                                            size=9,
-                                            color=ft.Colors.ON_SURFACE_VARIANT,
-                                        ),
-                                        ft.Text(
-                                            state.active_project_id,
-                                            size=24,
-                                            weight="black",
-                                            color=theme.PRIMARY,
-                                        ),
-                                    ],
-                                    spacing=2,
-                                    expand=True,
-                                ),
-                                ft.IconButton(
-                                    ft.Icons.COPY_ROUNDED,
-                                    tooltip="Copy PIN",
-                                    on_click=lambda e: page.run_task(
-                                        ft.Clipboard().set,
-                                        state.active_project_id,
-                                    ),
-                                ),
-                            ],
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        ),
-                        padding=12,
-                        border_radius=10,
-                        bgcolor=ft.Colors.with_opacity(0.06, theme.PRIMARY),
-                    ),
                     ft.Row(
                         [
                             ft.Column(
@@ -460,11 +421,13 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                                     ),
                                     ft.Text(
                                         state.active_project.get("phrase", ""),
-                                        size=10,
+                                        size=11,
                                         italic=True,
+                                        weight="w600",
+                                        color=theme.PRIMARY,
                                     ),
                                 ],
-                                spacing=2,
+                                spacing=4,
                                 expand=True,
                             ),
                             ft.IconButton(
@@ -481,13 +444,49 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                     ft.Container(
                         content=ft.Row(
                             [
+                                ft.Column(
+                                    [
+                                        ft.Text(
+                                            "WORKSPACE ID (INTERNAL REFERENCE)",
+                                            size=9,
+                                            color=ft.Colors.ON_SURFACE_VARIANT,
+                                        ),
+                                        ft.Text(
+                                            state.active_project_id,
+                                            size=11,
+                                            weight="bold",
+                                            color=ft.Colors.ON_SURFACE,
+                                        ),
+                                    ],
+                                    spacing=2,
+                                    expand=True,
+                                ),
+                                ft.IconButton(
+                                    ft.Icons.COPY_ROUNDED,
+                                    icon_size=16,
+                                    tooltip="Copy ID",
+                                    on_click=lambda e: page.run_task(
+                                        ft.Clipboard().set,
+                                        state.active_project_id,
+                                    ),
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        padding=12,
+                        border_radius=10,
+                        bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.ON_SURFACE),
+                    ),
+                    ft.Container(
+                        content=ft.Row(
+                            [
                                 ft.Icon(
                                     ft.Icons.INFO_OUTLINE_ROUNDED,
                                     size=14,
                                     color=theme.WARNING,
                                 ),
                                 ft.Text(
-                                    "Shared Access: Anyone with this PIN can edit or delete items.",
+                                    "Shared Access: Anyone with the Seed Phrase can edit or delete items.",
                                     size=10,
                                     color=theme.WARNING,
                                     weight="w500",
@@ -597,15 +596,15 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                                         weight="bold",
                                     ),
                                     ft.Text(
-                                        "To collaborate on a teammate's project, enter the 6-digit project PIN or the 12-word recovery seed phrase.",
+                                        "To collaborate on a teammate's project, enter the 12-word recovery seed phrase.",
                                         size=11,
                                         color=ft.Colors.ON_SURFACE_VARIANT,
                                     ),
                                     ft.Container(height=4),
                                     ft.TextField(
                                         ref=join_field,
-                                        label="6-Digit PIN or 12-Word Phrase",
-                                        hint_text="e.g. 583195 or 'apple banana ...'",
+                                        label="12-Word Seed Phrase",
+                                        hint_text="e.g. apple banana cookie ...",
                                         text_size=12,
                                         height=48,
                                         content_padding=12,

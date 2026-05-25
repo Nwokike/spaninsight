@@ -120,3 +120,38 @@ class AdService:
             except Exception:
                 return False
         return False
+
+    async def show_rewarded_interstitial(self, on_close: Callable) -> bool:
+        """Show a rewarded interstitial ad, triggering on_close when closed."""
+        if not _HAS_ADS or not self._is_mobile():
+            # If offline/desktop, simulate successful completion of ad
+            if asyncio.iscoroutinefunction(on_close):
+                await on_close()
+            else:
+                on_close()
+            return True
+
+        try:
+            # Create a brand new instance of InterstitialAd to avoid Flet reuse errors
+            async def _show(e):
+                await e.control.show()
+
+            async def _close(e):
+                if asyncio.iscoroutinefunction(on_close):
+                    await on_close()
+                else:
+                    on_close()
+
+            # Instantiate service in-memory. DO NOT append to page.overlay.
+            fta.InterstitialAd(
+                unit_id=self.interstitial_id,
+                on_load=lambda e: self.page.run_task(_show, e),
+                on_close=lambda e: self.page.run_task(_close, e),
+                on_error=lambda e: logger.error(
+                    "Rewarded Interstitial error: %s", e.data
+                ),
+            )
+            return True
+        except Exception as err:
+            logger.error("Failed to trigger rewarded interstitial: %s", err)
+            return False

@@ -636,6 +636,25 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                 )(),
             )
 
+    async def poll_for_updates():
+        import asyncio
+        from services.project_service import ProjectService
+        from views.analysis.handlers.ai import execute_pending_blocks
+
+        project_service = ProjectService(page, credit_service._storage)
+
+        while page.route == "/analysis":
+            project_id = state.active_project_id
+            if project_id and not project_id.startswith("loc_"):
+                try:
+                    await project_service.pull_project(project_id)
+                    await execute_pending_blocks(view_state)
+                except Exception as ex:
+                    logger.warning("Auto-polling updates failed: %s", ex)
+            await asyncio.sleep(5)
+
+    page.run_task(poll_for_updates)
+
     _rebuild()
 
     stack = ft.Stack(

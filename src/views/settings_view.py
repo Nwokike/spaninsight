@@ -5,13 +5,11 @@ from __future__ import annotations
 import logging
 import flet as ft
 
-from core import theme, tokens
+from core import theme, tokens, utils
 from core.state import state
 from core.constants import (
     STORAGE_THEME,
     STORAGE_UUID,
-    STORAGE_CREDITS,
-    STORAGE_LAST_RESET,
 )
 from core.styles import section_header, setting_tile
 from components.brand_header import build_brand_header
@@ -31,6 +29,11 @@ def build_settings_view(
 
     async def close_dialog_helper(dialog):
         page.pop_dialog()
+
+    def _show_credits():
+        from components.credit_badge import show_credits_dialog
+
+        show_credits_dialog(page, credit_service)
 
     # on_copy_uuid helper removed
 
@@ -58,12 +61,10 @@ def build_settings_view(
             async def _close(ev):
                 await close_dialog_helper(dialog)
                 if confirmed and storage:
-                    # Wipe ALL storage keys
+                    # Wipe local workspaces, ID, and settings, but retain credits to prevent abuse
                     for key in [
                         STORAGE_UUID,
                         STORAGE_THEME,
-                        STORAGE_CREDITS,
-                        STORAGE_LAST_RESET,
                         "spaninsight_projects",
                         "spaninsight_active_project_id",
                     ]:
@@ -73,10 +74,11 @@ def build_settings_view(
                             pass
                     state.clear_data()
                     state.user_projects = {}
-                    state.credits_remaining = 50
                     state.user_uuid = ""
                     page.snack_bar = ft.SnackBar(
-                        content=ft.Text("All local database & project data cleared."),
+                        content=ft.Text(
+                            "All local workspaces & settings cleared. Credits retained."
+                        ),
                         duration=2000,
                     )
                     page.snack_bar.open = True
@@ -88,7 +90,8 @@ def build_settings_view(
             title=ft.Text("Clear All Local Data?"),
             content=ft.Text(
                 "This will permanently delete all your local project workspaces, "
-                "AI analysis recipes, saved reports, survey forms, daily credits, and settings.\n\n"
+                "AI analysis recipes, saved reports, survey forms, and settings. "
+                "Your current credit balance will be retained.\n\n"
                 "Are you sure you want to proceed?"
             ),
             actions=[
@@ -138,6 +141,7 @@ def build_settings_view(
                 icon=ft.Icons.BOLT_ROUNDED,
                 title="Daily Credits",
                 subtitle=f"{state.credits_remaining} remaining today",
+                on_click=lambda e: _show_credits(),
             ),
             # ── Appearance Section ──────────────────────────────
             section_header("Appearance"),
@@ -259,6 +263,42 @@ def build_settings_view(
                 subtitle="Read our 100% privacy commitment",
                 on_click=on_launch_privacy,
             ),
+            # Banner Ad (Mobile Only)
+            (
+                lambda: ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                "SPONSORED",
+                                size=8,
+                                weight=ft.FontWeight.W_700,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                style=ft.TextStyle(letter_spacing=1),
+                            ),
+                            utils.get_banner_ad(
+                                unit_id="ca-app-pub-5679949845754640/5628404223",
+                                width=320,
+                                height=50,
+                            ),
+                        ],
+                        horizontal_alignment="center",
+                        spacing=4,
+                    ),
+                    alignment=ft.Alignment.CENTER,
+                    padding=8,
+                    border_radius=tokens.RADIUS_LG,
+                    bgcolor=theme.GLASS_BG,
+                    border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
+                    margin=ft.Margin(
+                        tokens.SPACE_LG,
+                        tokens.SPACE_MD,
+                        tokens.SPACE_LG,
+                        tokens.SPACE_MD,
+                    ),
+                )
+            )()
+            if page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
+            else ft.Container(),
             ft.Container(height=tokens.SPACE_XL),
             ft.Container(
                 content=build_brand_header(show_tagline=True, spacing_below=False),

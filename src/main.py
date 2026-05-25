@@ -487,10 +487,13 @@ async def main(page: ft.Page):
                 )
 
                 # 3. Credit Balance Badge
+                from components.credit_badge import show_credits_dialog
+
                 badge = build_credit_badge(state.credits_remaining)
                 badge_container = ft.Container(
                     content=badge,
                     margin=ft.Margin(0, 0, 16, 0),
+                    on_click=lambda e: show_credits_dialog(page, credit_service),
                 )
 
                 top_view.appbar.actions = [switcher, theme_btn, badge_container]

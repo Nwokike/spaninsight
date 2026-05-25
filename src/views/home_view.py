@@ -330,7 +330,7 @@ def build_home_view(
             form_ct = len(proj.get("forms", []))
 
             is_local = pid.startswith("loc_")
-            display_id = "Local Only" if is_local else f"PIN: {pid}"
+            display_id = "Local Only" if is_local else f"ID: {pid[:8]}..."
 
             card = ft.Container(
                 content=ft.Column(

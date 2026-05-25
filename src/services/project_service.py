@@ -1,7 +1,7 @@
 """Project management service — collaboration, creation, join, and sync.
 
 Groups all analyses, forms, and reports under project scopes.
-Synchronizes project state with D1/R2 gateway.
+Synchronizes project state with D1/R2 gateway via Delta Sync.
 """
 
 from __future__ import annotations
@@ -82,6 +82,7 @@ class ProjectService:
             "description": description,
             "phrase": phrase,
             "phrase_hash": phrase_hash,
+            "dataset_fingerprint": "",  # Set during file import
             "current_df_name": "",
             "current_file_path": "",
             "analysis_blocks": [],
@@ -100,14 +101,12 @@ class ProjectService:
         proj = await self.create_local_project(title, description)
         temp_id = proj["id"]
 
-        # 2. Package sync JSON
-        project_json = self._serialize_project(proj)
-
         payload = {
             "phrase_hash": proj["phrase_hash"],
             "title": proj["title"],
             "description": proj["description"],
-            "project_json": project_json,
+            "dataset_fingerprint": proj.get("dataset_fingerprint", ""),
+            "settings_json": {},
         }
 
         try:
@@ -121,7 +120,7 @@ class ProjectService:
                 data = resp.json()
                 server_id = data["id"]
 
-                # Replace local temporary ID with server generated 6-digit PIN ID
+                # Replace local temporary ID with server generated Secure ID
                 state.user_projects.pop(temp_id, None)
                 proj["id"] = server_id
                 proj["synced_at"] = datetime.datetime.now().timestamp()
@@ -130,7 +129,7 @@ class ProjectService:
                 state.active_project_id = server_id
                 await self._storage.set(STORAGE_ACTIVE_PROJECT_ID, server_id)
                 await self._persist_local_projects()
-                logger.info("Project registered in gateway. PIN: %s", server_id)
+                logger.info("Project registered in gateway. ID: %s", server_id)
                 return proj
         except Exception as e:
             logger.warning(
@@ -143,20 +142,20 @@ class ProjectService:
         return proj
 
     async def sync_project(self, project_id: str) -> bool:
-        """Upload local project state modifications to gateway."""
+        """Delta Sync: Upload ONLY new, unsynced analysis blocks to the gateway."""
         proj = state.user_projects.get(project_id)
         if not proj:
             return False
 
-        # If project is still local, attempt to register it
+        # If project is still local, attempt to register it first
         if project_id.startswith("loc_"):
             logger.info("Attempting to register local project '%s'...", proj["title"])
-            project_json = self._serialize_project(proj)
             payload = {
                 "phrase_hash": proj["phrase_hash"],
                 "title": proj["title"],
                 "description": proj["description"],
-                "project_json": project_json,
+                "dataset_fingerprint": proj.get("dataset_fingerprint", ""),
+                "settings_json": {},
             }
             try:
                 resp = await request_with_retry(
@@ -177,71 +176,48 @@ class ProjectService:
                     if state.active_project_id == project_id:
                         state.active_project_id = server_id
                         await self._storage.set(STORAGE_ACTIVE_PROJECT_ID, server_id)
-                    await self._persist_local_projects()
+                    project_id = server_id
                     logger.info(
-                        "Local project successfully registered. PIN: %s", server_id
+                        "Local project successfully registered. ID: %s", server_id
                     )
-                    return True
+                else:
+                    return False
             except Exception as e:
                 logger.warning("Could not register local project in gateway: %s", e)
-            return False
+                return False
 
-        project_json = self._serialize_project(proj)
-        payload = {
-            "title": proj["title"],
-            "description": proj["description"],
-            "project_json": project_json,
-        }
+        # Push unsynced blocks
+        success_count = 0
+        for block in proj.get("analysis_blocks", []):
+            if block.get("type") == "initial" or block.get("failed"):
+                continue
 
-        try:
-            resp = await request_with_retry(
-                "POST",
-                f"{API_BASE_URL}/projects/{project_id}/sync",
-                json=payload,
-                timeout=10.0,
-            )
-            if resp.status_code == 200:
-                proj["synced_at"] = datetime.datetime.now().timestamp()
-                await self._persist_local_projects()
-                logger.info(
-                    "Project '%s' successfully synced to Cloudflare gateway.",
-                    proj["title"],
-                )
-                return True
-        except Exception as e:
-            logger.warning("Project sync failed: %s", e)
-        return False
+            if not block.get("is_synced", False):
+                payload = {
+                    "id": block.get("id"),
+                    "prompt": block.get("prompt", ""),
+                    "code": block.get("code", ""),
+                    "description": block.get("description", ""),
+                }
+                try:
+                    resp = await request_with_retry(
+                        "POST",
+                        f"{API_BASE_URL}/projects/{project_id}/blocks",
+                        json=payload,
+                        timeout=10.0,
+                    )
+                    if resp.status_code in (201, 200):
+                        block["is_synced"] = True
+                        success_count += 1
+                except Exception as e:
+                    logger.warning("Failed to sync block %s: %s", block.get("id"), e)
 
-    async def join_project_by_pin(self, pin: str) -> dict | None:
-        """Join a collaborative project using its 6-digit Share PIN."""
-        try:
-            client = get_client()
-            resp = await client.get(
-                f"{API_BASE_URL}/projects/{pin}",
-                timeout=10.0,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                proj_data = self._deserialize_project(
-                    data["id"], data["title"], data["description"], data["project_json"]
-                )
-
-                # Retrieve phrase hash
-                proj_data["phrase_hash"] = data.get("phrase_hash", "")
-                proj_data["synced_at"] = datetime.datetime.now().timestamp()
-
-                state.user_projects[data["id"]] = proj_data
-                state.active_project_id = data["id"]
-                await self._storage.set(STORAGE_ACTIVE_PROJECT_ID, data["id"])
-                await self._persist_local_projects()
-
-                logger.info("Successfully joined project '%s' by PIN", data["title"])
-                return proj_data
-            else:
-                logger.warning("Join project failed: HTTP %d", resp.status_code)
-        except Exception as e:
-            logger.error("Failed to join project: %s", e)
-        return None
+        if success_count > 0:
+            proj["synced_at"] = datetime.datetime.now().timestamp()
+            await self._persist_local_projects()
+            logger.info("Delta Sync: Pushed %d new blocks.", success_count)
+            return True
+        return True
 
     async def join_project_by_phrase(self, phrase: str) -> dict | None:
         """Join a collaborative project using its 12-word seed phrase."""
@@ -257,20 +233,30 @@ class ProjectService:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                proj_data = self._deserialize_project(
-                    data["id"], data["title"], data["description"], data["project_json"]
-                )
-                proj_data["phrase"] = phrase
-                proj_data["phrase_hash"] = phrase_hash
-                proj_data["synced_at"] = datetime.datetime.now().timestamp()
+                proj_data = {
+                    "id": data["id"],
+                    "title": data["title"],
+                    "description": data["description"],
+                    "phrase": phrase,
+                    "phrase_hash": phrase_hash,
+                    "dataset_fingerprint": data.get("dataset_fingerprint", ""),
+                    "current_df_name": "",
+                    "current_file_path": "",
+                    "analysis_blocks": [],
+                    "user_reports": [],
+                    "forms": [],
+                    "synced_at": 0,  # 0 forces a full pull of all blocks
+                }
 
                 state.user_projects[data["id"]] = proj_data
                 state.active_project_id = data["id"]
                 await self._storage.set(STORAGE_ACTIVE_PROJECT_ID, data["id"])
-                await self._persist_local_projects()
+
+                # Immediately pull all historical blocks for this newly joined project
+                await self.pull_project(data["id"])
 
                 logger.info("Successfully joined project '%s' by phrase", data["title"])
-                return proj_data
+                return state.user_projects[data["id"]]
             else:
                 logger.warning(
                     "Join project by phrase failed: HTTP %d", resp.status_code
@@ -280,13 +266,13 @@ class ProjectService:
         return None
 
     async def pull_project(self, project_id: str) -> bool | str:
-        """Fetch remote project details to synchronize.
+        """Delta Pull: Fetch remote project blocks missing from the local UI.
 
         Returns:
-            "local"   - project is offline-only (not registered in cloud)
-            "deleted" - project has been deleted from gateway D1
-            True      - successfully pulled and updated newer changes
-            False     - offline, connection timeout, or no new updates
+            "local"   - project is offline-only
+            "deleted" - project has been deleted from gateway
+            True      - successfully pulled new blocks
+            False     - offline or no new updates
         """
         if project_id.startswith("loc_"):
             return "local"
@@ -297,83 +283,87 @@ class ProjectService:
 
         try:
             client = get_client()
+
+            # Format last synced time to ISO 8601 for the query
+            last_sync = proj.get("synced_at", 0)
+            since_iso = (
+                datetime.datetime.fromtimestamp(last_sync).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
+                if last_sync > 0
+                else "1970-01-01T00:00:00Z"
+            )
+
             resp = await client.get(
-                f"{API_BASE_URL}/projects/{project_id}",
+                f"{API_BASE_URL}/projects/{project_id}/blocks",
+                params={"since": since_iso},
                 timeout=8.0,
             )
+
             if resp.status_code == 200:
                 data = resp.json()
+                new_blocks = data.get("blocks", [])
 
-                # Parse server update time
-                server_updated_str = data.get("updated_at", "")
-                server_ts = self._parse_gateway_datetime(server_updated_str)
-                local_synced_ts = proj.get("synced_at", 0)
+                if not new_blocks:
+                    return False
 
-                # Only overwrite local if server contains a newer revision
-                if server_ts > local_synced_ts:
-                    logger.info(
-                        "Server version is newer for project '%s'. Merging changes...",
-                        proj["title"],
-                    )
-                    server_proj = self._deserialize_project(
-                        data["id"],
-                        data["title"],
-                        data["description"],
-                        data["project_json"],
-                    )
+                existing_ids = {b.get("id") for b in proj.get("analysis_blocks", [])}
+                added = False
 
-                    # RETAIN device-specific local raw dataset paths!
-                    server_proj["current_file_path"] = proj.get("current_file_path", "")
-                    server_proj["current_df_name"] = proj.get("current_df_name", "")
-                    server_proj["synced_at"] = datetime.datetime.now().timestamp()
+                for nb in new_blocks:
+                    if nb["id"] not in existing_ids:
+                        # Reconstruct the block for the UI
+                        new_block = {
+                            "id": nb["id"],
+                            "type": "analysis",
+                            "prompt": nb["prompt"],
+                            "code": nb["code"],
+                            "description": nb["description"],
+                            "figure_png": None,  # Regenerated locally later
+                            "result": "",  # Regenerated locally later
+                            "stdout": "",  # Regenerated locally later
+                            "suggestions": [],
+                            "pinned": False,
+                            "failed": False,
+                            "is_synced": True,  # Already on server
+                            "needs_execution": True,  # CRITICAL: Flags UI to run Python code
+                        }
+                        proj["analysis_blocks"].append(new_block)
+                        added = True
 
-                    state.user_projects[project_id] = server_proj
+                if added:
+                    proj["synced_at"] = datetime.datetime.now().timestamp()
                     await self._persist_local_projects()
+                    logger.info(
+                        "Delta Pull: Appended %d remote blocks.", len(new_blocks)
+                    )
                     return True
                 return False
 
             elif resp.status_code == 404:
-                logger.warning(
-                    "Project %s not found on server (deleted on D1).", project_id
-                )
+                logger.warning("Project %s not found on server (deleted).", project_id)
                 return "deleted"
         except Exception as e:
-            logger.warning("Failed to pull project %s: %s", project_id, e)
+            logger.warning("Failed to pull project blocks %s: %s", project_id, e)
         return False
 
-    def _parse_gateway_datetime(self, dt_str: str) -> float:
-        """Robust parse helper for SQLite YYYY-MM-DD HH:MM:SS or standard ISO dates."""
-        if not dt_str:
-            return 0.0
-        try:
-            # ISO Format (e.g. 2026-05-23T14:15:30.000Z)
-            cleaned = dt_str.replace("Z", "").split(".")[0]
-            if "T" in cleaned:
-                dt = datetime.datetime.fromisoformat(cleaned)
-            else:
-                # SQLite datetime('now') -> 2026-05-23 14:15:30
-                dt = datetime.datetime.strptime(cleaned, "%Y-%m-%d %H:%M:%S")
-            return dt.timestamp()
-        except Exception:
-            return 0.0
-
     async def rename_project(self, project_id: str, new_title: str) -> bool:
-        """Rename active project locally and push changes to server."""
+        """Rename active project locally.
+        (Note: In V2 Delta Sync, project metadata updates are decoupled to save bandwidth.
+        Title is strictly local until a re-register.)
+        """
         proj = state.user_projects.get(project_id)
         if not proj:
             return False
         proj["title"] = new_title
         await self._persist_local_projects()
-
-        # Sync changes to server
-        return await self.sync_project(project_id)
+        return True
 
     async def delete_project(self, project_id: str) -> bool:
-        """Remove a project locally and trigger gateway purge."""
+        """Remove a project locally and trigger gateway cascade delete."""
         state.user_projects.pop(project_id, None)
         await self._persist_local_projects()
 
-        # Trigger cascade delete in D1
         if not project_id.startswith("loc_"):
             try:
                 client = get_client()
@@ -398,15 +388,16 @@ class ProjectService:
     # ── Helpers ──────────────────────────────────────────────────────
 
     async def _persist_local_projects(self):
-        """Write current user_projects cache to storage settings."""
-        # Ensure we don't try to serialize bytes!
+        """Write current user_projects cache to local device storage."""
         safe_copy = {}
         for pid, p in state.user_projects.items():
-            safe_copy[pid] = self._serialize_project(p)
+            safe_copy[pid] = self._serialize_local_project(p)
         await self._storage.set(STORAGE_PROJECTS, json.dumps(safe_copy))
 
-    def _serialize_project(self, proj: dict) -> dict:
-        """Prepare project data dict for JSON serialization (encoding bytes)."""
+    def _serialize_local_project(self, proj: dict) -> dict:
+        """Prepare project data dict for local JSON serialization (encoding Base64).
+        Note: This is strictly for local device saving to prevent image loss on restart.
+        """
         import pandas as pd
 
         copied = json.loads(
@@ -418,13 +409,13 @@ class ProjectService:
             )
         )
 
-        # Custom serialize analysis_blocks: convert raw bytes figure_png to base64
         for b in copied.get("analysis_blocks", []):
             orig_block = next(
                 (
                     ob
                     for ob in proj.get("analysis_blocks", [])
-                    if ob.get("prompt") == b.get("prompt")
+                    if ob.get("id") == b.get("id")
+                    or ob.get("prompt") == b.get("prompt")
                 ),
                 None,
             )
@@ -436,49 +427,6 @@ class ProjectService:
             b.pop("figure", None)
 
         return copied
-
-    def _deserialize_project(
-        self, pid: str, title: str, description: str, project_json: dict | str
-    ) -> dict:
-        """Construct full local project dict from JSON details (decoding base64)."""
-        if isinstance(project_json, str):
-            meta = json.loads(project_json)
-        else:
-            meta = project_json
-
-        # Custom deserialize analysis_blocks: decode base64 back to raw bytes
-        for b in meta.get("analysis_blocks", []):
-            b["figure"] = None
-            if "id" not in b or not b["id"]:
-                b["id"] = "blk_" + str(uuid.uuid4())[:8]
-            if b.get("figure_png_b64"):
-                b["figure_png"] = base64.b64decode(b["figure_png_b64"])
-            else:
-                b["figure_png"] = None
-
-            # Reconstruct describe_data DataFrame if serialized as dict
-            desc_val = b.get("describe_data")
-            if isinstance(desc_val, dict):
-                import pandas as pd
-
-                try:
-                    b["describe_data"] = pd.DataFrame.from_dict(desc_val)
-                except Exception:
-                    pass
-
-        return {
-            "id": pid,
-            "title": title,
-            "description": description,
-            "phrase": meta.get("phrase", ""),
-            "phrase_hash": meta.get("phrase_hash", ""),
-            "current_df_name": meta.get("current_df_name", ""),
-            "current_file_path": meta.get("current_file_path", ""),
-            "analysis_blocks": meta.get("analysis_blocks", []),
-            "user_reports": meta.get("user_reports", []),
-            "forms": meta.get("forms", []),
-            "synced_at": meta.get("synced_at", 0),
-        }
 
     def uuid_to_phrase(self, user_uuid: str) -> str:
         """Convert a 128-bit UUID integer to a 12-word recovery mnemonic."""

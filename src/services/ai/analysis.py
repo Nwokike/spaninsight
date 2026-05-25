@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import httpx
 
 from core.constants import TASK_SUGGEST, TASK_INTERPRET, TASK_CODE
 from .client import call_gateway, extract_content, extract_block_by_pattern
@@ -189,6 +190,9 @@ async def generate_code(
         content = extract_content(data)
         code = extract_block_by_pattern(content, is_json=False)
         return code
+    except httpx.HTTPError as e:
+        logger.error("Network error during code generation: %s", e)
+        raise
     except Exception as e:
         logger.error("Code generation failed: %s", e)
         return ""
@@ -244,6 +248,9 @@ async def generate_corrected_code(
         content = extract_content(data)
         code = extract_block_by_pattern(content, is_json=False)
         return code
+    except httpx.HTTPError as e:
+        logger.error("Network error during corrected code generation: %s", e)
+        raise
     except Exception as e:
         logger.error("Corrected code generation failed: %s", e)
         return ""

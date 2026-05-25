@@ -13,6 +13,91 @@ from .base import show_error, build_analysis_context
 logger = logging.getLogger(__name__)
 
 
+async def execute_pending_blocks(view_state):
+    """
+    Delta Sync Engine: Scans for blocks downloaded from collaborators that
+    need to be executed locally to generate charts without transferring heavy images.
+    """
+    if state.current_df is None:
+        return
+
+    # Check if any blocks need execution before taking the lock
+    needs_run = any(b.get("needs_execution") for b in state.analysis_blocks)
+    if not needs_run:
+        return
+
+    if view_state.analysis_lock.locked():
+        return
+
+    async with view_state.analysis_lock:
+        state.is_analyzing = True
+        view_state.rebuild()
+
+        executed_count = 0
+
+        for block in state.analysis_blocks:
+            if not block.get("needs_execution"):
+                continue
+
+            code = block.get("code", "")
+            if not code:
+                block["needs_execution"] = False
+                continue
+
+            try:
+                res = await sandbox.execute_code_async(code, state.current_df)
+                if res["success"]:
+                    raw_figure = res.get("figure")
+                    figure_png = None
+                    if raw_figure:
+                        try:
+                            figure_png = await asyncio.to_thread(
+                                figure_to_png_bytes, raw_figure
+                            )
+                        except Exception:
+                            pass
+                        res["figure"] = None  # Free C++ memory reference
+
+                    block["figure_png"] = figure_png
+                    block["stdout"] = res.get("stdout", "")
+                    block["result"] = res.get("result", "")
+                    block["failed"] = False
+
+                    if res.get("modified"):
+                        state.dataset_modified = True
+                        if res.get("new_df") is not None:
+                            state.current_df = res["new_df"]
+                            state.current_df_columns = list(state.current_df.columns)
+                            state.current_df_rows = len(state.current_df)
+                            from services import file_service
+
+                            state.current_df_summary = file_service.get_data_summary(
+                                state.current_df
+                            )
+                else:
+                    block["failed"] = True
+                    block["description"] = (
+                        f"Collaborator code failed locally: {res.get('error', 'Unknown error')}"
+                    )
+            except Exception as e:
+                logger.error(
+                    "Failed to execute pending block %s: %s", block.get("id"), e
+                )
+                block["failed"] = True
+            finally:
+                block["needs_execution"] = False
+                executed_count += 1
+                view_state.rebuild()
+
+        state.is_analyzing = False
+        view_state.rebuild()
+        if executed_count > 0:
+            logger.info(
+                "Delta Sync: Successfully rendered %d collaborator blocks locally.",
+                executed_count,
+            )
+
+
 async def on_suggestion_selected(
     view_state, prompt: str, is_autopilot: bool = False, is_custom: bool = False
 ):
@@ -34,7 +119,7 @@ async def on_suggestion_selected(
                 code = await ai_service.generate_code(
                     prompt, state.current_df_summary, analysis_context=ctx
                 )
-            except (httpx.ConnectError, httpx.TimeoutException) as net_err:
+            except httpx.HTTPError as net_err:
                 logger.warning("Offline network error: %s", net_err)
                 show_error(
                     view_state,
@@ -116,9 +201,19 @@ async def on_suggestion_selected(
                     "suggestions": [],
                     "pinned": False,
                     "failed": True,
+                    "is_synced": False,
                 }
                 state.analysis_blocks.append(block)
                 view_state.rebuild()
+
+                # Push block in background if online
+                from services.project_service import ProjectService
+
+                asyncio.create_task(
+                    ProjectService(
+                        view_state.page, view_state.credit_service._storage
+                    ).sync_project(state.active_project_id)
+                )
                 return
 
             if not is_autopilot and not is_custom and tx_id:
@@ -149,9 +244,9 @@ async def on_suggestion_selected(
                 "suggestions": [],
                 "pinned": is_autopilot,
                 "failed": False,
+                "is_synced": False,
             }
 
-            # Append block but keep is_analyzing = True
             state.analysis_blocks.append(block)
             wrapped_block = state.analysis_blocks[-1]
             view_state.rebuild()
@@ -170,10 +265,9 @@ async def on_suggestion_selected(
                         "result": str(b["result"]),
                     }
 
-                    # MODIFIED: Build Context FIRST so both tasks can run concurrently
                     ctx = build_analysis_context()
 
-                    # MODIFIED: Prepare tasks for concurrent execution
+                    # Run AI calls concurrently for extreme speed
                     desc_task = ai_service.describe_result(block0_desc, res_data)
                     sugg_task = ai_service.suggest(
                         state.current_df_summary,
@@ -181,12 +275,10 @@ async def on_suggestion_selected(
                         analysis_context=ctx,
                     )
 
-                    # MODIFIED: Fire both network requests to the Cloudflare gateway simultaneously
                     description, suggestions = await asyncio.gather(
                         desc_task, sugg_task
                     )
 
-                    # Bind all results to the block state at once
                     b["description"] = description
                     b["suggestions"] = suggestions
                     state.suggestions = suggestions
@@ -201,15 +293,23 @@ async def on_suggestion_selected(
                             }
                         )
 
-                    # MODIFIED: Only rebuild the UI once after all data is ready
                     view_state.rebuild()
+
+                    # Push block automatically to collaborators in background
+                    from services.project_service import ProjectService
+
+                    asyncio.create_task(
+                        ProjectService(
+                            view_state.page, view_state.credit_service._storage
+                        ).sync_project(state.active_project_id)
+                    )
+
                 except Exception as e:
                     logger.error("Block AI load failed: %s", e)
 
-            # Ensure all AI is finished while lock is held
             await load_block_ai(wrapped_block)
 
-        except (httpx.ConnectError, httpx.TimeoutException) as net_err:
+        except httpx.HTTPError as net_err:
             logger.warning("Connection failure: %s", net_err)
             show_error(
                 view_state,

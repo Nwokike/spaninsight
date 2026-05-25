@@ -102,6 +102,14 @@ class CreditService:
         logger.info("Spent %d credits. Remaining: %d", amount, new_balance)
         return True, new_balance
 
+    async def add_credits(self, amount: int) -> int:
+        """Add credits to the user's balance. Returns the new balance."""
+        current = await self._get_credits()
+        new_balance = current + amount
+        await self._storage.set(STORAGE_CREDITS, str(new_balance))
+        logger.info("Added %d credits. New Balance: %d", amount, new_balance)
+        return new_balance
+
     async def get_balance(self) -> int:
         """Return current credit balance."""
         return await self._get_credits()
