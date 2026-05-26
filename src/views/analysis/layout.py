@@ -134,6 +134,8 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
                             ),
                             on_click=lambda e: (
                                 setattr(state, "autopilot_cancelled", True)
+                                or setattr(state, "is_analyzing", False)
+                                or setattr(state, "autopilot_running", False)
                                 or view_state.rebuild()
                             ),
                         )

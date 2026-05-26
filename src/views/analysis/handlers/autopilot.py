@@ -187,6 +187,9 @@ async def run_autopilot(view_state):
                     pass
                 result["figure"] = None
 
+            if getattr(state, "autopilot_cancelled", False):
+                break
+
             import uuid
 
             block = {
