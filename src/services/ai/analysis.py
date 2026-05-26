@@ -36,6 +36,7 @@ _EXEC_RULES = (
     "- Plotting: always create figures with plt.figure() or plt.subplots(). NEVER call plt.savefig().\n"
     "- Use tick_labels= instead of labels= in plt.boxplot() (renamed in Matplotlib 3.9).\n"
     "- Assign key results to a variable named `result`.\n"
+    "- NEVER print human-readable text summaries, comments, or analytical insights. Only output raw tables, statistics, or plots.\n"
     "- 60-second time limit. Keep code efficient, max 4-5 figures per block.\n"
     "- Return only executable Python code, no remarks.\n"
 )
