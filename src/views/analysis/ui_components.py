@@ -16,11 +16,10 @@ def build_chart_container(block: dict) -> ft.Container | None:
     if not figure_png:
         return None
     try:
-        # Convert raw bytes to base64 for the native Flet Image control
         b64_img = base64.b64encode(figure_png).decode("utf-8")
         return ft.Container(
             content=ft.Image(
-                src=b64_img,  # <-- FIXED: Flet now handles base64 directly in the standard 'src' attribute
+                src=b64_img,
                 fit="contain",
             ),
             height=280,
@@ -42,7 +41,6 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
             or str(stdout_val).strip() == "None"
         ):
             return None
-        # Monospace terminal block for stdout
         return ft.Container(
             content=ft.Text(
                 str(stdout_val).strip(),
@@ -56,19 +54,16 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
             border=ft.Border.all(1, "#1A1A2E"),
         )
 
-    # 1. Handle Pandas DataFrame
     if isinstance(result_val, pd.DataFrame):
         if not result_val.empty:
             return build_data_preview(result_val)
         return ft.Text("Empty DataFrame", size=12, italic=True)
 
-    # 2. Handle Pandas Series
     if isinstance(result_val, pd.Series):
         if not result_val.empty:
             return build_data_preview(result_val.to_frame())
         return ft.Text("Empty Series", size=12, italic=True)
 
-    # 3. Handle Dictionary
     if isinstance(result_val, dict):
         primitives = {}
         structures = {}
@@ -91,14 +86,12 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
 
         controls = []
 
-        # Render primitives as a beautiful metric grid
         if primitives:
             metric_cards = []
             for k, v in primitives.items():
                 label_text = str(k).replace("_", " ").title()
 
                 if isinstance(v, (list, np.ndarray)):
-                    # Render array of primitives as a horizontal Row of badges
                     badge_items = []
                     for x in v:
                         val_str = (
@@ -163,7 +156,6 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                         spacing=2,
                     )
 
-                # Build a premium mini stat card
                 metric_cards.append(
                     ft.Container(
                         content=card_content,
@@ -175,7 +167,6 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                     )
                 )
 
-            # Wrap metric cards in a responsive row
             for c in metric_cards:
                 c.col = {"xs": 6, "sm": 4, "md": 3}
             controls.append(
@@ -186,7 +177,6 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                 )
             )
 
-        # Render structures recursively
         if structures:
             for k, v in structures.items():
                 label_text = str(k).replace("_", " ").title()
@@ -221,9 +211,7 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
         if controls:
             return ft.Column(controls, spacing=12)
 
-    # 4. Handle List or Numpy Array
     if isinstance(result_val, (list, np.ndarray)):
-        # Check if list of dicts (render as dataframe)
         if (
             isinstance(result_val, list)
             and len(result_val) > 0
@@ -239,7 +227,6 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
         if len(items) == 0:
             return ft.Text("Empty list", size=12, italic=True)
 
-        # If small list, render as a nice row of chips
         if len(items) <= 12 and all(
             isinstance(x, (int, float, np.number)) for x in items
         ):
@@ -270,7 +257,6 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                 border_radius=8,
             )
 
-    # 5. Primitive values
     val_str = str(result_val).strip()
     if not val_str or val_str == "None":
         return None
@@ -293,8 +279,7 @@ def build_text_output_container(result_val, stdout_val) -> ft.Container | None:
             padding=ft.Padding(0, 8, 0, 8),
         )
     except Exception as e:
-        logger.error("Failed to render native result beautifully: %s", e)
-        # Safe fallback
+        logger.error("Failed to render result: %s", e)
         output_text = str(result_val) if result_val is not None else ""
         if not output_text or output_text.strip() == "None":
             output_text = str(stdout_val) if stdout_val is not None else ""
@@ -443,7 +428,6 @@ def build_block_card(
         describe_data = block.get("describe_data")
         import pandas as pd
 
-        # Self-healing: if describe_data is a string/None and the DataFrame is active, regenerate it!
         if (
             isinstance(describe_data, str) or describe_data is None
         ) and state.current_df is not None:
@@ -455,7 +439,6 @@ def build_block_card(
             except Exception:
                 pass
 
-        # If it was serialized as a JSON string, try to parse it to a dictionary
         if isinstance(describe_data, str):
             try:
                 import json
@@ -466,7 +449,6 @@ def build_block_card(
             except Exception:
                 pass
 
-        # Convert dictionary back to pandas DataFrame
         if isinstance(describe_data, dict):
             try:
                 describe_data = pd.DataFrame.from_dict(describe_data)

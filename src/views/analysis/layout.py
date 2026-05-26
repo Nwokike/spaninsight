@@ -833,7 +833,7 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
         expand=True,
     )
 
-    return ft.View(
+    view = ft.View(
         route="/analysis",
         appbar=ft.AppBar(
             title=ft.Text("Analysis Engine", weight="bold"),
@@ -842,3 +842,5 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
         controls=[stack],
         padding=0,
     )
+    view._analysis_state = view_state
+    return view

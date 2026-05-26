@@ -91,3 +91,62 @@ result = np.sum(df['A'])
     res = await execute_code_async(code, df)
     assert res["success"]
     assert res["result"] == 30
+
+
+def test_execute_code_restricted_builtins_block_open():
+    """open() should be blocked by restricted builtins."""
+    df = pd.DataFrame({"A": [1]})
+    code = """
+result = open("test.txt", "w")
+"""
+    res = execute_code(code, df)
+    assert not res["success"]
+    assert "open" in res["error"].lower() or "name" in res["error"].lower()
+
+
+def test_execute_code_restricted_builtins_block_eval():
+    """eval() should be blocked by restricted builtins."""
+    df = pd.DataFrame({"A": [1]})
+    code = """
+result = eval("1 + 1")
+"""
+    res = execute_code(code, df)
+    assert not res["success"]
+
+
+def test_execute_code_whitelisted_builtins_work():
+    """Common builtins like sorted, enumerate, zip should work."""
+    df = pd.DataFrame({"A": [3, 1, 2]})
+    code = """
+s = sorted(df['A'].tolist())
+e = list(enumerate(s))
+z = list(zip(s, [10, 20, 30]))
+result = {"sorted": s, "enum_len": len(e), "zip_len": len(z)}
+"""
+    res = execute_code(code, df)
+    assert res["success"]
+    assert res["result"]["sorted"] == [1, 2, 3]
+    assert res["result"]["enum_len"] == 3
+
+
+def test_safe_import_blocks_os():
+    """os import should be blocked at both AST and runtime levels."""
+    df = pd.DataFrame({"A": [1]})
+    code = """
+__import__('os').system('echo pwned')
+"""
+    res = execute_code(code, df)
+    assert not res["success"]
+
+
+def test_execute_code_print_captured():
+    """print() output should be captured in stdout."""
+    df = pd.DataFrame({"A": [1, 2, 3]})
+    code = """
+print("hello world")
+result = 42
+"""
+    res = execute_code(code, df)
+    assert res["success"]
+    assert res["result"] == 42
+    assert "hello world" in res["stdout"]

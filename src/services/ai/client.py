@@ -42,6 +42,18 @@ async def check_health() -> bool:
 
 async def call_gateway(task_type: str, messages: list[dict]) -> dict:
     """Make a non-streaming POST to the gateway with retry and expanded processing thresholds."""
+    import time
+
+    start_time = time.perf_counter()
+
+    prompt_chars = sum(len(m.get("content", "")) for m in messages)
+    logger.info(
+        "[AI Gateway] Request starting | Task: %s | Messages: %d | Prompt size: ~%d chars",
+        task_type,
+        len(messages),
+        prompt_chars,
+    )
+
     payload = {
         "task_type": task_type,
         "stream": False,
@@ -49,26 +61,122 @@ async def call_gateway(task_type: str, messages: list[dict]) -> dict:
     }
     timeout = TIMEOUTS.get(task_type, 20.0)
 
-    resp = await request_with_retry(
-        "POST",
-        API_CHAT_ENDPOINT,
-        json=payload,
-        timeout=timeout,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    try:
+        resp = await request_with_retry(
+            "POST",
+            API_CHAT_ENDPOINT,
+            json=payload,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        duration = time.perf_counter() - start_time
+        model_name = data.get("model", "unknown-gateway-model")
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+
+        logger.info(
+            "[AI Gateway] Request completed | Model: %s | Duration: %.2fs | "
+            "Tokens: In=%d, Out=%d | Status: %d",
+            model_name,
+            duration,
+            prompt_tokens,
+            completion_tokens,
+            resp.status_code,
+        )
+
+        if (
+            "groq" in model_name.lower()
+            or "llama" in model_name.lower()
+            or "mixtral" in model_name.lower()
+        ):
+            if prompt_chars > 15000 or prompt_tokens > 4000:
+                logger.warning(
+                    "[AI Gateway WARNING] Large context (%d chars / %d tokens) detected on model %s. "
+                    "Groq models have strict limits and should ideally be kept under ~5K context for optimal stability.",
+                    prompt_chars,
+                    prompt_tokens,
+                    model_name,
+                )
+        return data
+    except Exception as err:
+        duration = time.perf_counter() - start_time
+        logger.error(
+            "[AI Gateway ERROR] Request failed after %.2fs | Task: %s | Error: %s",
+            duration,
+            task_type,
+            err,
+        )
+        raise
 
 
 async def call_gateway_raw(payload: dict, timeout: float = 15.0) -> dict:
     """Make a raw POST to the gateway with active connection parameters."""
-    resp = await request_with_retry(
-        "POST",
-        API_CHAT_ENDPOINT,
-        json=payload,
-        timeout=timeout,
+    import time
+
+    start_time = time.perf_counter()
+
+    messages = payload.get("messages", [])
+    prompt_chars = sum(len(m.get("content", "")) for m in messages)
+    task_type = payload.get("task_type", "raw")
+    logger.info(
+        "[AI Gateway] Raw request starting | Task: %s | Messages: %d | Prompt size: ~%d chars",
+        task_type,
+        len(messages),
+        prompt_chars,
     )
-    resp.raise_for_status()
-    return resp.json()
+
+    try:
+        resp = await request_with_retry(
+            "POST",
+            API_CHAT_ENDPOINT,
+            json=payload,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        duration = time.perf_counter() - start_time
+        model_name = data.get("model", "unknown-gateway-model")
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+
+        logger.info(
+            "[AI Gateway] Raw request completed | Model: %s | Duration: %.2fs | "
+            "Tokens: In=%d, Out=%d | Status: %d",
+            model_name,
+            duration,
+            prompt_tokens,
+            completion_tokens,
+            resp.status_code,
+        )
+
+        if (
+            "groq" in model_name.lower()
+            or "llama" in model_name.lower()
+            or "mixtral" in model_name.lower()
+        ):
+            if prompt_chars > 15000 or prompt_tokens > 4000:
+                logger.warning(
+                    "[AI Gateway WARNING] Large context (%d chars / %d tokens) detected on model %s. "
+                    "Groq models have strict limits and should ideally be kept under ~5K context for optimal stability.",
+                    prompt_chars,
+                    prompt_tokens,
+                    model_name,
+                )
+        return data
+    except Exception as err:
+        duration = time.perf_counter() - start_time
+        logger.error(
+            "[AI Gateway ERROR] Raw request failed after %.2fs | Task: %s | Error: %s",
+            duration,
+            task_type,
+            err,
+        )
+        raise
 
 
 def extract_content(data: dict) -> str:

@@ -1,8 +1,4 @@
-"""Database service — SQLAlchemy engine and query execution.
-
-Allows users to connect to SQL databases (SQLite, PostgreSQL, MySQL, SQL Server),
-test connections, list tables, and load tables into Pandas DataFrames.
-"""
+"""Database service — SQLAlchemy engine and query execution."""
 
 from __future__ import annotations
 
@@ -24,7 +20,6 @@ class DatabaseService:
     def test_connection(connection_url: str) -> tuple[bool, str]:
         """Test if a database connection URL is valid and reachable."""
         try:
-            # We enforce a small connect timeout (e.g. 5s) so the UI doesn't hang indefinitely
             if "sqlite" in connection_url:
                 engine = create_engine(connection_url)
             else:
@@ -37,7 +32,6 @@ class DatabaseService:
             return True, "Connection successful!"
         except Exception as e:
             logger.error("Database connection test failed: %s", e)
-            # Return a cleaned, human-readable error snippet
             err_msg = str(e).split("\n")[0]
             if "timeout" in err_msg.lower():
                 return (
@@ -54,9 +48,7 @@ class DatabaseService:
         try:
             engine = create_engine(connection_url)
             inspector = inspect(engine)
-            tables = inspector.get_table_names()
-            # Sort tables alphabetically
-            return sorted(tables)
+            return sorted(inspector.get_table_names())
         except Exception as e:
             logger.error("Failed to list tables: %s", e)
             return []
@@ -65,16 +57,13 @@ class DatabaseService:
     def load_table(
         connection_url: str, table_name: str, max_rows: int = 100000
     ) -> pd.DataFrame:
-        """Load a database table into a Pandas DataFrame, capping rows to prevent OOM on mobile."""
+        """Load a database table into a DataFrame, capping rows to prevent OOM."""
         try:
             engine = create_engine(connection_url)
-            # Use chunks or read SQL query with LIMIT for non-sqlite databases to be extra safe
-            if "sqlite" in connection_url:
-                query = f'SELECT * FROM "{table_name}" LIMIT {max_rows}'
-            else:
-                query = f'SELECT * FROM "{table_name}" LIMIT {max_rows}'
-
-            df = pd.read_sql_query(query, engine)
+            query = text(
+                'SELECT * FROM "' + table_name.replace('"', '""') + '" LIMIT :limit'
+            )
+            df = pd.read_sql_query(query, engine, params={"limit": max_rows})
             logger.info("Loaded table %s: %d rows", table_name, len(df))
             return df
         except Exception as e:

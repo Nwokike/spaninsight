@@ -296,14 +296,17 @@ async def on_suggestion_selected(
 
                     view_state.rebuild()
 
-                    # Push block automatically to collaborators in background
                     from services.project_service import ProjectService
 
-                    asyncio.create_task(
-                        ProjectService(
-                            view_state.page, view_state.credit_service._storage
-                        ).sync_project(state.active_project_id)
-                    )
+                    async def _safe_sync():
+                        try:
+                            await ProjectService(
+                                view_state.page, view_state.credit_service._storage
+                            ).sync_project(state.active_project_id)
+                        except Exception as sync_err:
+                            logger.warning("Background sync failed: %s", sync_err)
+
+                    asyncio.create_task(_safe_sync())
 
                 except Exception as e:
                     logger.error("Block AI load failed: %s", e)

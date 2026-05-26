@@ -33,19 +33,19 @@ def build_data_preview(df) -> ft.Column:
         for col in preview_df.columns
     ]
 
-    # Build data rows
     rows = []
-    for _, row in preview_df.iterrows():
+    cols = list(preview_df.columns)
+    for i in range(len(preview_df)):
         cells = [
             ft.DataCell(
                 ft.Text(
-                    _format_cell(row[col]),
+                    _format_cell(preview_df.iloc[i, j]),
                     size=tokens.FONT_XS,
                     max_lines=1,
                     overflow=ft.TextOverflow.ELLIPSIS,
                 )
             )
-            for col in preview_df.columns
+            for j in range(len(cols))
         ]
         rows.append(ft.DataRow(cells=cells))
 
@@ -62,7 +62,6 @@ def build_data_preview(df) -> ft.Column:
         data_row_max_height=36,
     )
 
-    # Footer showing row count
     showing = min(DATA_PREVIEW_ROWS, total_rows)
     footer_text = (
         f"Showing {showing} of {total_rows:,} rows"
@@ -97,9 +96,6 @@ def build_data_preview(df) -> ft.Column:
 
 def _format_cell(value) -> str:
     """Format a cell value for display."""
-    # P2: imports moved to module level — avoid 500+ lookups per preview
-
-    # C4: Guard against 0-d numpy arrays (e.g. np.float64(3.14))
     if isinstance(value, np.ndarray):
         if np.ndim(value) == 0:
             return _format_cell(value.item())

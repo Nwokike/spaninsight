@@ -83,7 +83,6 @@ async def on_save(page: ft.Page, ui_state, report_service):
     from core import theme
 
     ui_state.is_saving["value"] = True
-    # Targeted update: Disable the save button without rebuilding the DOM
     if ui_state.save_btn_ref.current:
         ui_state.save_btn_ref.current.disabled = True
         ui_state.save_btn_ref.current.update()
@@ -116,7 +115,6 @@ async def on_save(page: ft.Page, ui_state, report_service):
         page.update()
     finally:
         ui_state.is_saving["value"] = False
-        # Re-enable the button
         if ui_state.save_btn_ref.current:
             ui_state.save_btn_ref.current.disabled = False
             ui_state.save_btn_ref.current.update()
@@ -144,7 +142,10 @@ async def on_share(page: ft.Page, ui_state, report_service, ad_service):
                 ui_state.active_report["data"], state.user_uuid
             )
             if url:
-                await ft.Clipboard().set(url)
+                try:
+                    await ft.Clipboard().set(url)
+                except Exception:
+                    pass
                 page.snack_bar = ft.SnackBar(
                     content=ft.Row(
                         [
@@ -205,7 +206,6 @@ async def on_import(page: ft.Page, ui_state):
         page.update()
         return
 
-    # Make inner function async to offload Matplotlib rendering
     async def on_select_block(idx):
         block = state.analysis_blocks[idx]
         png_b64 = ""
@@ -213,7 +213,6 @@ async def on_import(page: ft.Page, ui_state):
             png_b64 = base64.b64encode(block["figure_png"]).decode("utf-8")
         elif block.get("figure"):
             try:
-                # IMPORTANT FIX: Offload synchronous Matplotlib call to background thread!
                 png_bytes = await asyncio.to_thread(
                     figure_to_png_bytes, block["figure"], dpi=150
                 )
@@ -409,7 +408,6 @@ async def on_view_live(page: ft.Page, ui_state, report_service, ad_service):
         ui_state.view_live_btn_ref.current.update()
 
     try:
-        # Save current edits + generate fresh share link
         if report_service:
             await report_service.update_report(
                 report["id"],

@@ -9,6 +9,34 @@ from core.state import state
 
 logger = logging.getLogger(__name__)
 
+_seed_visible = False
+
+
+def _toggle_seed_visibility(e, page):
+    """Toggle seed phrase between masked and visible."""
+    global _seed_visible
+    _seed_visible = not _seed_visible
+    phrase = state.active_project.get("phrase", "")
+    ctrl = e.control
+    try:
+        parent_row = ctrl.parent
+        for c in parent_row.controls:
+            if isinstance(c, ft.Column):
+                for t in c.controls:
+                    if getattr(t, "key", None) == "seed_display":
+                        t.value = (
+                            phrase if _seed_visible else "•••• •••• •••• •••• •••• ••••"
+                        )
+                        break
+        ctrl.icon = (
+            ft.Icons.VISIBILITY_ROUNDED
+            if _seed_visible
+            else ft.Icons.VISIBILITY_OFF_ROUNDED
+        )
+        page.update()
+    except Exception:
+        pass
+
 
 def build_project_switcher(page: ft.Page, project_service) -> ft.Container:
     """Build a premium top-right dropdown/button showing active project name."""
@@ -420,15 +448,23 @@ def _show_switcher_dialog(page: ft.Page, project_service):
                                         color=ft.Colors.ON_SURFACE_VARIANT,
                                     ),
                                     ft.Text(
-                                        state.active_project.get("phrase", ""),
+                                        "•••• •••• •••• •••• •••• ••••",
                                         size=11,
                                         italic=True,
                                         weight="w600",
                                         color=theme.PRIMARY,
+                                        key="seed_display",
                                     ),
                                 ],
                                 spacing=4,
                                 expand=True,
+                            ),
+                            ft.IconButton(
+                                ft.Icons.VISIBILITY_OFF_ROUNDED,
+                                tooltip="Show/Hide Phrase",
+                                icon_size=16,
+                                key="seed_toggle",
+                                on_click=lambda e: _toggle_seed_visibility(e, page),
                             ),
                             ft.IconButton(
                                 ft.Icons.COPY_ROUNDED,

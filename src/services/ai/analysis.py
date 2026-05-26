@@ -13,9 +13,36 @@ from .vision import analyze_image
 
 logger = logging.getLogger(__name__)
 
+_SANDBOX_LIB_CONSTRAINTS = (
+    "AVAILABLE LIBRARIES (ONLY these):\n"
+    "  pandas (pd), numpy (np), matplotlib.pyplot (plt), math, datetime,\n"
+    "  statistics, shapely, jq, pendulum, re, collections, itertools,\n"
+    "  functools, operator, string, copy, random, json, textwrap, typing, warnings.\n"
+    "FORBIDDEN (will crash): seaborn, scipy, sklearn, statsmodels, plotly, pingouin, lifelines.\n"
+    "BANNED PATTERNS:\n"
+    "  - NEVER use .plot.kde() or kind='kde' (requires scipy internally).\n"
+    "  - NEVER use np.percentile() inside .agg() lambda — use df.quantile() instead.\n"
+    "LIBRARY TIPS:\n"
+    "  - Use pendulum for advanced datetime parsing (pendulum.parse(), .diff(), timezones).\n"
+    "  - Use jq for extracting/flattening nested JSON columns: jq.first('.key', json_str).\n"
+    "  - Use shapely for spatial/GIS analysis: Point, Polygon, unary_union, .area, .distance().\n"
+)
+
+_EXEC_RULES = (
+    "EXECUTION RULES:\n"
+    "- DataFrame is pre-loaded as `df`. Use Pandas 2.0+ CoW syntax. NumPy 2.0+.\n"
+    "- Always .dropna() or .fillna() before algebraic/statistical operations.\n"
+    "- select_dtypes: use include=['object', 'string'], never 'object' alone.\n"
+    "- Plotting: always create figures with plt.figure() or plt.subplots(). NEVER call plt.savefig().\n"
+    "- Use tick_labels= instead of labels= in plt.boxplot() (renamed in Matplotlib 3.9).\n"
+    "- Assign key results to a variable named `result`.\n"
+    "- 60-second time limit. Keep code efficient, max 4-5 figures per block.\n"
+    "- Return only executable Python code, no remarks.\n"
+)
+
 
 async def describe_dataset(schema_json: dict) -> str:
-    """Block 0 describe: AI reads the schema and describes the dataset."""
+    """AI reads the schema and produces a concise dataset overview."""
     system_prompt = (
         "You are an expert data science director. Given a comprehensive dataset schema "
         "with structural details and distribution statistics, provide a professional, "
@@ -31,7 +58,7 @@ async def describe_dataset(schema_json: dict) -> str:
         {"role": "user", "content": json.dumps(ai_schema, default=str)},
     ]
     try:
-        data = await call_gateway(TASK_SUGGEST, messages)
+        data = await call_gateway(TASK_INTERPRET, messages)
         desc = extract_content(data)
         if desc:
             logger.info("Block 0 describe: %s", desc[:80])
@@ -43,7 +70,7 @@ async def describe_dataset(schema_json: dict) -> str:
 
 
 async def describe_result(initial_description: str, latest_result: dict) -> str:
-    """Block N describe: AI describes what a specific analysis result shows."""
+    """AI describes what a specific analysis result shows."""
     system_prompt = (
         "You are an expert data analyst. Describe what this specific data analysis "
         "execution result establishes. Interpret anomalies, specific distributions, exact "
@@ -77,55 +104,29 @@ async def describe_result(initial_description: str, latest_result: dict) -> str:
 async def suggest(
     schema_json: dict,
     initial_description: str = "",
-    latest_result: dict | None = None,
     analysis_context: str = "",
 ) -> list[dict]:
-    """Context-aware suggestions without cost-cutting limits."""
-    # Ensure exactly 5 suggestions are generated to match user consistency requirements.
+    """Fast context-aware suggestions — lean prompt matching describe_result speed."""
     system_prompt = (
-        "You are an expert's data intelligence consultant. Suggest a rich, multi-angle "
-        "suite of exactly 5 distinct, deeply insightful data analysis tracks the user should perform next. "
-        "Analyze trends, correlations, spatial maps, pivot metrics, and exploratory profiles. Do NOT repeat previous steps.\n\n"
-        "CRITICAL EXECUTION CONSTRAINTS:\n"
-        "- The execution environment supports: pandas, numpy, matplotlib.pyplot, math, datetime, statistics (Python standard library), shapely, jq, pendulum, re, collections, itertools, functools, operator, string, copy, random, json, textwrap, typing, and warnings.\n"
-        "- The environment DOES NOT HAVE: seaborn, scipy, scikit-learn (sklearn), statsmodels, plotly, or pingouin.\n"
-        "- Any visual suggestion must be plotting-compatible with MATPLOTLIB ONLY (do NOT suggest seaborn, plotly, etc.).\n"
-        "- You are fully free to suggest and combine any calculations, spatial GIS operations, time-series shifts, database queries, or mathematical/statistical operations as long as they rely solely on the allowed whitelisted libraries.\n"
-        "- CRITICAL: do NOT suggest anything involving Kernel Density Estimation (KDE) — pandas `plot.kde()` or `df.plot(kind='kde')` will crash at runtime because it requires scipy internally, which is NOT installed.\n"
-        "- Keep analysis suggestions computationally efficient — execution has a 60-second limit.\n\n"
-        "Return exclusively a valid, raw JSON array of objects with zero conversational wrappers. "
-        "Each object must contain EXACTLY these keys:\n"
-        '- "label": concise descriptive title (max 5 words)\n'
-        '- "icon": "emoji" (always double-quoted emoji character)\n'
-        '- "prompt": full structural instruction used to generate the required execution block\n'
-        "Do not include code fences, preamble, or conversational notes outside the JSON array."
+        "You are an expert data intelligence consultant. Suggest exactly 5 distinct, "
+        "deeply insightful analysis tracks. Do NOT repeat previous steps.\n\n"
+        + _SANDBOX_LIB_CONSTRAINTS
+        + "\nReturn ONLY a raw JSON array. Each object has EXACTLY these keys:\n"
+        '- "label": concise title (max 5 words)\n'
+        '- "icon": "emoji" (double-quoted)\n'
+        '- "prompt": full analysis instruction for code generation\n'
     )
 
     ai_schema = dict(schema_json)
-    ai_schema.pop("head", None)
-    ai_schema.pop("tail", None)
+    for key in ("head", "tail", "describe"):
+        ai_schema.pop(key, None)
     context_parts = [json.dumps(ai_schema, default=str)]
 
     if initial_description:
-        context_parts.append(f"\nDataset Overview: {initial_description}")
+        context_parts.append(f"\nDataset: {initial_description}")
 
     if analysis_context:
-        # MODIFIED: Truncate history to the last 2000 characters.
-        # This prevents the prompt from bloating as the analysis session gets longer.
-        truncated_history = (
-            analysis_context[-5000:]
-            if len(analysis_context) > 5000
-            else analysis_context
-        )
-        context_parts.append(
-            f"\nAnalysis History (do NOT repeat):\n...{truncated_history}"
-        )
-    elif latest_result:
-        context_parts.append(
-            f"\nLast analysis step: {latest_result.get('prompt', '')}"
-            f"\nExecution Result: {latest_result.get('result', '')}"
-            f"\nInsight: {latest_result.get('description', '')}"
-        )
+        context_parts.append(f"\nDone (do NOT repeat):\n{analysis_context}")
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -156,50 +157,36 @@ async def suggest(
         return fallback_suggestions()
 
 
+def _compress_schema(schema_json: dict) -> dict:
+    """Optimize LLM context usage while maintaining high code quality.
+
+    Pares down the massive head (from 20 rows to 2 rows) and removes the tail completely.
+    This preserves the exact value formatting context needed for excellent code quality,
+    but saves thousands of tokens.
+    """
+    compressed = dict(schema_json)
+    if "head" in compressed and isinstance(compressed["head"], list):
+        compressed["head"] = compressed["head"][:2]
+    compressed.pop("tail", None)
+    return compressed
+
+
 async def generate_code(
     prompt: str, schema_json: dict, analysis_context: str = ""
 ) -> str:
-    """Send prompt to code route using full uncut dataset schema statistics."""
+    """Generate executable Python code for the user's analysis request."""
     context_section = ""
     if analysis_context:
-        context_section = f"\n\nPrevious Analysis Context (do NOT repeat these):\n{analysis_context}\n"
+        context_section = (
+            f"\n\nPrevious Analysis Context (do NOT repeat):\n{analysis_context}\n"
+        )
 
+    compressed = _compress_schema(schema_json)
     system_prompt = (
-        "You are an expert Python core data engineer. Generate optimal, safe Python "
-        "code blocks to analyze the loaded DataFrame `df` according to the user's explicit request.\n\n"
-        "CRITICAL — ONLY these standard/native libraries are available:\n"
-        "  1. pandas (import as pd)\n"
-        "  2. numpy  (import as np)\n"
-        "  3. matplotlib.pyplot (import as plt)\n"
-        "  4. math and datetime\n"
-        "  5. statistics (Python standard library)\n"
-        "  6. shapely (advanced geographic and vector computational geometry)\n"
-        "  7. jq (JSON slicing and cleaning)\n"
-        "  8. pendulum (advanced datetime parsing and manipulations)\n"
-        "  9. re (regular expressions)\n"
-        "  10. collections (Counter, defaultdict, etc.)\n"
-        "  11. itertools, functools, operator\n"
-        "  12. string, textwrap, typing, warnings\n"
-        "  13. copy, random, json\n\n"
-        "STRICTLY FORBIDDEN — do NOT import or use ANY of these (they will cause execution failure):\n"
-        "  seaborn, sns, scipy, sklearn, statsmodels, plotly, pingouin, lifelines, any other non-whitelisted library.\n"
-        "CRITICAL — Even if you don't explicitly import them, using certain pandas methods that internally depend on banned packages will crash. In particular:\n"
-        "  - NEVER use `.plot.kde()` or `kind='kde'` — these require scipy internally.\n"
-        "  - NEVER use `np.percentile()` inside a `.agg()` lambda — the resulting column name `<lambda_0>`/`<lambda_1>` varies by pandas version. Use `df.quantile(q=[0.25, 0.75])` instead.\n"
-        "Execution Framework Rules:\n"
-        "- The DataFrame is pre-loaded as global variable `df`.\n"
-        "- Use modern Pandas 2.0+ Copy-on-Write syntax.\n"
-        "- The environment uses NumPy 2.0+.\n"
-        "- IMPORTANT: Always use `.dropna()` or `.fillna()` before performing algebraic, matrix, or statistical operations to prevent errors.\n"
-        "- To select object/string columns with `select_dtypes`, NEVER pass 'object' alone (which triggers a deprecation warning). Instead, explicitly include 'str' as well: `select_dtypes(include=['object', 'str'])` or `select_dtypes(include=['object', 'string'])`.\n"
-        "- You are fully free to write any classes, loops, custom calculations, statistics, or spatial algorithms. Build any advanced analysis directly using the allowed whitelisted modules.\n"
-        "- For plotting, ALWAYS create a figure explicitly using plt.figure() or plt.subplots().\n"
-        "- IMPORTANT: Use `tick_labels=` instead of `labels=` in plt.boxplot() — the old `labels` parameter was renamed in Matplotlib 3.9.\n"
-        "- NEVER call plt.savefig() — figures are automatically captured. savefig just wastes time writing files to disk.\n"
-        "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
-        "- KEEP CODE EFFICIENT — execution has a 60-second limit. Do not loop over every column creating separate figures. Reuse subplot grids. Avoid generating more than 4–5 total figures per block.\n"
-        "- Return only functional Python code. No introductory remarks.\n\n"
-        f"Complete Dataset Metric Schema:\n{json.dumps(schema_json, default=str)}"
+        "You are an expert Python data engineer. Generate optimal, safe code to analyze `df`.\n\n"
+        + _SANDBOX_LIB_CONSTRAINTS
+        + _EXEC_RULES
+        + f"\nComplete Dataset Schema:\n{json.dumps(compressed, default=str)}"
         f"{context_section}"
     )
 
@@ -227,49 +214,20 @@ async def generate_corrected_code(
     error_message: str,
     schema_json: dict,
 ) -> str:
-    """Send failing code and traceback to generate corrected Python code."""
+    """Debug and correct failing Python code."""
+    compressed = _compress_schema(schema_json)
     system_prompt = (
-        "You are an expert Python data debugging engineer. Correct the failing Python code block.\n\n"
-        "CRITICAL — ONLY these standard/native libraries are available:\n"
-        "  1. pandas (import as pd)\n"
-        "  2. numpy  (import as np)\n"
-        "  3. matplotlib.pyplot (import as plt)\n"
-        "  4. math and datetime\n"
-        "  5. statistics (Python standard library)\n"
-        "  6. shapely (advanced geographic and vector computational geometry)\n"
-        "  7. jq (JSON slicing and cleaning)\n"
-        "  8. pendulum (advanced datetime parsing and manipulations)\n"
-        "  9. re (regular expressions)\n"
-        "  10. collections (Counter, defaultdict, etc.)\n"
-        "  11. itertools, functools, operator\n"
-        "  12. string, textwrap, typing, warnings\n"
-        "  13. copy, random, json\n\n"
-        "STRICTLY FORBIDDEN — do NOT import or use ANY of these (they will cause execution failure):\n"
-        "  seaborn, sns, scipy, sklearn, statsmodels, plotly, pingouin, lifelines, any other non-whitelisted library.\n"
-        "CRITICAL — Even if you don't explicitly import them, using certain pandas methods that internally depend on banned packages will crash. In particular:\n"
-        "  - NEVER use `.plot.kde()` or `kind='kde'` — these require scipy internally.\n"
-        "  - NEVER use `np.percentile()` inside a `.agg()` lambda — the resulting column name `<lambda_0>`/`<lambda_1>` varies by pandas version. Use `df.quantile(q=[0.25, 0.75])` instead.\n"
-        "Execution Framework Rules:\n"
-        "- The DataFrame is pre-loaded as global variable `df`.\n"
-        "- Use modern Pandas 2.0+ Copy-on-Write syntax.\n"
-        "- The environment uses NumPy 2.0+.\n"
-        "- IMPORTANT: Always use `.dropna()` or `.fillna()` before performing algebraic, matrix, or statistical operations to prevent errors.\n"
-        "- To select object/string columns with `select_dtypes`, NEVER pass 'object' alone (which triggers a deprecation warning). Instead, explicitly include 'str' as well: `select_dtypes(include=['object', 'str'])` or `select_dtypes(include=['object', 'string'])`.\n"
-        "- You are fully free to write any classes, loops, custom calculations, statistics, or spatial algorithms. Build any advanced analysis directly using the allowed whitelisted modules.\n"
-        "- For plotting, ALWAYS create a figure explicitly using plt.figure() or plt.subplots().\n"
-        "- IMPORTANT: Use `tick_labels=` instead of `labels=` in plt.boxplot() — the old `labels` parameter was renamed in Matplotlib 3.9.\n"
-        "- NEVER call plt.savefig() — figures are automatically captured. savefig just wastes time writing files to disk.\n"
-        "- Assign any critical table, subset metrics, or computation text to a local variable named `result`.\n"
-        "- KEEP CODE EFFICIENT — execution has a 60-second limit. Do not loop over every column creating separate figures. Reuse subplot grids. Avoid generating more than 4–5 total figures per block.\n"
-        "- Return only functional Python code. No introductory remarks.\n\n"
-        f"Complete Dataset Metric Schema:\n{json.dumps(schema_json, default=str)}"
+        "You are an expert Python data debugging engineer. Correct the failing code.\n\n"
+        + _SANDBOX_LIB_CONSTRAINTS
+        + _EXEC_RULES
+        + f"\nDataset Schema:\n{json.dumps(compressed, default=str)}"
     )
 
     user_content = (
         f"Original Request: {prompt}\n\n"
-        f"Failing Python Code:\n```python\n{bad_code}\n```\n\n"
-        f"Execution Traceback/Error:\n{error_message}\n\n"
-        "Please debug the code, fix the issue completely, and return ONLY the corrected, whitelisted, executable python block."
+        f"Failing Code:\n```python\n{bad_code}\n```\n\n"
+        f"Error:\n{error_message}\n\n"
+        "Return ONLY the corrected executable Python code."
     )
 
     messages = [
@@ -280,8 +238,7 @@ async def generate_corrected_code(
     try:
         data = await call_gateway(TASK_CODE, messages)
         content = extract_content(data)
-        code = extract_block_by_pattern(content, is_json=False)
-        return code
+        return extract_block_by_pattern(content, is_json=False)
     except httpx.HTTPError as e:
         logger.error("Network error during corrected code generation: %s", e)
         raise
@@ -304,21 +261,17 @@ async def plan_next_step(
     history_summary = "\n".join(history_lines) if history_lines else "No steps yet."
 
     system_prompt = (
-        "You are an autonomous data analysis agent. Your job is to decide the NEXT analysis step.\n\n"
-        "CRITICAL EXECUTION CONSTRAINTS:\n"
-        "- The execution environment supports: pandas, numpy, matplotlib.pyplot, math, datetime, statistics (Python standard library), shapely, jq, pendulum, re, collections, itertools, functools, operator, string, copy, random, json, textwrap, typing, and warnings.\n"
-        "- The environment DOES NOT HAVE: seaborn, scipy, scikit-learn (sklearn), statsmodels, plotly, or pingouin.\n"
-        "- CRITICAL: Any plan involving Kernel Density Estimation (KDE) will fail — pandas `plot.kde()` requires scipy internally, which is NOT installed.\n"
-        "- Keep planned analyses computationally efficient — execution has a 60-second limit. Avoid plans requiring many separate figures.\n"
-        "- Any analysis track you decide on must be fully executable using only these allowed whitelisted libraries. Plan any statistical, spatial, or datetime analyses standardly using their provided capabilities.\n\n"
-        "Return ONLY a valid JSON object with these keys:\n"
+        "You are an autonomous data analysis agent. Decide the NEXT step.\n\n"
+        + _SANDBOX_LIB_CONSTRAINTS
+        + "\nReturn ONLY a valid JSON object with these keys:\n"
         '- "prompt": the next analysis instruction (empty string if complete)\n'
         '- "is_complete": boolean\n'
-        '- "reason": brief explanation of your decision\n'
+        '- "reason": brief explanation\n'
     )
 
+    compressed = _compress_schema(schema_json)
     user_content = (
-        f"Dataset Schema:\n{json.dumps(schema_json, default=str)}\n\n"
+        f"Dataset Schema:\n{json.dumps(compressed, default=str)}\n\n"
         f"Dataset Overview: {initial_description}\n\n"
         f"Completed Steps ({len(analysis_history)} total):\n{history_summary}"
     )
@@ -377,8 +330,7 @@ async def analyze_image_for_data(
 
 
 def fallback_suggestions() -> list[dict]:
-    """Return an expanded suite of safe fallbacks if remote channels are offline."""
-    # Consistently return exactly 5 fallbacks to match the standard suggester count.
+    """Safe fallbacks when the AI gateway is offline."""
     return [
         {
             "label": "Summary Statistics",

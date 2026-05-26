@@ -1,14 +1,8 @@
 """Safe Python execution sandbox.
 
-AI-generated Pandas/Matplotlib code runs inside a heavily restricted
-exec() namespace. Filesystem, network, and system access are blocked.
-
-Security hardening (AST Rewrite):
-- Implemented strict Abstract Syntax Tree (AST) Node Whitelisting.
-- Banned direct access to dunder/magic methods (e.g., __class__) to prevent escapes.
-- Explicitly blocked destructive pandas file I/O methods (to_csv, read_parquet, etc.).
-- Cross-platform timeout via threading (works on Windows/Android).
-- Deep DataFrame copy to prevent master state corruption.
+AI-generated code runs inside a restricted exec() namespace.
+Security: AST import whitelisting, blocked terms, restricted builtins,
+thread-based timeout, deep DataFrame copy via Copy-on-Write.
 """
 
 from __future__ import annotations
@@ -35,7 +29,7 @@ class SandboxError(Exception):
 
 
 class ASTSecurityChecker(ast.NodeVisitor):
-    """Restricts imports in sandbox to ensure only whitelisted packages are used."""
+    """Restricts imports to whitelisted packages only."""
 
     def __init__(self):
         self.is_safe = True
@@ -51,7 +45,6 @@ class ASTSecurityChecker(ast.NodeVisitor):
             "shapely",
             "jq",
             "pendulum",
-            # Standard library — pure Python, no system/network/filesystem access
             "re",
             "collections",
             "itertools",
@@ -108,7 +101,7 @@ class ASTSecurityChecker(ast.NodeVisitor):
 
 
 def validate_code(code: str) -> tuple[bool, str]:
-    """Parse code into an AST and validate imports, also check against blocked terms."""
+    """Parse code into AST and validate imports + blocked terms."""
     if code.count("\n") > 200:
         return False, "Code exceeds 200 lines — too complex for execution."
 
@@ -129,7 +122,7 @@ def validate_code(code: str) -> tuple[bool, str]:
 
 @contextlib.contextmanager
 def _capture_stdout():
-    """Context manager that guarantees sys.stdout is restored."""
+    """Thread-safe stdout capture using StringIO."""
     old_stdout = sys.stdout
     captured = io.StringIO()
     sys.stdout = captured
@@ -146,7 +139,7 @@ class _TimeoutError(Exception):
 
 
 def _safe_import(name, *args, **kwargs):
-    """Restricted import that only allows whitelisted modules."""
+    """Restricted __import__ allowing only whitelisted modules."""
     allowed = {
         "pandas",
         "numpy",
@@ -183,7 +176,7 @@ class TimeoutException(BaseException):
 
 
 def _exec_with_timeout(code: str, namespace: dict, timeout_sec: int) -> None:
-    """Execute code in a separate thread with a hard timeout and runaway thread tracing."""
+    """Execute code in a thread with timeout and leaked-thread watchdog."""
     import time
     import sys
 
@@ -213,7 +206,7 @@ def _exec_with_timeout(code: str, namespace: dict, timeout_sec: int) -> None:
     thread.join(timeout=timeout_sec + 1.0)  # Add buffer for join
 
     if thread.is_alive():
-        # Raised in case the trace hook hasn't fired yet or the thread is blocked in an un-traceable C function
+        logger.warning("Sandbox thread leaked — stuck in C extension, cannot be killed")
         raise _TimeoutError(f"Code execution exceeded {timeout_sec}s time limit.")
 
     if exc_info[0] is not None:
@@ -250,16 +243,104 @@ def execute_code(
     # FIX: Safely mock plt.show() so it doesn't open GUI windows or trigger AST blocks
     plt.show = lambda *args, **kwargs: None
 
-    # Enable Pandas 2.0 Copy-on-Write globally to avoid memory exhaustion/UI freezes (only needed for Pandas < 3.0)
     try:
         if int(pd.__version__.split(".")[0]) < 3:
             pd.options.mode.copy_on_write = True
     except Exception:
         pass
 
-    # Build execution namespace
-    # With Copy-on-Write enabled, passing a direct reference is O(1) time and memory,
-    # yet still guarantees the AI cannot permanently corrupt the master Flet state.
+    # Restricted builtins — no open(), eval(), exec(), getattr() etc.
+    safe_builtins = {
+        "__import__": _safe_import,
+        "print": print,
+        "len": len,
+        "range": range,
+        "enumerate": enumerate,
+        "zip": zip,
+        "map": map,
+        "filter": filter,
+        "sorted": sorted,
+        "reversed": reversed,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "abs": abs,
+        "round": round,
+        "int": int,
+        "float": float,
+        "str": str,
+        "bool": bool,
+        "list": list,
+        "dict": dict,
+        "tuple": tuple,
+        "set": set,
+        "frozenset": frozenset,
+        "type": type,
+        "isinstance": isinstance,
+        "issubclass": issubclass,
+        "hasattr": hasattr,
+        "any": any,
+        "all": all,
+        "repr": repr,
+        "hash": hash,
+        "id": id,
+        "iter": iter,
+        "next": next,
+        "slice": slice,
+        "complex": complex,
+        "bytes": bytes,
+        "bytearray": bytearray,
+        "memoryview": memoryview,
+        "object": object,
+        "staticmethod": staticmethod,
+        "classmethod": classmethod,
+        "property": property,
+        "super": super,
+        "ValueError": ValueError,
+        "TypeError": TypeError,
+        "KeyError": KeyError,
+        "IndexError": IndexError,
+        "AttributeError": AttributeError,
+        "RuntimeError": RuntimeError,
+        "StopIteration": StopIteration,
+        "Exception": Exception,
+        "True": True,
+        "False": False,
+        "None": None,
+        "NotImplemented": NotImplemented,
+        "Ellipsis": Ellipsis,
+        "ArithmeticError": ArithmeticError,
+        "ZeroDivisionError": ZeroDivisionError,
+        "OverflowError": OverflowError,
+        "UnicodeError": UnicodeError,
+        "UnicodeDecodeError": UnicodeDecodeError,
+        "UnicodeEncodeError": UnicodeEncodeError,
+        "IOError": IOError,
+        "OSError": OSError,
+        "FileNotFoundError": FileNotFoundError,
+        "PermissionError": PermissionError,
+        "ImportError": ImportError,
+        "ModuleNotFoundError": ModuleNotFoundError,
+        "LookupError": LookupError,
+        "NameError": NameError,
+        "SyntaxError": SyntaxError,
+        "GeneratorExit": GeneratorExit,
+        "SystemExit": SystemExit,
+        "KeyboardInterrupt": KeyboardInterrupt,
+        "chr": chr,
+        "ord": ord,
+        "hex": hex,
+        "oct": oct,
+        "bin": bin,
+        "pow": pow,
+        "divmod": divmod,
+        "format": format,
+        "vars": vars,
+        "dir": dir,
+        "callable": callable,
+        "input": lambda *a, **kw: "",
+    }
+
     namespace = {
         "df": df,
         "pd": pd,
@@ -269,6 +350,7 @@ def execute_code(
         "datetime": __import__("datetime"),
         "statistics": __import__("statistics"),
         "result": None,
+        "__builtins__": safe_builtins,
     }
 
     plt.close("all")
@@ -281,17 +363,14 @@ def execute_code(
             if plt.get_fignums():
                 figure = plt.gcf()
 
-            # Check if dataframe is modified
             modified = False
             try:
-                # Compare namespace["df"] with the initial df
                 if not namespace["df"].equals(df):
                     modified = True
             except Exception:
                 pass
 
-            # Check for clean/save keywords
-            if any(kw in code for kw in ["to_csv", "save", "df.to_csv"]):
+            if any(kw in code for kw in ["to_csv", "save"]):
                 modified = True
 
             res_val = namespace.get("result")

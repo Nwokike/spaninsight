@@ -21,7 +21,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
     ui_state = FormsState()
     audio_svc = AudioService(page)
 
-    # ── Form Loading ─────────────────────────────────────────────
     async def load_forms():
         ui_state.is_loading["value"] = True
         _rebuild()
@@ -30,7 +29,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
             ui_state.user_forms.clear()
             ui_state.user_forms.extend(forms)
 
-            # Sync active project's forms in global state
             state.forms = forms
         except Exception as e:
             logger.error("Failed to load forms: %s", e)
@@ -39,7 +37,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
             ui_state.is_loading["value"] = False
             _rebuild()
 
-    # ── AI Generate → Preview ────────────────────────────────────
     async def on_create_form(e):
         if not ui_state.form_prompt_field.current:
             return
@@ -68,7 +65,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
             ui_state.is_creating["value"] = False
             _rebuild()
 
-    # ── Editor voice/AI state ──────────────────────────────────────
     async def on_ai_edit(action: str, text: str = ""):
         if action == "__set_text__":
             ui_state.ai_edit_text["value"] = text
@@ -161,7 +157,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 ui_state.ai_edit_text["value"] = transcript
                 _rebuild()
 
-    # ── Publish ──────────────────────────────────────────────────
     async def on_publish():
         ui_state.is_publishing["value"] = True
         _rebuild()
@@ -200,7 +195,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
         ui_state.draft_schema.clear()
         _rebuild()
 
-    # ── Voice ────────────────────────────────────────────────────
     async def on_voice_toggle(e):
         if ui_state.is_recording["value"]:
             result = await audio_svc.stop_recording()
@@ -260,7 +254,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 ui_state.form_prompt_field.current.value = transcript
                 page.update()
 
-    # ── Form Detail (existing form) ──────────────────────────────
     async def on_view_form(form: dict):
         ui_state.active_form["data"] = form
         resp_data = await forms_service.get_responses(
@@ -276,7 +269,10 @@ def build_forms_view(page: ft.Page) -> ft.View:
 
     async def on_copy_link(form_id: str):
         url = f"https://f.spaninsight.com/{form_id}"
-        await ft.Clipboard().set(url)
+        try:
+            await ft.Clipboard().set(url)
+        except Exception:
+            pass
         page.snack_bar = ft.SnackBar(ft.Text("Link copied!"), duration=2000)
         page.snack_bar.open = True
         page.update()
@@ -380,7 +376,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
         state.current_df_summary = file_service.get_data_summary(df)
         await page.push_route("/analysis")
 
-    # ── Helpers ───────────────────────────────────────────────────
     def _show_error(msg: str):
         page.snack_bar = ft.SnackBar(
             ft.Text(msg, color=ft.Colors.WHITE), bgcolor=theme.ERROR, duration=4000
@@ -398,12 +393,10 @@ def build_forms_view(page: ft.Page) -> ft.View:
         if not ui_state.content_column.current:
             return
 
-        # 1. Determine active state
         show_editor = ui_state.editor_active["value"]
         show_detail = ui_state.active_form["data"] is not None
         show_dashboard = not show_editor and not show_detail
 
-        # Toggle visibilities of containers
         for ref, vis in [
             (ui_state.dashboard_container_ref, show_dashboard),
             (ui_state.editor_container_ref, show_editor),
@@ -413,7 +406,6 @@ def build_forms_view(page: ft.Page) -> ft.View:
                 ref.current.visible = vis
                 ref.current.update()
 
-        # 2. Update the active view content
         if show_editor:
             if ui_state.editor_container_ref.current:
                 ui_state.editor_container_ref.current.content = ft.Column(

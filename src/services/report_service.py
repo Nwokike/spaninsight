@@ -1,8 +1,4 @@
-"""Report management — local-first storage with R2 sharing.
-
-Reports live entirely on-device in StorageService. R2 is only used
-for ephemeral sharing (7-day auto-delete, renewable).
-"""
+"""Report management — local-first storage with R2 sharing."""
 
 from __future__ import annotations
 
@@ -13,22 +9,10 @@ import string
 import time
 
 from core.constants import API_BASE_URL
+from core.utils import sanitize_numpy
 from services.api_client import request_with_retry
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_json_value(val):
-    """Recursively replace NaN/Infinity with None for JSON-safe serialization."""
-    import math
-
-    if isinstance(val, list):
-        return [_sanitize_json_value(v) for v in val]
-    if isinstance(val, dict):
-        return {k: _sanitize_json_value(v) for k, v in val.items()}
-    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-        return None
-    return val
 
 
 class ReportService:
@@ -48,8 +32,7 @@ class ReportService:
 
         try:
             state.user_reports = reports
-            # Persist project changes locally using the correct ProjectService serializer
-            proj_svc = ProjectService(None, self._storage)
+            proj_svc = ProjectService(self._storage._page, self._storage)
             safe_copy = {}
             for pid, p in state.user_projects.items():
                 safe_copy[pid] = proj_svc._serialize_local_project(p)
@@ -133,9 +116,7 @@ class ReportService:
             item = {
                 "prompt": block.get("prompt", ""),
                 "description": block.get("description", ""),
-                "serialized_result": _sanitize_json_value(
-                    block.get("serialized_result")
-                ),
+                "serialized_result": sanitize_numpy(block.get("serialized_result")),
                 "stdout": block.get("stdout"),
             }
             if block.get("figure_png_b64"):

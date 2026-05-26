@@ -4,21 +4,9 @@ import flet as ft
 
 from core.state import state
 from core import theme, utils
+from core.utils import sanitize_numpy as _sanitize_numpy
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_numpy(val):
-    """Replace NaN/Infinity with None recursively in lists/dicts."""
-    import math
-
-    if isinstance(val, list):
-        return [_sanitize_numpy(v) for v in val]
-    if isinstance(val, dict):
-        return {k: _sanitize_numpy(v) for k, v in val.items()}
-    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-        return None
-    return val
 
 
 def serialize_result_for_report(result_val) -> dict | None:

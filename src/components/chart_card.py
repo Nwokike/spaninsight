@@ -31,7 +31,7 @@ def build_chart_card(
         if b64_img:
             chart_widget = ft.Container(
                 content=ft.Image(
-                    src=b64_img,  # <-- FIXED: Using 'src' here as well
+                    src=b64_img,
                     fit="contain",
                 ),
                 height=280,

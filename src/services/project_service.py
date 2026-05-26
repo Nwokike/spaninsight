@@ -36,22 +36,24 @@ class ProjectService:
     async def initialize_projects(self) -> str:
         """Load projects from storage or create a default one. Returns active_project_id."""
         try:
-            # 1. Load active project ID
             active_id = await self._storage.get(STORAGE_ACTIVE_PROJECT_ID)
 
-            # 2. Load all local projects
             raw_projects = await self._storage.get(STORAGE_PROJECTS)
-            projects = json.loads(raw_projects) if raw_projects else {}
+            try:
+                projects = json.loads(raw_projects) if raw_projects else {}
+                if not isinstance(projects, dict):
+                    raise ValueError("Projects data is not a dict")
+            except (json.JSONDecodeError, ValueError) as parse_err:
+                logger.error("Corrupt projects JSON, resetting: %s", parse_err)
+                projects = {}
 
             state.user_projects = projects
 
             if not projects:
-                # No projects exist, create default workspace
                 logger.info("No projects found. Generating default workspace...")
                 default_proj = await self.create_local_project("My Workspace")
                 active_id = default_proj["id"]
 
-                # Proactively try to register default project in D1 gateway in the background
                 import asyncio
 
                 asyncio.create_task(self.sync_project(active_id))

@@ -56,6 +56,11 @@ async def run_autopilot(view_state):
                 analysis_history,
             )
 
+            if getattr(state, "autopilot_cancelled", False):
+                state.autopilot_progress = "Cancelled by user."
+                show_error(view_state, "Autopilot cancelled.")
+                break
+
             if plan.get("is_complete"):
                 state.autopilot_progress = f"Analysis complete after {iteration - 1} steps. {plan.get('reason', '')}"
                 logger.info(
@@ -77,6 +82,8 @@ async def run_autopilot(view_state):
 
             # Proceed directly with code generation and execution under the upfront Autopilot credit payment
             if getattr(state, "autopilot_cancelled", False):
+                state.autopilot_progress = "Cancelled by user."
+                show_error(view_state, "Autopilot cancelled.")
                 break
 
             max_retries = 2
@@ -84,12 +91,22 @@ async def run_autopilot(view_state):
             current_code = await ai_service.generate_code(
                 next_prompt, state.current_df_summary
             )
+
+            if getattr(state, "autopilot_cancelled", False):
+                state.autopilot_progress = "Cancelled by user."
+                show_error(view_state, "Autopilot cancelled.")
+                break
+
             result = None
 
             while retry_count <= max_retries and current_code:
+                if getattr(state, "autopilot_cancelled", False):
+                    break
                 result = await sandbox.execute_code_async(
                     current_code, state.current_df
                 )
+                if getattr(state, "autopilot_cancelled", False):
+                    break
                 if result["success"]:
                     if result.get("modified"):
                         state.dataset_modified = True
@@ -106,14 +123,23 @@ async def run_autopilot(view_state):
 
                 retry_count += 1
                 if retry_count <= max_retries:
+                    if getattr(state, "autopilot_cancelled", False):
+                        break
                     current_code = await ai_service.generate_corrected_code(
                         next_prompt,
                         current_code,
                         result["error"],
                         state.current_df_summary,
                     )
+                    if getattr(state, "autopilot_cancelled", False):
+                        break
                     if not current_code:
                         break
+
+            if getattr(state, "autopilot_cancelled", False):
+                state.autopilot_progress = "Cancelled by user."
+                show_error(view_state, "Autopilot cancelled.")
+                break
 
             if not result or not result["success"]:
                 analysis_history.append(
@@ -226,6 +252,9 @@ async def run_autopilot(view_state):
                         desc_task, sugg_task
                     )
 
+                    if getattr(state, "autopilot_cancelled", False):
+                        return
+
                     b["description"] = description
                     hist_entry["description"] = description
                     if state.charts:
@@ -238,6 +267,8 @@ async def run_autopilot(view_state):
                     logger.error("Autopilot block AI failed: %s", e)
 
             if getattr(state, "autopilot_cancelled", False):
+                state.autopilot_progress = "Cancelled by user."
+                show_error(view_state, "Autopilot cancelled.")
                 break
 
             await load_block_ai(wrapped_block, analysis_history[-1])

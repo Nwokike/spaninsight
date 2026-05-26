@@ -50,7 +50,7 @@ def build_credit_badge(credits: int) -> ft.Container:
 
 
 def show_credits_dialog(page: ft.Page, credit_service):
-    """Show the premium credits panel, featuring Ad Rewards with a 30s cooldown."""
+    """Show the premium credits panel, featuring Ad Rewards with a 30s cooldown on mobile and standard balance display on PC."""
     import time
     import asyncio
     from core import theme
@@ -63,6 +63,8 @@ def show_credits_dialog(page: ft.Page, credit_service):
     if not hasattr(state, "ad_cooldown_end"):
         state.ad_cooldown_end = 0.0
 
+    is_mobile = page.platform in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS)
+
     credits_text = ft.Text(
         f"{state.credits_remaining}",
         size=36,
@@ -74,13 +76,15 @@ def show_credits_dialog(page: ft.Page, credit_service):
         "", size=11, color=ft.Colors.ON_SURFACE_VARIANT, text_align=ft.TextAlign.CENTER
     )
 
-    watch_btn = ft.FilledButton(
-        "Watch Ad (+2 Credits)",
-        icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
-        bgcolor=theme.ACCENT,
-        color=ft.Colors.WHITE,
-        disabled=False,
-    )
+    watch_btn = None
+    if is_mobile:
+        watch_btn = ft.FilledButton(
+            "Watch Ad (+2 Credits)",
+            icon=ft.Icons.PLAY_CIRCLE_ROUNDED,
+            bgcolor=theme.ACCENT,
+            color=ft.Colors.WHITE,
+            disabled=False,
+        )
 
     dialog_open = True
 
@@ -94,6 +98,8 @@ def show_credits_dialog(page: ft.Page, credit_service):
         dialog_open = False
 
     async def _update_timer_loop():
+        if not is_mobile or watch_btn is None:
+            return
         # A loop that updates the countdown in real-time while the dialog is visible
         while dialog_open and dlg.open:
             now = time.time()
@@ -120,6 +126,8 @@ def show_credits_dialog(page: ft.Page, credit_service):
             await asyncio.sleep(0.5)
 
     async def _on_watch_success():
+        if not is_mobile:
+            return
         # Award credits securely
         new_balance = await credit_service.add_credits(2)
         state.credits_remaining = new_balance
@@ -133,11 +141,13 @@ def show_credits_dialog(page: ft.Page, credit_service):
             pass
 
     async def _on_watch_click(e):
+        if not is_mobile or watch_btn is None:
+            return
         now = time.time()
         if state.ad_cooldown_end > now:
             return
 
-        # Start 30-second cooldown immediately to prevent duplicate clicks during ad loading
+        # Start cooldown immediately to prevent duplicate clicks
         state.ad_cooldown_end = now + 30.0
 
         watch_btn.disabled = True
@@ -152,50 +162,57 @@ def show_credits_dialog(page: ft.Page, credit_service):
             watch_btn.disabled = False
             watch_btn.update()
 
-    watch_btn.on_click = lambda e: page.run_task(_on_watch_click, e)
+    if is_mobile and watch_btn is not None:
+        watch_btn.on_click = lambda e: page.run_task(_on_watch_click, e)
+
+    content_controls = [
+        ft.Row(
+            [
+                ft.Icon(ft.Icons.BOLT_ROUNDED, size=28, color=theme.ACCENT),
+                ft.Text("AI Credit Balance", size=18, weight="bold"),
+            ],
+            spacing=8,
+            alignment=ft.MainAxisAlignment.CENTER,
+        ),
+        ft.Container(height=10),
+        ft.Row(
+            [
+                credits_text,
+                ft.Text("credits", size=14, color=ft.Colors.ON_SURFACE_VARIANT),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=6,
+        ),
+        ft.Container(height=6),
+        ft.Text(
+            "Spaninsight grants 50 free analysis credits every 24 hours. "
+            "Credits are spent when running deep AI insights and automated tasks.",
+            size=11,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+            text_align=ft.TextAlign.CENTER,
+        ),
+    ]
+
+    if is_mobile:
+        content_controls.extend(
+            [
+                ft.Divider(height=20, thickness=0.5),
+                ft.Text(
+                    "Need more credits?",
+                    size=12,
+                    weight="bold",
+                    color=theme.PRIMARY,
+                ),
+                cooldown_label,
+                ft.Container(height=4),
+                watch_btn,
+            ]
+        )
 
     dlg = ft.AlertDialog(
         content=ft.Container(
             content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Icon(ft.Icons.BOLT_ROUNDED, size=28, color=theme.ACCENT),
-                            ft.Text("AI Credit Balance", size=18, weight="bold"),
-                        ],
-                        spacing=8,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                    ft.Container(height=10),
-                    ft.Row(
-                        [
-                            credits_text,
-                            ft.Text(
-                                "credits", size=14, color=ft.Colors.ON_SURFACE_VARIANT
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        spacing=6,
-                    ),
-                    ft.Container(height=6),
-                    ft.Text(
-                        "Spaninsight grants 50 free analysis credits every 24 hours. "
-                        "Credits are spent when running deep AI insights and automated tasks.",
-                        size=11,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Divider(height=20, thickness=0.5),
-                    ft.Text(
-                        "Need more credits?",
-                        size=12,
-                        weight="bold",
-                        color=theme.PRIMARY,
-                    ),
-                    cooldown_label,
-                    ft.Container(height=4),
-                    watch_btn,
-                ],
+                content_controls,
                 spacing=8,
                 tight=True,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -208,5 +225,6 @@ def show_credits_dialog(page: ft.Page, credit_service):
     )
 
     page.show_dialog(dlg)
-    # Start timer loop immediately on load
-    page.run_task(_update_timer_loop)
+    if is_mobile:
+        # Start timer loop immediately on load
+        page.run_task(_update_timer_loop)

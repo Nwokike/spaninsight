@@ -28,16 +28,22 @@ class AnalysisState:
         self.audio_svc = AudioService(page)
 
         self.rebuild_fn = None
+        self._disposed = False
 
         self.pinning_block_index = -1
 
-        # --- DATABASE FORM STATE ---
         self.import_mode = "file"
         self.db_url = ""
         self.db_tables = []
         self.db_selected_table = ""
-        self.db_test_status = ""  # "", "testing", "success", "failed: error"
+        self.db_test_status = ""
+
+    def dispose(self):
+        """Mark this view state as disposed — all future rebuilds become no-ops."""
+        self._disposed = True
 
     def rebuild(self):
+        if self._disposed or self.page.route != "/analysis":
+            return
         if self.rebuild_fn:
             self.rebuild_fn()

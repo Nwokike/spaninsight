@@ -1,12 +1,6 @@
 """Spaninsight — Privacy-First Data Intelligence.
 
-Main entry point. Handles page config, NavigationBar, routing,
-UUID initialization, and service bootstrapping.
-
-Architecture mirrors Akili flet-rewrite (production) patterns:
-- page.route = route (direct assignment, not push_route)
-- @ft.observable state singleton
-- view builder functions
+Main entry point: page config, routing, service bootstrapping.
 """
 
 from __future__ import annotations
@@ -26,7 +20,6 @@ from services.storage_service import StorageService
 from services.credit_service import CreditService
 from services.ad_service import AdService
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -34,13 +27,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("spaninsight")
 
-# Fix Windows event loop policy
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def _patch_matplotlib():
-    """Monkeypatch matplotlib — deferred to avoid blocking startup."""
+    """Monkeypatch matplotlib to prevent WebAgg crashes in Flet."""
     try:
         import matplotlib.backends.backend_webagg_core as webagg
 
@@ -82,9 +74,8 @@ def _patch_matplotlib():
         logger.warning("Failed to monkeypatch FigureManagerBase: %s", agg_err)
 
 
-# ── Housekeeping (Audit Fix) ─────────────────────────────────────────
 def cleanup_temp_files():
-    """Wipe old imported CSV/Excel files from temp dir on startup to prevent storage bloat."""
+    """Wipe old temp files on startup to prevent storage bloat."""
     try:
         from core.utils import get_temp_dir
 
@@ -92,15 +83,12 @@ def cleanup_temp_files():
         if temp_dir.exists():
             shutil.rmtree(temp_dir, ignore_errors=True)
         temp_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Storage housekeeping complete: Temporary cache wiped clean.")
     except Exception as e:
         logger.warning("Temp cleanup failed: %s", e)
 
 
 async def main(page: ft.Page):
     """Main Flet application entry point."""
-
-    # ── Page Configuration ──────────────────────────────────────────
     page.title = "Spaninsight"
     page.favicon = "icon.png"
 
@@ -115,14 +103,12 @@ async def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     state.theme_mode = page.theme_mode
 
-    # Desktop window sizing — beautiful responsive defaults
     page.window.min_width = 360
     page.window.min_height = 600
 
     page.padding = 0
     page.spacing = 0
 
-    # ── Error Handler ───────────────────────────────────────────────
     def on_error(e):
         logger.error("Page error: %s", e.data)
         try:
@@ -139,16 +125,7 @@ async def main(page: ft.Page):
 
     page.on_error = on_error
 
-    # ── Show Splash IMMEDIATELY (before any heavy init) ──────
-    from views.splash_view import build_splash_view
-
-    page.views.append(build_splash_view())
-    page.update()
-
-    # ── Deferred heavy import (matplotlib) ───────────────────
     _patch_matplotlib()
-
-    # ── Asset Validation ────────────────────────────────────────────
     import os
 
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
@@ -156,7 +133,6 @@ async def main(page: ft.Page):
         if not os.path.exists(os.path.join(assets_dir, asset)):
             logger.warning("Missing asset: %s — app may display incorrectly", asset)
 
-    # ── Initialize Services ─────────────────────────────────
     storage = StorageService(page)
     from services.project_service import ProjectService
 
@@ -164,12 +140,8 @@ async def main(page: ft.Page):
     credit_service = CreditService(page, storage)
     ad_service = AdService(page)
 
-    # Initialize projects
     await project_service.initialize_projects()
 
-    # UUID initialization removed since identity is purely project-based
-
-    # Load Theme
     from core.constants import STORAGE_THEME
 
     try:
@@ -184,13 +156,9 @@ async def main(page: ft.Page):
     except Exception as e:
         logger.warning("Theme load failed (using default): %s", e)
 
-    # Initialize credits (daily reset)
     state.credits_remaining = await credit_service.initialize()
-
-    # Preload interstitial ad
     page.run_task(ad_service.preload_interstitial)
 
-    # ── Shutdown Handler ────────────────────────────────────────────
     async def on_disconnect(e=None):
         """Flush storage and close HTTP client on app close."""
         try:
@@ -206,7 +174,6 @@ async def main(page: ft.Page):
 
     page.on_disconnect = on_disconnect
 
-    # ── Gateway Health Check + Version Check (non-blocking) ──
     async def _startup_checks():
         from services import ai as ai_service
 
@@ -245,9 +212,7 @@ async def main(page: ft.Page):
         except Exception:
             pass
 
-    page.run_task(_startup_checks)  # Non-blocking — no longer blocks splash!
-
-    # ── Navigation Bar ──────────────────────────────────────────────
+    page.run_task(_startup_checks)
     nav_bar = ft.NavigationBar(
         selected_index=0,
         destinations=[
@@ -284,7 +249,6 @@ async def main(page: ft.Page):
 
     TAB_ROUTES = ["/home", "/forms", "/analysis", "/reports", "/settings"]
 
-    # ── Navigation Helpers ──────────────────────────────────────────
     async def navigate(route: str):
         page.route = route
         await route_change()
@@ -346,10 +310,16 @@ async def main(page: ft.Page):
     def nav_to(route: str):
         page.run_task(navigate, route)
 
-    # ── Route Change Handler ────────────────────────────────────────
+    _active_analysis_state = None
+
     async def route_change(e=None):
+        nonlocal _active_analysis_state
         route = page.route
         logger.info("Route: %s", route)
+
+        if _active_analysis_state and route != "/analysis":
+            _active_analysis_state.dispose()
+            _active_analysis_state = None
 
         page.views.clear()
 
@@ -382,6 +352,7 @@ async def main(page: ft.Page):
                 credit_service=credit_service,
                 report_service=report_service,
             )
+            _active_analysis_state = getattr(view, "_analysis_state", None)
             page.views.append(view)
             nav_bar.selected_index = 2
 
@@ -411,12 +382,6 @@ async def main(page: ft.Page):
             page.views.append(view)
             nav_bar.selected_index = 4
 
-        elif route == "/splash":
-            from views.splash_view import build_splash_view
-
-            view = build_splash_view()
-            page.views.append(view)
-
         elif route == "/onboarding":
             from views.onboarding_view import build_onboarding_view
 
@@ -441,21 +406,17 @@ async def main(page: ft.Page):
             )
             page.views.append(view)
 
-        # Attach nav bar to the current view (skip splash)
-        if page.views and route != "/splash":
+        if page.views:
             page.views[-1].navigation_bar = nav_bar
 
-        # Inject standard consistent appbar actions dynamically
-        if page.views and route not in ("/splash", "/onboarding"):
+        if page.views and route != "/onboarding":
             top_view = page.views[-1]
             if top_view.appbar:
                 from components.project_switcher import build_project_switcher
                 from components.credit_badge import build_credit_badge
 
-                # 1. Workspace Switcher
                 switcher = build_project_switcher(page, project_service)
 
-                # 2. Color Mode Switch (Theme toggle)
                 async def _global_toggle_theme(e=None):
                     is_dark = page.theme_mode == ft.ThemeMode.DARK or (
                         page.theme_mode == ft.ThemeMode.SYSTEM
@@ -476,8 +437,6 @@ async def main(page: ft.Page):
                             else "dark",
                         )
 
-                    # Update the theme button icon directly and trigger page.update()
-                    # to keep the active view_state and running tasks intact.
                     theme_btn.icon = (
                         ft.Icons.LIGHT_MODE_ROUNDED
                         if page.theme_mode == ft.ThemeMode.DARK
@@ -494,7 +453,6 @@ async def main(page: ft.Page):
                     on_click=lambda e: page.run_task(_global_toggle_theme),
                 )
 
-                # 3. Credit Balance Badge
                 from components.credit_badge import show_credits_dialog
 
                 badge = build_credit_badge(state.credits_remaining)
@@ -531,7 +489,6 @@ async def main(page: ft.Page):
 
         page.update()
 
-    # ── View Pop Handler ────────────────────────────────────────────
     async def view_pop(e):
         page.views.pop()
         if page.views:
@@ -546,9 +503,7 @@ async def main(page: ft.Page):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    # ── Splash → Home/Onboarding ─────────────────────────────
-    async def splash_complete():
-        await asyncio.sleep(0.5)
+    async def _initial_route():
         from core.constants import STORAGE_ONBOARDING_DONE
 
         onboarding_done = await storage.get(STORAGE_ONBOARDING_DONE)
@@ -557,11 +512,9 @@ async def main(page: ft.Page):
         else:
             await navigate("/onboarding")
 
-    page.run_task(splash_complete)
+    page.run_task(_initial_route)
 
 
-# ── Entry Point ─────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # Wipe old temp data BEFORE the Flet engine mounts
     cleanup_temp_files()
     ft.run(main, assets_dir="assets")

@@ -1,7 +1,4 @@
-"""Shared utilities — snackbar, version comparison, image helpers.
-
-Centralizes patterns that were duplicated 20+ times across views.
-"""
+"""Shared utilities — snackbar, version comparison, image helpers."""
 
 from __future__ import annotations
 
@@ -13,9 +10,6 @@ from pathlib import Path
 import flet as ft
 
 logger = logging.getLogger(__name__)
-
-
-# ── Snackbar Helper ─────────────────────────────────────────────────
 
 
 def show_snack(
@@ -55,9 +49,6 @@ def show_snack(
     page.update()
 
 
-# ── Version Comparison ──────────────────────────────────────────────
-
-
 def parse_version(version_str: str) -> tuple[int, ...]:
     """Parse a semver string into a comparable tuple.
 
@@ -70,9 +61,6 @@ def parse_version(version_str: str) -> tuple[int, ...]:
         return tuple(int(x) for x in version_str.strip().split("."))
     except (ValueError, AttributeError):
         return (0, 0, 0)
-
-
-# ── Figure to PNG Bytes ─────────────────────────────────────────────
 
 
 def figure_to_png_bytes(figure, dpi: int = 150) -> bytes:
@@ -137,3 +125,16 @@ def get_banner_ad(unit_id: str, width: int = 320, height: int = 50) -> ft.Contro
     except Exception as e:
         logger.warning("Failed to load BannerAd (using safe fallback Container): %s", e)
         return ft.Container()
+
+
+def sanitize_numpy(val):
+    """Replace NaN/Infinity with None recursively in nested structures."""
+    import math
+
+    if isinstance(val, list):
+        return [sanitize_numpy(v) for v in val]
+    if isinstance(val, dict):
+        return {k: sanitize_numpy(v) for k, v in val.items()}
+    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+        return None
+    return val

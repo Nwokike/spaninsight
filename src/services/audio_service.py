@@ -1,14 +1,4 @@
-"""Audio recording service.
-
-Wraps ``flet-audio-recorder`` to record voice input and return raw bytes
-for Whisper transcription via the gateway.
-
-Enforces:
-- MAX_VOICE_DURATION_SEC (60s) — auto-stops recording after limit
-- MAX_AUDIO_SIZE_BYTES (25MB) — gateway rejects larger files
-
-Based on FletBot + Akili Ear production patterns.
-"""
+"""Audio recording service — voice input via flet-audio-recorder."""
 
 from __future__ import annotations
 
@@ -23,7 +13,6 @@ from core.constants import MAX_VOICE_DURATION_SEC, MAX_AUDIO_SIZE_BYTES
 
 logger = logging.getLogger(__name__)
 
-_HAS_RECORDER = False
 try:
     from flet_audio_recorder import (
         AudioRecorder,
@@ -33,8 +22,8 @@ try:
     )
 
     _HAS_RECORDER = True
-except Exception as e:
-    logger.warning("AudioRecorder not available on this platform: %s", e)
+except ImportError as e:
+    logger.warning("AudioRecorder not available: %s", e)
     _HAS_RECORDER = False
 
 PCM_SAMPLE_RATE = 44100
@@ -43,11 +32,7 @@ PCM_BYTES_PER_SAMPLE = 2  # 16-bit
 
 
 class AudioService:
-    """Voice recording helper.
-
-    Provides start/stop recording and returns audio bytes.
-    Auto-stops after MAX_VOICE_DURATION_SEC (60s).
-    """
+    """Voice recording helper with auto-stop and buffer limits."""
 
     def __init__(self, page: ft.Page):
         self._page = page
@@ -71,12 +56,7 @@ class AudioService:
         return self._recording
 
     async def start_recording(self, on_auto_stop=None) -> bool:
-        """Start recording audio via PCM16BITS streaming. Returns True if started.
-
-        Args:
-            on_auto_stop: Optional callback invoked when recording auto-stops
-                          after MAX_VOICE_DURATION_SEC (60s).
-        """
+        """Start PCM16BITS streaming recording. Returns True if started."""
         if not self._recorder:
             self._page.snack_bar = ft.SnackBar(
                 content=ft.Text("Audio recording not available on this platform")
@@ -133,12 +113,10 @@ class AudioService:
                 self._page.update()
 
                 if on_auto_stop and result:
-                    # C4 FIX: Check if callback is async and handle appropriately
                     if asyncio.iscoroutinefunction(on_auto_stop):
                         await on_auto_stop(result)
                     else:
                         callback_result = on_auto_stop(result)
-                        # If it returned a coroutine (e.g. from page.run_task), await it
                         if asyncio.iscoroutine(callback_result):
                             await callback_result
         except asyncio.CancelledError:
@@ -201,7 +179,11 @@ class AudioService:
         return None
 
     def _on_stream(self, e: AudioRecorderStreamEvent):
-        """Collect PCM16BITS chunks into the buffer."""
+        """Collect PCM16BITS chunks with 50MB safety cap."""
+        MAX_BUFFER = 50 * 1024 * 1024
+        if len(self._pcm_buffer) + len(e.chunk) > MAX_BUFFER:
+            logger.warning("PCM buffer exceeded 50MB limit, discarding new data")
+            return
         self._pcm_buffer.extend(e.chunk)
 
     def _on_state_change(self, e):
