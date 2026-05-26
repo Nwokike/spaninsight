@@ -64,6 +64,12 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
             return build_data_preview(result_val.to_frame())
         return ft.Text("Empty Series", size=12, italic=True)
 
+    if isinstance(result_val, np.ndarray) and result_val.ndim == 2:
+        try:
+            return build_data_preview(pd.DataFrame(result_val))
+        except Exception:
+            pass
+
     if isinstance(result_val, dict):
         primitives = {}
         structures = {}
@@ -73,7 +79,7 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
                 or isinstance(v, np.number)
                 or (isinstance(v, np.ndarray) and v.ndim == 0)
                 or (
-                    isinstance(v, (list, np.ndarray))
+                    isinstance(v, (list, tuple, np.ndarray))
                     and len(v) <= 24
                     and all(
                         isinstance(x, (int, float, str, bool, np.number)) for x in v
@@ -91,7 +97,7 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
             for k, v in primitives.items():
                 label_text = str(k).replace("_", " ").title()
 
-                if isinstance(v, (list, np.ndarray)):
+                if isinstance(v, (list, tuple, np.ndarray)):
                     badge_items = []
                     for x in v:
                         val_str = (
@@ -211,9 +217,9 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
         if controls:
             return ft.Column(controls, spacing=12)
 
-    if isinstance(result_val, (list, np.ndarray)):
+    if isinstance(result_val, (list, tuple, np.ndarray)):
         if (
-            isinstance(result_val, list)
+            isinstance(result_val, (list, tuple))
             and len(result_val) > 0
             and all(isinstance(x, dict) for x in result_val)
         ):
@@ -244,7 +250,8 @@ def build_result_visualizer(result_val, stdout_val) -> ft.Control | None:
             return ft.Row(chips, spacing=4, wrap=True)
         else:
             arr_str = ", ".join(
-                f"{x:.4f}" if isinstance(x, float) else str(x) for x in items[:50]
+                f"{x:.4f}" if isinstance(x, (float, np.floating)) else str(x)
+                for x in items[:50]
             )
             if len(items) > 50:
                 arr_str += f" ... (+{len(items) - 50} more items)"

@@ -58,8 +58,8 @@ def _repair_json(text: str) -> str:
     repaired = re.sub(r"/\*.*?\*/", "", repaired, flags=re.DOTALL)
 
     # 2. Replace single quotes with double quotes (but not within double-quoted strings)
-    repaired = re.sub(r"(?<=[{,]\s*)'([^']*?)'(?=\s*[:,\}])", r'"\1"', repaired)
-    repaired = re.sub(r"(?<=:)\s*'([^']*?)'(?=\s*[,}])", r'"\1"', repaired)
+    repaired = re.sub(r"([{,])\s*'([^']*?)'\s*(?=\s*[:,\}])", r'\1"\2"', repaired)
+    repaired = re.sub(r"(:\s*)'([^']*?)'\s*(?=\s*[,}])", r'\1"\2"', repaired)
 
     # 3. Replace bare NaN, Infinity, -Infinity with null
     repaired = re.sub(r"\bNaN\b", "null", repaired)
