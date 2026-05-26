@@ -160,35 +160,14 @@ async def suggest(
 def _compress_schema(schema_json: dict) -> dict:
     """Optimize LLM context usage while maintaining high code quality.
 
-    Pares down the massive head (from 20 rows to 2 rows), removes the tail completely,
-    and slices the describe statistics to include only the absolute essential metrics
-    needed by the AI (min, max, mean, unique, top) to drastically reduce token footprint.
+    Pares down the massive head (from 20 rows to 2 rows) and removes the tail completely.
+    This preserves the exact value formatting context needed for excellent code quality,
+    but saves thousands of tokens.
     """
     compressed = dict(schema_json)
     if "head" in compressed and isinstance(compressed["head"], list):
         compressed["head"] = compressed["head"][:2]
     compressed.pop("tail", None)
-
-    if "describe" in compressed and isinstance(compressed["describe"], dict):
-        sliced_describe = {}
-        for col, stats in compressed["describe"].items():
-            if not isinstance(stats, dict):
-                sliced_describe[col] = stats
-                continue
-
-            # Keep only the absolute essential metrics needed for excellent AI code generation
-            essential = {}
-            for k in ("min", "max", "mean"):
-                if k in stats:
-                    essential[k] = stats[k]
-            for k in ("unique", "top"):
-                if k in stats:
-                    essential[k] = stats[k]
-
-            # Use essential sliced metrics, fall back to full object if none matched
-            sliced_describe[col] = essential if essential else stats
-        compressed["describe"] = sliced_describe
-
     return compressed
 
 
