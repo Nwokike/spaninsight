@@ -108,7 +108,7 @@ async def suggest(
 ) -> list[dict]:
     """Fast context-aware suggestions — lean prompt matching describe_result speed."""
     system_prompt = (
-        "You are an expert data intelligence consultant. Suggest exactly 5 distinct, "
+        "You are an expert data intelligence consultant. Suggest exactly 3 distinct, "
         "deeply insightful analysis tracks. Do NOT repeat previous steps.\n\n"
         + _SANDBOX_LIB_CONSTRAINTS
         + "\nReturn ONLY a raw JSON array. Each object has EXACTLY these keys:\n"
@@ -142,7 +142,7 @@ async def suggest(
         cleaned = re.sub(r'"icon"\s*:\s*([^"\s,{}]+)', r'"icon": "\1"', cleaned)
         suggestions = json.loads(cleaned)
         if isinstance(suggestions, list):
-            return suggestions
+            return suggestions[:3]
         return []
     except Exception as e:
         model_used = (
@@ -346,15 +346,5 @@ def fallback_suggestions() -> list[dict]:
             "label": "Missing Values Audit",
             "icon": "🔍",
             "prompt": "Calculate percent of missing values in each column and render as a bar plot.",
-        },
-        {
-            "label": "Correlation Heatmap",
-            "icon": "🔗",
-            "prompt": "Calculate and plot the correlation matrix of all numeric columns to identify relationships.",
-        },
-        {
-            "label": "Outlier Detection",
-            "icon": "🚨",
-            "prompt": "Identify potential outliers in numeric columns using the Interquartile Range (IQR) method and show as box plots.",
         },
     ]

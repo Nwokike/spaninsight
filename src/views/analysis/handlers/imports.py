@@ -162,13 +162,12 @@ async def process_file(view_state, file):
                     )
                     block0["suggestions"] = ai_service.fallback_suggestions()
                 else:
-                    description = await ai_service.describe_dataset(
-                        state.current_df_summary
+                    # Execute describe and suggest concurrently to save up to 4+ seconds of startup latency
+                    description, suggestions = await asyncio.gather(
+                        ai_service.describe_dataset(state.current_df_summary),
+                        ai_service.suggest(state.current_df_summary),
                     )
                     block0["description"] = description
-                    view_state.rebuild()
-
-                    suggestions = await ai_service.suggest(state.current_df_summary)
                     block0["suggestions"] = suggestions
                     state.suggestions = suggestions
 
@@ -268,13 +267,12 @@ async def process_db_table(view_state, connection_url: str, table_name: str):
                     )
                     block0["suggestions"] = ai_service.fallback_suggestions()
                 else:
-                    description = await ai_service.describe_dataset(
-                        state.current_df_summary
+                    # Execute describe and suggest concurrently to save up to 4+ seconds of startup latency
+                    description, suggestions = await asyncio.gather(
+                        ai_service.describe_dataset(state.current_df_summary),
+                        ai_service.suggest(state.current_df_summary),
                     )
                     block0["description"] = description
-                    view_state.rebuild()
-
-                    suggestions = await ai_service.suggest(state.current_df_summary)
                     block0["suggestions"] = suggestions
                     state.suggestions = suggestions
 
