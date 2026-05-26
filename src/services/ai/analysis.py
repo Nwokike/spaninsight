@@ -142,7 +142,7 @@ async def suggest(
         cleaned = re.sub(r'"icon"\s*:\s*([^"\s,{}]+)', r'"icon": "\1"', cleaned)
         suggestions = json.loads(cleaned)
         if isinstance(suggestions, list):
-            return suggestions[:3]
+            return suggestions
         return []
     except Exception as e:
         model_used = (
