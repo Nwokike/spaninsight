@@ -80,7 +80,7 @@ def build_dashboard_layout(
                     [
                         ft.Text("Create a Survey", weight="bold", size=16),
                         ft.Text(
-                            "Describe your questionnaire — AI generates it, you edit before publishing.",
+                            "Describe your questionnaire, we will generate it, and you can edit before publishing.",
                             size=12,
                             color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
@@ -90,7 +90,7 @@ def build_dashboard_layout(
                                 ft.TextField(
                                     ref=ui_state.form_prompt_field,
                                     value=ui_state.prompt_text["value"],
-                                    hint_text="e.g. Student study habits",
+                                    hint_text="e.g. A questionnaire on employee satisfaction",
                                     expand=True,
                                     border_radius=12,
                                     max_lines=3,
@@ -169,6 +169,9 @@ def build_dashboard_layout(
                     ],
                     spacing=4,
                 ),
+                padding=16,
+                margin=ft.Margin(20, 0, 20, 10),
+                border_radius=16,
                 bgcolor=theme.GLASS_BG,
                 border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
             ),

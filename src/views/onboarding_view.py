@@ -173,86 +173,93 @@ def build_onboarding_view(page: ft.Page, on_done: Callable, storage=None) -> ft.
     return ft.View(
         route="/onboarding",
         controls=[
-            ft.Column(
-                [
-                    ft.Row(
+            ft.SafeArea(
+                content=ft.Container(
+                    content=ft.Column(
                         [
-                            ft.TextButton(
-                                "Skip",
-                                on_click=on_skip,
-                                style=ft.ButtonStyle(
-                                    color=ft.Colors.ON_SURFACE_VARIANT
-                                ),
+                            ft.Row(
+                                [
+                                    ft.TextButton(
+                                        "Skip",
+                                        on_click=on_skip,
+                                        style=ft.ButtonStyle(
+                                            color=ft.Colors.ON_SURFACE_VARIANT
+                                        ),
+                                    ),
+                                ],
+                                alignment="end",
                             ),
+                            # U2 FIX: Wrap slide in GestureDetector for swipe navigation
+                            ft.GestureDetector(
+                                content=ft.Container(
+                                    ref=slide_container,
+                                    content=_build_slide(slides[0]),
+                                    expand=True,
+                                    padding=ft.Padding(32, 0, 32, 0),
+                                ),
+                                on_horizontal_drag_end=on_swipe,
+                            ),
+                            ft.Row(
+                                ref=indicator_row,
+                                controls=_build_indicators(),
+                                alignment="center",
+                                spacing=6,
+                            ),
+                            ft.Container(height=20),
+                            # Agreement check row
+                            ft.Container(
+                                ref=agree_container_ref,
+                                content=ft.Row(
+                                    [
+                                        ft.Checkbox(
+                                            ref=agree_checkbox_ref,
+                                            on_change=on_agree_changed,
+                                            value=False,
+                                        ),
+                                        ft.Text("I agree to the ", size=12),
+                                        ft.TextButton(
+                                            "Privacy Policy",
+                                            style=ft.ButtonStyle(color=theme.PRIMARY),
+                                            on_click=_launch_privacy,
+                                        ),
+                                        ft.Text(" & ", size=12),
+                                        ft.TextButton(
+                                            "Terms of Service",
+                                            style=ft.ButtonStyle(color=theme.PRIMARY),
+                                            on_click=_launch_terms,
+                                        ),
+                                    ],
+                                    alignment="center",
+                                    spacing=0,
+                                ),
+                                visible=False,
+                            ),
+                            ft.Container(height=16),
+                            ft.Container(
+                                content=ft.FilledButton(
+                                    "Get Started" if is_last else "Next",
+                                    ref=button_ref,
+                                    icon=ft.Icons.ARROW_FORWARD_ROUNDED,
+                                    on_click=on_next,
+                                    width=200,
+                                    height=48,
+                                    style=ft.ButtonStyle(
+                                        bgcolor=theme.ACCENT,
+                                        color=ft.Colors.WHITE,
+                                        shape=ft.RoundedRectangleBorder(radius=24),
+                                    ),
+                                ),
+                                alignment=ft.Alignment.CENTER,
+                            ),
+                            ft.Container(height=48),
                         ],
-                        alignment="end",
+                        expand=True,
                     ),
-                    # U2 FIX: Wrap slide in GestureDetector for swipe navigation
-                    ft.GestureDetector(
-                        content=ft.Container(
-                            ref=slide_container,
-                            content=_build_slide(slides[0]),
-                            expand=True,
-                            padding=ft.Padding(32, 0, 32, 0),
-                        ),
-                        on_horizontal_drag_end=on_swipe,
-                    ),
-                    ft.Row(
-                        ref=indicator_row,
-                        controls=_build_indicators(),
-                        alignment="center",
-                        spacing=6,
-                    ),
-                    ft.Container(height=20),
-                    # Agreement check row
-                    ft.Container(
-                        ref=agree_container_ref,
-                        content=ft.Row(
-                            [
-                                ft.Checkbox(
-                                    ref=agree_checkbox_ref,
-                                    on_change=on_agree_changed,
-                                    value=False,
-                                ),
-                                ft.Text("I agree to the ", size=12),
-                                ft.TextButton(
-                                    "Privacy Policy",
-                                    style=ft.ButtonStyle(color=theme.PRIMARY),
-                                    on_click=_launch_privacy,
-                                ),
-                                ft.Text(" & ", size=12),
-                                ft.TextButton(
-                                    "Terms of Service",
-                                    style=ft.ButtonStyle(color=theme.PRIMARY),
-                                    on_click=_launch_terms,
-                                ),
-                            ],
-                            alignment="center",
-                            spacing=0,
-                        ),
-                        visible=False,
-                    ),
-                    ft.Container(height=16),
-                    ft.Container(
-                        content=ft.FilledButton(
-                            "Get Started" if is_last else "Next",
-                            ref=button_ref,
-                            icon=ft.Icons.ARROW_FORWARD_ROUNDED,
-                            on_click=on_next,
-                            width=200,
-                            height=48,
-                            style=ft.ButtonStyle(
-                                bgcolor=theme.ACCENT,
-                                color=ft.Colors.WHITE,
-                                shape=ft.RoundedRectangleBorder(radius=24),
-                            ),
-                        ),
-                        alignment=ft.Alignment.CENTER,
-                    ),
-                    ft.Container(height=48),
-                ],
+                    padding=20,
+                    expand=True,
+                ),
                 expand=True,
-            ),
+            )
         ],
         padding=0,
     )

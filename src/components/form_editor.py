@@ -264,7 +264,10 @@ def build_form_editor(
                     schema.append(new_field(schema)),
                     on_schema_changed(),
                 ),
-                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
+                style=ft.ButtonStyle(
+                    shape=ft.RoundedRectangleBorder(radius=12),
+                    padding=14,
+                ),
             ),
             padding=ft.Padding(20, 4, 20, 4),
         )
@@ -362,12 +365,23 @@ def build_form_editor(
                             ft.FilledButton(
                                 "Publish",
                                 icon=ft.Icons.PUBLISH_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    bgcolor=theme.PRIMARY,
+                                    color=ft.Colors.WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
                                 on_click=lambda e: on_publish(),
                                 disabled=is_publishing or is_ai_editing,
                             ),
                             ft.OutlinedButton(
                                 "Cancel",
                                 icon=ft.Icons.CLOSE_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                    color=theme.PRIMARY,
+                                ),
                                 on_click=lambda e: on_cancel(),
                             ),
                         ],

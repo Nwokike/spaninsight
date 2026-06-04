@@ -156,6 +156,12 @@ def build_report_view(
                             ft.FilledButton(
                                 "Start Analysis",
                                 icon=ft.Icons.ANALYTICS_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    bgcolor=theme.PRIMARY,
+                                    color=ft.Colors.WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=16,
+                                ),
                                 on_click=lambda _: page.run_task(
                                     page.push_route, "/analysis"
                                 ),

@@ -599,6 +599,12 @@ def build_report_editor(
                                 icon=ft.Icons.OPEN_IN_NEW_ROUNDED
                                 if not is_viewing_live
                                 else None,
+                                style=ft.ButtonStyle(
+                                    bgcolor=theme.PRIMARY,
+                                    color=ft.Colors.WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
                                 on_click=lambda e: on_view_live(),
                                 disabled=is_viewing_live or is_ai_editing,
                                 expand=True,
@@ -620,6 +626,12 @@ def build_report_editor(
                                 if is_saving
                                 else "Save",
                                 icon=ft.Icons.SAVE_ROUNDED if not is_saving else None,
+                                style=ft.ButtonStyle(
+                                    bgcolor=theme.PRIMARY,
+                                    color=ft.Colors.WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
                                 on_click=lambda e: on_save(),
                                 disabled=is_saving or is_ai_editing,
                                 expand=True,
@@ -644,6 +656,11 @@ def build_report_editor(
                                 if is_sharing
                                 else "Share",
                                 icon=ft.Icons.SHARE_ROUNDED if not is_sharing else None,
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                    color=theme.PRIMARY,
+                                ),
                                 on_click=lambda e: on_share(),
                                 disabled=is_sharing or is_ai_editing,
                             ),
@@ -662,6 +679,10 @@ def build_report_editor(
                                 icon=ft.Icons.ARROW_BACK_ROUNDED
                                 if not is_deleting
                                 else None,
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
                                 on_click=lambda e: on_back(),
                                 disabled=is_deleting,
                             ),
@@ -691,7 +712,11 @@ def build_report_editor(
                                     if not is_deleting
                                     else None,
                                     icon_color=theme.ERROR,
-                                    style=ft.ButtonStyle(color=theme.ERROR),
+                                    style=ft.ButtonStyle(
+                                        color=theme.ERROR,
+                                        shape=ft.RoundedRectangleBorder(radius=12),
+                                        padding=14,
+                                    ),
                                     on_click=lambda e: on_delete(),
                                     disabled=is_deleting or is_ai_editing,
                                 )

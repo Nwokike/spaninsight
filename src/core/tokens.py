@@ -27,23 +27,23 @@ SPACE_XXXL = 48
 SPACE_XXXXL = 56
 
 # ── Font Sizes ──────────────────────────────────────────────────────
-FONT_XXS = 10
-FONT_XS = 12
-FONT_SM = 13
-FONT_MD = 16
-FONT_LG = 20
-FONT_XL = 22
-FONT_XXL = 26
-FONT_TITLE = 30
-FONT_HERO = 38
+FONT_XXS = 8
+FONT_XS = 10
+FONT_SM = 11
+FONT_MD = 14
+FONT_LG = 18
+FONT_XL = 20
+FONT_XXL = 24
+FONT_TITLE = 28
+FONT_HERO = 36
 
 # ── Icon Sizes ──────────────────────────────────────────────────────
-ICON_SM = 18
-ICON_MD = 20
-ICON_LG = 24
-ICON_XL = 32
-ICON_XXL = 48
-ICON_HERO = 64
+ICON_SM = 16
+ICON_MD = 18
+ICON_LG = 22
+ICON_XL = 30
+ICON_XXL = 46
+ICON_HERO = 62
 
 # ── Shadow ──────────────────────────────────────────────────────────
 SHADOW_BLUR = 8

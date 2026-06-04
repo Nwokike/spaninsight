@@ -7,10 +7,9 @@
 </p>
 
 <p align="center">
-  <a href="#download"><img src="https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows11&logoColor=white" alt="Windows" /></a>
-  <a href="#android"><img src="https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android" /></a>
-  <br>
-  <img src="https://img.shields.io/badge/Built%20with-Flet%200.85-00B0FF?style=flat-square" alt="Built with Flet" />
+  <img src="https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android" />
+  <img src="https://img.shields.io/badge/Built%20with-Flet%200.85-00B0FF?style=for-the-badge&logo=flutter&logoColor=white" alt="Built with Flet" />
+  <img src="https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
 </p>
 
 ---
@@ -19,7 +18,6 @@
 
 | Platform | Download | Notes |
 |:--------:|:--------:|:------|
-| 🪟 **Windows** | [**SpanInsight_Setup.exe**](https://github.com/Nwokike/spaninsight/releases/latest/download/SpanInsight_Setup.exe) | Windows 10/11 64-bit Installer |
 | 🤖 **Android** | [![Play Store](https://img.shields.io/badge/Google_Play-414141?style=flat-square&logo=google-play&logoColor=white)](https://play.google.com/store/apps/details?id=com.spaninsight.app) | Recommended for most users |
 
 ### Android (APK direct download)
@@ -47,7 +45,7 @@
 
 ## Screenshots
 
-### Desktop Experience
+### Widescreen & Tablet Experience
 
 <p align="center">
   <img src="screenshots/home_desktop_light.png" width="90%" alt="Workspace Home Screen" />
@@ -117,7 +115,7 @@
 - **Editable Code Blocks** — View, edit, and re-run the Python code behind every analysis result.
 - **Local Sandbox** — Built-in Python runtime (`pandas`, `matplotlib`) runs in a restricted environment.
 - **Credit-Based System** — AI tasks use a transparent credit system with generous daily free allowances.
-- **Native Desktop & Mobile** — High-performance, optimized deployments across Windows and Android devices.
+- **Responsive Widescreen & Mobile** — High-performance, optimized deployments across widescreen and Android layouts.
 - **Google AdMob Integration** — Safe, buffered banner and interstitial advertising support for mobile app users.
 - **Resilient Mobile Sandbox** — Hardened client environment utilizing sandboxed directory access (`FLET_APP_STORAGE_DATA`/`TEMP`) for maximum permission security and zero PermissionError crashes.
 

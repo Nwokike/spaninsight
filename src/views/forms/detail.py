@@ -24,7 +24,7 @@ def build_form_detail(
                     ft.Text(form["title"], weight="bold", size=16, expand=True),
                 ]
             ),
-            padding=ft.Padding(10, 0, 10, 0),
+            padding=ft.Padding(20, 0, 20, 0),
         )
     )
     resp_count = form.get("_count", form.get("response_count", 0))
@@ -172,6 +172,12 @@ def build_form_detail(
                             ft.FilledButton(
                                 "Copy Link",
                                 icon=ft.Icons.LINK_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    bgcolor=theme.PRIMARY,
+                                    color=ft.Colors.WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
                                 on_click=lambda e: page.run_task(
                                     on_copy_link, form["id"]
                                 ),
@@ -179,6 +185,12 @@ def build_form_detail(
                             ft.FilledButton(
                                 "Renew +7d",
                                 icon=ft.Icons.UPDATE_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    bgcolor=theme.PRIMARY,
+                                    color=ft.Colors.WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
                                 on_click=lambda e: page.run_task(
                                     on_renew_form, form["id"]
                                 ),
@@ -192,11 +204,23 @@ def build_form_detail(
                             ft.FilledButton(
                                 "Download CSV",
                                 icon=ft.Icons.DOWNLOAD_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    bgcolor=theme.PRIMARY,
+                                    color=ft.Colors.WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
                                 on_click=lambda e: page.run_task(on_download_csv, form),
                             ),
                             ft.FilledButton(
                                 "Analyze",
                                 icon=ft.Icons.ANALYTICS_ROUNDED,
+                                style=ft.ButtonStyle(
+                                    bgcolor=theme.PRIMARY,
+                                    color=ft.Colors.WHITE,
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
                                 on_click=lambda e: page.run_task(
                                     on_analyze_responses, form
                                 ),
@@ -208,7 +232,10 @@ def build_form_detail(
                     ft.TextButton(
                         "Delete Form",
                         icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
-                        style=ft.ButtonStyle(color=theme.ERROR),
+                        style=ft.ButtonStyle(
+                            color=theme.ERROR,
+                            shape=ft.RoundedRectangleBorder(radius=12),
+                        ),
                         on_click=lambda e: page.run_task(on_delete_form, form["id"]),
                     ),
                 ],
