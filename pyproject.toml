@@ -1,6 +1,6 @@
 [project]
 name = "spaninsight"
-version = "1.1.0"
+version = "1.2.0"
 description = "A high-performance, privacy-first data intelligence platform for smart data collection, analysis and reporting."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -30,14 +30,11 @@ dev = [
 [tool.flet]
 org = "com.spaninsight"
 product = "Spaninsight"
-build_number = 2
+build_number = 3
 
 [tool.flet.app]
 path = "src"
 
-[tool.flet.splash]
-color = "#F5F6FA"
-dark_color = "#0A0B14"
 
 [tool.flet.app.boot_screen]
 show = true
