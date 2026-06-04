@@ -46,7 +46,6 @@ def build_stat_card(
         ),
         border_radius=tokens.RADIUS_LG,
         bgcolor=theme.GLASS_BG,
-        blur=ft.Blur(tokens.BLUR_SM, tokens.BLUR_SM, ft.BlurTileMode.MIRROR),
         border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
         expand=True,
     )

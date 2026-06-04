@@ -710,7 +710,7 @@ def build_block_card(
                     else ft.Icons.PUSH_PIN_OUTLINED,
                     on_click=lambda e, idx=index: on_pin_block(view_state, idx),
                     style=ft.ButtonStyle(
-                        color=theme.SUCCESS if is_pinned else theme.PRIMARY
+                        color=theme.ACCENT if is_pinned else theme.PRIMARY
                     ),
                     disabled=state.is_analyzing or is_pinning,
                 )

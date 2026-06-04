@@ -11,23 +11,22 @@ import flet as ft
 from core import theme, tokens
 
 
-# ── Glass Card ──────────────────────────────────────────────────────
+# ── Glass Card ────────────────────────────────────────────────────────
 def glass_card(
     content: ft.Control,
     *,
     width: int | None = None,
     padding: int | ft.Padding = tokens.SPACE_XL,
     border_radius: int = tokens.RADIUS_XL,
-    blur_sigma: int = tokens.BLUR_SM,
+    blur_sigma: int = 0,  # kept for signature compat, unused
 ) -> ft.Container:
-    """Return a frosted-glass card container."""
+    """Return a clean card container — no blur for mobile performance."""
     return ft.Container(
         content=content,
         width=width,
         padding=padding,
         border_radius=border_radius,
         bgcolor=theme.GLASS_BG,
-        blur=ft.Blur(blur_sigma, blur_sigma, ft.BlurTileMode.MIRROR),
         border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
         shadow=ft.BoxShadow(
             spread_radius=0,
@@ -87,8 +86,9 @@ def section_header(title: str) -> ft.Container:
         content=ft.Text(
             title.upper(),
             size=tokens.FONT_XS,
-            weight=ft.FontWeight.BOLD,
+            weight=ft.FontWeight.W_600,
             color=ft.Colors.PRIMARY,
+            style=ft.TextStyle(letter_spacing=0.8),
         ),
         padding=ft.Padding(
             left=tokens.SPACE_XS,
@@ -148,6 +148,7 @@ def setting_tile(
         ),
         border_radius=tokens.RADIUS_MD,
         ink=True,
+        ink_color=ft.Colors.with_opacity(0.08, theme.PRIMARY),
         on_click=on_click,
     )
 

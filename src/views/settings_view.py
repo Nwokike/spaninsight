@@ -263,7 +263,7 @@ def build_settings_view(
                                 "SOON",
                                 size=tokens.FONT_XXS,
                                 weight=ft.FontWeight.W_700,
-                                color=theme.PRIMARY_LIGHT,
+                                color=theme.ACCENT,
                             ),
                             padding=ft.Padding(
                                 left=tokens.SPACE_SM,
@@ -272,7 +272,7 @@ def build_settings_view(
                                 bottom=tokens.SPACE_XXS,
                             ),
                             border_radius=tokens.RADIUS_SM,
-                            bgcolor=ft.Colors.with_opacity(0.1, theme.PRIMARY),
+                            bgcolor=ft.Colors.with_opacity(0.1, theme.ACCENT),
                         ),
                     ],
                     spacing=tokens.SPACE_LG,

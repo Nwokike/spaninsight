@@ -242,7 +242,7 @@ def build_onboarding_view(page: ft.Page, on_done: Callable, storage=None) -> ft.
                             width=200,
                             height=48,
                             style=ft.ButtonStyle(
-                                bgcolor=theme.PRIMARY,
+                                bgcolor=theme.ACCENT,
                                 color=ft.Colors.WHITE,
                                 shape=ft.RoundedRectangleBorder(radius=24),
                             ),

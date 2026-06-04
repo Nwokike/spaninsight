@@ -92,7 +92,7 @@ def build_home_view(
                 ft.Icon(
                     ft.Icons.SHIELD_ROUNDED,
                     size=tokens.ICON_MD,
-                    color=theme.SUCCESS,
+                    color=theme.PRIMARY,
                 ),
                 ft.Column(
                     controls=[
@@ -128,8 +128,8 @@ def build_home_view(
             bottom=tokens.SPACE_SM,
         ),
         border_radius=tokens.RADIUS_LG,
-        bgcolor=ft.Colors.with_opacity(0.06, theme.SUCCESS),
-        border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.SUCCESS)),
+        bgcolor=ft.Colors.with_opacity(0.06, theme.PRIMARY),
+        border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.PRIMARY)),
     )
 
     # ── What you can do ─────────────────────────────────────────────
@@ -176,7 +176,7 @@ def build_home_view(
                     "Voice Commands",
                     "Speak your analysis request in a 60-second voice note. "
                     "Spaninsight transcribes it and runs the analysis for you.",
-                    "#9C27B0",
+                    theme.PRIMARY_LIGHT,
                 ),
             ],
             spacing=tokens.SPACE_MD,

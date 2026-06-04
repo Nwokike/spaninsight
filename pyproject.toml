@@ -43,10 +43,6 @@ dark_color = "#0A0B14"
 show = true
 message = "Preparing the app for its first launch…"
 
-[tool.flet.app.startup_screen]
-show = true
-message = "Autonomous Data Intelligence for Everyone"
-
 [tool.flet.android]
 bundle_id = "com.spaninsight.app"
 

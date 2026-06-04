@@ -20,22 +20,22 @@ SPACE_XXS = 2
 SPACE_XS = 4
 SPACE_SM = 8
 SPACE_MD = 12
-SPACE_LG = 16
-SPACE_XL = 20
-SPACE_XXL = 24
-SPACE_XXXL = 32
-SPACE_XXXXL = 40
+SPACE_LG = 20
+SPACE_XL = 24
+SPACE_XXL = 32
+SPACE_XXXL = 48
+SPACE_XXXXL = 56
 
 # ── Font Sizes ──────────────────────────────────────────────────────
 FONT_XXS = 10
 FONT_XS = 12
 FONT_SM = 13
-FONT_MD = 15
-FONT_LG = 18
-FONT_XL = 20
-FONT_XXL = 24
-FONT_TITLE = 28
-FONT_HERO = 36
+FONT_MD = 16
+FONT_LG = 20
+FONT_XL = 22
+FONT_XXL = 26
+FONT_TITLE = 30
+FONT_HERO = 38
 
 # ── Icon Sizes ──────────────────────────────────────────────────────
 ICON_SM = 18
@@ -45,16 +45,11 @@ ICON_XL = 32
 ICON_XXL = 48
 ICON_HERO = 64
 
-# ── Blur Sigma ──────────────────────────────────────────────────────
-BLUR_SM = 10
-BLUR_MD = 20
-BLUR_LG = 30
-
 # ── Shadow ──────────────────────────────────────────────────────────
-SHADOW_BLUR = 12
-SHADOW_BLUR_LG = 24
-SHADOW_OFFSET_Y = 4
-SHADOW_OFFSET_Y_LG = 8
+SHADOW_BLUR = 8
+SHADOW_BLUR_LG = 16
+SHADOW_OFFSET_Y = 2
+SHADOW_OFFSET_Y_LG = 4
 
 # ── Layout ──────────────────────────────────────────────────────────
 NAV_BAR_HEIGHT = 70

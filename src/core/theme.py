@@ -1,6 +1,7 @@
 """Design system — colour palette, gradients, and Material 3 theme.
 
 Every colour used anywhere in Spaninsight lives here.
+Palette derived from brand logo: Teal (primary) + Orange (accent/CTA).
 """
 
 from __future__ import annotations
@@ -8,113 +9,126 @@ from __future__ import annotations
 import flet as ft
 
 # ── Brand Palette ───────────────────────────────────────────────────
-PRIMARY = "#6C63FF"  # Electric indigo
-PRIMARY_DARK = "#5A52D5"  # Pressed state
-PRIMARY_LIGHT = "#8B83FF"  # Hover state
-ACCENT = "#00D9FF"  # Cyan data glow
-ACCENT_DIM = "#00A8C6"  # Subdued accent
+PRIMARY = "#00897B"  # Teal 600 — brand primary
+PRIMARY_DARK = "#00796B"  # Teal 700 — pressed state
+PRIMARY_LIGHT = "#4DB6AC"  # Teal 300 — hover / light variant
+ACCENT = "#F4831F"  # Warm Orange — CTA / secondary
+ACCENT_DIM = "#E07316"  # Deep Orange — subdued accent
 
-SUCCESS = "#00E676"
-WARNING = "#FFB74D"
-ERROR = "#FF5252"
+SUCCESS = "#2E7D32"  # Green 800
+WARNING = "#F9A825"  # Amber 800
+ERROR = "#D32F2F"  # Red 700
 
-# ── Dark Mode Surfaces ──────────────────────────────────────────────
-DARK_BG_1 = "#0A0B14"  # Deepest background
-DARK_BG_2 = "#0D0F1A"  # Primary background
-DARK_SURFACE = "#141627"  # Card surface
-DARK_SURFACE_2 = "#1C1E33"  # Elevated surface
-DARK_BORDER = "#2A2D4A"  # Subtle borders
-DARK_TEXT = "#EEEEF5"  # Primary text
-DARK_TEXT_DIM = "#8E90A6"  # Secondary text
+# ── Dark Mode Surfaces (M3 Surface Container hierarchy) ────────────
+DARK_BG_1 = "#0F1114"  # Background
+DARK_BG_2 = "#121518"  # Surface
+DARK_SURFACE = "#1A1D22"  # Surface Container Low — cards
+DARK_SURFACE_2 = "#252A30"  # Surface Container High — dialogs
+DARK_BORDER = "#2E3339"  # Outline / dividers
+DARK_TEXT = "#ECEFF1"  # On Surface
+DARK_TEXT_DIM = "#90A4AE"  # On Surface Variant
 
-LIGHT_BG = "#F5F6FA"
+LIGHT_BG = "#FAFAFA"
 LIGHT_SURFACE = "#FFFFFF"
-LIGHT_SURFACE_2 = "#F0F1F8"
-LIGHT_BORDER = "#E0E1EC"
-LIGHT_TEXT = "#1A1B2E"
-LIGHT_TEXT_DIM = "#6B6D82"
+LIGHT_SURFACE_2 = "#F5F5F5"
+LIGHT_BORDER = "#E0E0E0"
+LIGHT_TEXT = "#1A1A2E"
+LIGHT_TEXT_DIM = "#757575"
 
-# ── Glassmorphism ───────────────────────────────────────────────────
-GLASS_BG_OPACITY = 0.06
+# ── Surface Cards (replaces glassmorphism — solid, performant) ──────
+GLASS_BG_OPACITY = 0.06  # kept for backward compat in edge cases
 GLASS_BORDER_OPACITY = 0.12
-GLASS_BG = ft.Colors.with_opacity(GLASS_BG_OPACITY, ft.Colors.WHITE)
-GLASS_BORDER_COLOR = ft.Colors.with_opacity(GLASS_BORDER_OPACITY, ft.Colors.WHITE)
+GLASS_BG = ft.Colors.with_opacity(0.05, ft.Colors.WHITE)
+GLASS_BORDER_COLOR = ft.Colors.with_opacity(0.10, ft.Colors.WHITE)
 
-LIGHT_GLASS_BG = ft.Colors.with_opacity(0.06, ft.Colors.BLACK)
-LIGHT_GLASS_BORDER = ft.Colors.with_opacity(0.10, ft.Colors.BLACK)
+LIGHT_GLASS_BG = ft.Colors.with_opacity(0.04, ft.Colors.BLACK)
+LIGHT_GLASS_BORDER = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
 
 # ── Shadows ─────────────────────────────────────────────────────────
-SHADOW_PRIMARY = ft.Colors.with_opacity(0.25, PRIMARY)
-SHADOW_DARK = ft.Colors.with_opacity(0.15, "#000000")
+SHADOW_PRIMARY = ft.Colors.with_opacity(0.20, PRIMARY)
+SHADOW_DARK = ft.Colors.with_opacity(0.12, "#000000")
 
 # ── Credit Badge Colours ────────────────────────────────────────────
-CREDIT_HIGH = SUCCESS  # > 20 credits
+CREDIT_HIGH = PRIMARY  # > 20 credits — teal (brand)
 CREDIT_MEDIUM = WARNING  # 5–20 credits
 CREDIT_LOW = ERROR  # < 5 credits
 
 
 # ── Gradient Builders ───────────────────────────────────────────────
 def dark_gradient() -> ft.LinearGradient:
-    """Deep space gradient for dark mode."""
+    """Subtle dark gradient — nearly flat for performance."""
     return ft.LinearGradient(
         begin=ft.Alignment.TOP_CENTER,
         end=ft.Alignment.BOTTOM_CENTER,
-        colors=[DARK_BG_1, DARK_BG_2, "#0F1020"],
+        colors=[DARK_BG_1, DARK_BG_2],
     )
 
 
 def light_gradient() -> ft.LinearGradient:
-    """Subtle gradient for light mode."""
+    """Subtle warm gradient for light mode."""
     return ft.LinearGradient(
         begin=ft.Alignment.TOP_CENTER,
         end=ft.Alignment.BOTTOM_CENTER,
-        colors=["#ECEDF5", LIGHT_BG, "#F8F9FD"],
+        colors=["#F5F5F5", LIGHT_BG],
     )
 
 
 def accent_gradient() -> ft.LinearGradient:
-    """Vibrant gradient for primary action buttons."""
+    """Teal-to-orange gradient for primary action highlights."""
     return ft.LinearGradient(
         begin=ft.Alignment.BOTTOM_LEFT,
         end=ft.Alignment.TOP_RIGHT,
-        colors=[PRIMARY, "#8B83FF", ACCENT],
+        colors=[PRIMARY, PRIMARY_LIGHT, ACCENT],
     )
 
 
 def adaptive_glass_bg(page: ft.Page | None = None):
-    """Return glass background color appropriate for current theme."""
+    """Return card background color appropriate for current theme."""
     if page and page.theme_mode == ft.ThemeMode.LIGHT:
         return LIGHT_GLASS_BG
     return GLASS_BG
 
 
 def adaptive_glass_border(page: ft.Page | None = None):
-    """Return glass border color appropriate for current theme."""
+    """Return card border color appropriate for current theme."""
     if page and page.theme_mode == ft.ThemeMode.LIGHT:
         return LIGHT_GLASS_BORDER
     return GLASS_BORDER_COLOR
 
 
 class AppTheme:
-    """Build Material 3 themes for Spaninsight."""
+    """Build Material 3 themes for Spaninsight — teal/orange."""
 
     @staticmethod
     def get_dark_theme() -> ft.Theme:
         return ft.Theme(
             color_scheme=ft.ColorScheme(
                 primary=PRIMARY,
+                on_primary=ft.Colors.WHITE,
+                primary_container="#004D40",
+                on_primary_container="#A7F3D0",
                 secondary=ACCENT,
+                on_secondary=ft.Colors.WHITE,
+                secondary_container="#7B3F00",
+                on_secondary_container="#FFE0B2",
+                tertiary="#F9A825",
+                on_tertiary=ft.Colors.BLACK,
                 surface=DARK_BG_2,
                 on_surface=DARK_TEXT,
                 on_surface_variant=DARK_TEXT_DIM,
+                surface_container_lowest=DARK_BG_1,
+                surface_container_low=DARK_SURFACE,
+                surface_container=DARK_SURFACE,
+                surface_container_high=DARK_SURFACE_2,
+                surface_container_highest="#2C3138",
                 error=ERROR,
-                on_primary=ft.Colors.WHITE,
-                on_secondary=ft.Colors.BLACK,
+                on_error=ft.Colors.WHITE,
                 outline=DARK_BORDER,
-                surface_container_highest=DARK_SURFACE_2,
+                outline_variant="#1E2228",
             ),
             navigation_bar_theme=ft.NavigationBarTheme(
-                label_text_style=ft.TextStyle(size=10, weight=ft.FontWeight.W_500)
+                indicator_color=ft.Colors.with_opacity(0.16, PRIMARY),
+                label_text_style=ft.TextStyle(size=10, weight=ft.FontWeight.W_500),
             ),
             visual_density=ft.VisualDensity.COMFORTABLE,
         )
@@ -124,18 +138,31 @@ class AppTheme:
         return ft.Theme(
             color_scheme=ft.ColorScheme(
                 primary=PRIMARY,
+                on_primary=ft.Colors.WHITE,
+                primary_container="#B2DFDB",
+                on_primary_container="#00251A",
                 secondary=ACCENT,
+                on_secondary=ft.Colors.WHITE,
+                secondary_container="#FFE0B2",
+                on_secondary_container="#4E2600",
+                tertiary="#F9A825",
+                on_tertiary=ft.Colors.BLACK,
                 surface=LIGHT_BG,
                 on_surface=LIGHT_TEXT,
                 on_surface_variant=LIGHT_TEXT_DIM,
+                surface_container_lowest="#FFFFFF",
+                surface_container_low=LIGHT_SURFACE,
+                surface_container=LIGHT_SURFACE,
+                surface_container_high=LIGHT_SURFACE_2,
+                surface_container_highest="#EEEEEE",
                 error=ERROR,
-                on_primary=ft.Colors.WHITE,
-                on_secondary=ft.Colors.BLACK,
+                on_error=ft.Colors.WHITE,
                 outline=LIGHT_BORDER,
-                surface_container_highest=LIGHT_SURFACE_2,
+                outline_variant="#F5F5F5",
             ),
             navigation_bar_theme=ft.NavigationBarTheme(
-                label_text_style=ft.TextStyle(size=10, weight=ft.FontWeight.W_500)
+                indicator_color=ft.Colors.with_opacity(0.16, PRIMARY),
+                label_text_style=ft.TextStyle(size=10, weight=ft.FontWeight.W_500),
             ),
             visual_density=ft.VisualDensity.COMFORTABLE,
         )

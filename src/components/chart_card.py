@@ -111,6 +111,5 @@ def build_chart_card(
         padding=tokens.SPACE_LG,
         border_radius=tokens.RADIUS_XL,
         bgcolor=theme.GLASS_BG,
-        blur=ft.Blur(tokens.BLUR_SM, tokens.BLUR_SM, ft.BlurTileMode.MIRROR),
         border=ft.Border.all(1, theme.GLASS_BORDER_COLOR),
     )
