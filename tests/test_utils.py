@@ -58,7 +58,7 @@ class TestParseVersion:
         assert parse_version(None) == (0, 0, 0)
 
     def test_whitespace_stripped(self):
-        assert parse_version("  1.2.0  ") == (1, 1, 0)
+        assert parse_version("  1.2.0  ") == (1, 2, 0)
 
 
 class TestFigureToPngBytes:
