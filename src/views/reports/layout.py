@@ -7,6 +7,7 @@ import pendulum
 from core import theme, utils
 
 from components.brand_header import build_brand_header
+from components.refresh_button import build_refresh_button
 from components.report_editor import build_report_editor
 
 from .state import ReportsState
@@ -21,6 +22,9 @@ def build_report_view(
     credit_service=None,
 ) -> ft.View:
     ui_state = ReportsState(page)
+
+    async def _on_start_analysis(e):
+        await page.push_route("/analysis")
 
     def _rebuild():
         if not ui_state.content_column.current:
@@ -162,9 +166,7 @@ def build_report_view(
                                     shape=ft.RoundedRectangleBorder(radius=12),
                                     padding=16,
                                 ),
-                                on_click=lambda _: page.run_task(
-                                    page.push_route, "/analysis"
-                                ),
+                                on_click=_on_start_analysis,
                             ),
                         ],
                         horizontal_alignment="center",
@@ -268,9 +270,7 @@ def build_report_view(
                     [
                         ft.Text("Your Reports", size=18, weight=ft.FontWeight.W_700),
                         ft.Container(expand=True),
-                        ft.IconButton(
-                            ft.Icons.REFRESH_ROUNDED,
-                            tooltip="Refresh",
+                        build_refresh_button(
                             on_click=lambda e: page.run_task(
                                 handlers.load_reports, page, ui_state, report_service
                             ),

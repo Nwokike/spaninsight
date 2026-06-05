@@ -609,6 +609,34 @@ def build_report_editor(
                                 disabled=is_viewing_live or is_ai_editing,
                                 expand=True,
                             ),
+                        ],
+                        spacing=8,
+                    ),
+                    # Row 2 — Secondary actions
+                    ft.Row(
+                        [
+                            ft.OutlinedButton(
+                                content=ft.Row(
+                                    [
+                                        ft.ProgressRing(
+                                            width=12, height=12, stroke_width=2
+                                        ),
+                                        ft.Text("Back...", size=12),
+                                    ],
+                                    spacing=6,
+                                )
+                                if is_deleting
+                                else "Back",
+                                icon=ft.Icons.ARROW_BACK_ROUNDED
+                                if not is_deleting
+                                else None,
+                                style=ft.ButtonStyle(
+                                    shape=ft.RoundedRectangleBorder(radius=12),
+                                    padding=14,
+                                ),
+                                on_click=lambda e: on_back(),
+                                disabled=is_deleting,
+                            ),
                             ft.FilledButton(
                                 ref=save_btn_ref,
                                 content=ft.Row(
@@ -634,14 +662,7 @@ def build_report_editor(
                                 ),
                                 on_click=lambda e: on_save(),
                                 disabled=is_saving or is_ai_editing,
-                                expand=True,
                             ),
-                        ],
-                        spacing=8,
-                    ),
-                    # Row 2 — Secondary actions
-                    ft.Row(
-                        [
                             ft.OutlinedButton(
                                 ref=share_btn_ref,
                                 content=ft.Row(
@@ -663,28 +684,6 @@ def build_report_editor(
                                 ),
                                 on_click=lambda e: on_share(),
                                 disabled=is_sharing or is_ai_editing,
-                            ),
-                            ft.OutlinedButton(
-                                content=ft.Row(
-                                    [
-                                        ft.ProgressRing(
-                                            width=12, height=12, stroke_width=2
-                                        ),
-                                        ft.Text("Back...", size=12),
-                                    ],
-                                    spacing=6,
-                                )
-                                if is_deleting
-                                else "Back",
-                                icon=ft.Icons.ARROW_BACK_ROUNDED
-                                if not is_deleting
-                                else None,
-                                style=ft.ButtonStyle(
-                                    shape=ft.RoundedRectangleBorder(radius=12),
-                                    padding=14,
-                                ),
-                                on_click=lambda e: on_back(),
-                                disabled=is_deleting,
                             ),
                         ]
                         + (

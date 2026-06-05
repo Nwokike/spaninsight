@@ -1,6 +1,7 @@
 import flet as ft
 from core import theme, utils
 from components.brand_header import build_brand_header
+from components.refresh_button import build_refresh_button
 from .state import FormsState
 
 
@@ -210,9 +211,7 @@ def build_dashboard_layout(
                 content=ft.Row(
                     [
                         ft.Text("Your Forms", weight="bold", size=16),
-                        ft.TextButton(
-                            "Refresh",
-                            icon=ft.Icons.REFRESH_ROUNDED,
+                        build_refresh_button(
                             on_click=lambda e: page.run_task(load_forms),
                         ),
                     ],
