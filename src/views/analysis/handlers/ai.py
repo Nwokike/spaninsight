@@ -9,6 +9,7 @@ from core.constants import COST_SUGGEST, COST_CUSTOM_PROMPT
 from core.utils import figure_to_png_bytes
 from services import ai as ai_service, sandbox
 from .base import show_error, build_analysis_context
+from components.credit_badge import show_credits_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,7 @@ async def on_suggestion_selected(
                 cost = COST_CUSTOM_PROMPT if is_custom else COST_SUGGEST
                 tx_id = await view_state.credit_service.reserve(cost)
                 if not tx_id:
-                    show_error(view_state, "Not enough credits.")
+                    show_credits_dialog(view_state.page, view_state.credit_service)
                     return
 
             max_retries = 2
@@ -432,3 +433,134 @@ async def on_voice_toggle(view_state, e):
                 )
                 view_state.page.update(view_state.recording_timer.current)
     view_state.is_recording["value"] = False
+
+
+async def on_run_code(view_state, code: str):
+    """Execute raw user code directly (no AI generation)."""
+    if not code or view_state.analysis_lock.locked():
+        return
+
+    async with view_state.analysis_lock:
+        state.is_analyzing = True
+        view_state.rebuild()
+
+        try:
+            result = await sandbox.execute_code_async(code, state.current_df)
+
+            figure_png = None
+            if result["success"]:
+                if result.get("modified"):
+                    state.dataset_modified = True
+                    if result.get("new_df") is not None:
+                        state.current_df = result["new_df"]
+                        state.current_df_columns = list(state.current_df.columns)
+                        state.current_df_rows = len(state.current_df)
+                        from services import file_service
+
+                        state.current_df_summary = file_service.get_data_summary(
+                            state.current_df
+                        )
+                raw_figure = result.get("figure")
+                if raw_figure:
+                    try:
+                        figure_png = await asyncio.to_thread(
+                            figure_to_png_bytes, raw_figure
+                        )
+                    except Exception:
+                        pass
+                    result["figure"] = None
+
+            block = {
+                "id": "blk_" + str(uuid.uuid4())[:8],
+                "type": "analysis",
+                "prompt": "# User Code",
+                "code": code,
+                "figure": None,
+                "figure_png": figure_png,
+                "stdout": result.get("stdout", ""),
+                "result": result.get("result", ""),
+                "description": "",
+                "suggestions": [],
+                "pinned": False,
+                "failed": not result["success"],
+                "is_synced": False,
+            }
+
+            if not result["success"]:
+                block["description"] = (
+                    f"Execution failed: {result.get('error', 'Unknown error')}"
+                )
+
+            state.analysis_blocks.append(block)
+            view_state.rebuild()
+
+            if result["success"]:
+                try:
+                    balance = await view_state.credit_service.get_balance()
+                except Exception:
+                    balance = 0
+
+                if balance > 0:
+                    tx_id = await view_state.credit_service.reserve(COST_SUGGEST)
+                    if tx_id:
+                        try:
+                            ctx = build_analysis_context()
+                            block0_desc = (
+                                state.analysis_blocks[0]["description"]
+                                if state.analysis_blocks
+                                else ""
+                            )
+                            res_data = {
+                                "prompt": "# User Code",
+                                "code": code,
+                                "stdout": block["stdout"],
+                                "result": str(block["result"]),
+                            }
+                            description, suggestions = await asyncio.gather(
+                                ai_service.describe_result(block0_desc, res_data),
+                                ai_service.suggest(
+                                    state.current_df_summary,
+                                    initial_description=block0_desc,
+                                    analysis_context=ctx,
+                                ),
+                            )
+                            block["description"] = description
+                            block["suggestions"] = suggestions
+                            state.suggestions = suggestions
+                            await view_state.credit_service.commit(tx_id)
+                        except Exception:
+                            await view_state.credit_service.rollback(tx_id)
+                            block["description"] = (
+                                "Code executed. Add credits to unlock AI-powered insights."
+                            )
+                        else:
+                            from services.project_service import ProjectService
+
+                            asyncio.create_task(
+                                ProjectService(
+                                    view_state.page,
+                                    view_state.credit_service._storage,
+                                ).sync_project(state.active_project_id)
+                            )
+                    else:
+                        block["description"] = (
+                            "Code executed. Add credits to unlock AI-powered insights."
+                        )
+                else:
+                    block["description"] = (
+                        "Code executed. Add credits to unlock AI-powered insights."
+                    )
+                view_state.rebuild()
+
+        except Exception as err:
+            from .base import show_error
+
+            show_error(view_state, f"Execution failed: {err}")
+            logger.exception("on_run_code error")
+        finally:
+            state.is_analyzing = False
+            try:
+                state.credits_remaining = await view_state.credit_service.get_balance()
+            except Exception:
+                pass
+            view_state.rebuild()

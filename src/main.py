@@ -92,9 +92,7 @@ async def main(page: ft.Page):
     page.title = "Spaninsight"
     page.favicon = "icon.png"
 
-    page.fonts = {
-        "Outfit": "assets/outfit.css"
-    }
+    page.fonts = {"Outfit": "assets/outfit.css"}
 
     page.theme = AppTheme.get_light_theme()
     page.dark_theme = AppTheme.get_dark_theme()

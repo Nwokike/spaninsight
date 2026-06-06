@@ -13,10 +13,15 @@ from views.analysis.handlers import (
     process_file,
     on_clear_data,
     on_custom_prompt,
+    on_run_code,
     on_voice_toggle,
     on_export_data,
 )
-from views.analysis.ui_components import build_block_card, build_db_import_card
+from views.analysis.ui_components import (
+    build_block_card,
+    build_db_import_card,
+    build_terminal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -633,6 +638,46 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
 
             blocks_list.controls.append(build_skeleton_loader())
 
+    if not hasattr(state, "_terminal_expanded"):
+        state._terminal_expanded = False
+
+    def _toggle_terminal(e):
+        state._terminal_expanded = not state._terminal_expanded
+        input_section.content = None
+        _update_bottom_sections()
+
+    def _build_terminal_input():
+        if not getattr(state, "_terminal_expanded", False):
+            return ft.TextField(
+                ref=view_state.custom_prompt_field,
+                hint_text="Describe an analysis or tap mic...",
+                expand=True,
+                border_radius=12,
+                on_submit=lambda e: page.run_task(on_custom_prompt, view_state, e),
+            )
+
+        terminal = build_terminal(
+            view_state,
+            code="",
+            block_index=-1,
+            field_ref=view_state.custom_prompt_field,
+            on_run=lambda c: page.run_task(on_run_code, view_state, c),
+            filename="manual.py",
+        )
+        terminal.expand = True
+        return ft.Row(
+            [
+                ft.IconButton(
+                    ft.Icons.CHEVRON_LEFT_ROUNDED,
+                    icon_color=ft.Colors.ON_SURFACE_VARIANT,
+                    tooltip="Collapse",
+                    on_click=_toggle_terminal,
+                ),
+                terminal,
+            ],
+            expand=True,
+        )
+
     def _update_bottom_sections():
         expects_dataset = bool(state.current_df_name)
         has_dataframe = state.current_df is not None
@@ -656,80 +701,94 @@ def build_analysis_view(page: ft.Page, credit_service, report_service=None) -> f
             autopilot_overlay.visible = False
             loading_section.visible = False
             if not input_section.content:
-                input_section.content = ft.Row(
-                    [
-                        ft.TextField(
-                            ref=view_state.custom_prompt_field,
-                            hint_text="Describe an analysis or tap mic...",
-                            expand=True,
-                            border_radius=12,
-                            on_submit=lambda e: page.run_task(
-                                on_custom_prompt, view_state, e
+                expanded = getattr(state, "_terminal_expanded", False)
+                if expanded:
+                    input_section.content = _build_terminal_input()
+                else:
+                    input_section.content = ft.Row(
+                        [
+                            ft.IconButton(
+                                ft.Icons.CODE_ROUNDED,
+                                icon_color=ft.Colors.ON_SURFACE_VARIANT,
+                                tooltip="Expert Mode",
+                                on_click=_toggle_terminal,
                             ),
-                        ),
-                        ft.Row(
-                            [
-                                ft.Text(
-                                    ref=view_state.recording_timer,
-                                    value="00:00 / 01:00",
-                                    size=12,
-                                    color=theme.ERROR,
-                                    weight="bold",
-                                    visible=False,
-                                ),
-                                ft.ProgressRing(
-                                    width=16, height=16, stroke_width=2, visible=False
-                                ),
-                                ft.IconButton(
-                                    ft.Icons.MIC_ROUNDED,
-                                    icon_color=ft.Colors.ON_SURFACE_VARIANT,
-                                    tooltip="Voice",
-                                    on_click=lambda e: page.run_task(
-                                        on_voice_toggle, view_state, e
+                            _build_terminal_input(),
+                            ft.Row(
+                                [
+                                    ft.Text(
+                                        ref=view_state.recording_timer,
+                                        value="00:00 / 01:00",
+                                        size=12,
+                                        color=theme.ERROR,
+                                        weight="bold",
+                                        visible=False,
                                     ),
-                                ),
-                            ],
-                            spacing=4,
-                            vertical_alignment="center",
-                        ),
-                        ft.IconButton(
-                            ft.Icons.SEND_ROUNDED,
-                            icon_color=theme.PRIMARY,
-                            on_click=lambda e: page.run_task(
-                                on_custom_prompt, view_state, e
+                                    ft.ProgressRing(
+                                        width=16,
+                                        height=16,
+                                        stroke_width=2,
+                                        visible=False,
+                                    ),
+                                    ft.IconButton(
+                                        ft.Icons.MIC_ROUNDED,
+                                        icon_color=ft.Colors.ON_SURFACE_VARIANT,
+                                        tooltip="Voice",
+                                        on_click=lambda e: page.run_task(
+                                            on_voice_toggle, view_state, e
+                                        ),
+                                    ),
+                                ],
+                                spacing=4,
+                                vertical_alignment="center",
                             ),
-                        ),
-                    ]
-                )
+                            ft.IconButton(
+                                ft.Icons.SEND_ROUNDED,
+                                icon_color=theme.PRIMARY,
+                                on_click=lambda e: page.run_task(
+                                    on_custom_prompt, view_state, e
+                                ),
+                            ),
+                        ]
+                    )
 
             input_section.padding = ft.Padding(20, 10, 10, 30)
             input_section.visible = True
 
-            tf = input_section.content.controls[0]
-            action_row = input_section.content.controls[1]
-            send_btn = input_section.content.controls[2]
-
-            is_rec = view_state.is_recording["value"]
-            is_trans = view_state.is_transcribing["value"]
+            expanded = getattr(state, "_terminal_expanded", False)
             is_missing_local = expects_dataset and not has_dataframe
             is_loading = state.is_analyzing
 
-            tf.disabled = is_rec or is_trans or is_missing_local or is_loading
-            send_btn.disabled = is_rec or is_trans or is_missing_local or is_loading
+            if not expanded:
+                tf = input_section.content.controls[1]
+                action_row = input_section.content.controls[2]
+                send_btn = input_section.content.controls[3]
+                expand_btn = input_section.content.controls[0]
 
-            action_row.controls[0].visible = is_rec
-            action_row.controls[1].visible = is_trans
-            mic_btn = action_row.controls[2]
-            mic_btn.icon = ft.Icons.STOP_ROUNDED if is_rec else ft.Icons.MIC_ROUNDED
-            mic_btn.icon_color = theme.ERROR if is_rec else ft.Colors.ON_SURFACE_VARIANT
-            mic_btn.disabled = is_trans or is_missing_local or is_loading
+                is_rec = view_state.is_recording["value"]
+                is_trans = view_state.is_transcribing["value"]
 
-            if is_missing_local:
-                tf.hint_text = (
-                    f"Locate raw '{state.current_df_name}' to run AI analysis..."
+                tf.disabled = is_rec or is_trans or is_missing_local or is_loading
+                send_btn.disabled = is_rec or is_trans or is_missing_local or is_loading
+                expand_btn.disabled = is_loading
+
+                action_row.controls[0].visible = is_rec
+                action_row.controls[1].visible = is_trans
+                mic_btn = action_row.controls[2]
+                mic_btn.icon = ft.Icons.STOP_ROUNDED if is_rec else ft.Icons.MIC_ROUNDED
+                mic_btn.icon_color = (
+                    theme.ERROR if is_rec else ft.Colors.ON_SURFACE_VARIANT
                 )
+                mic_btn.disabled = is_trans or is_missing_local or is_loading
+
+                if is_missing_local:
+                    tf.hint_text = (
+                        f"Locate raw '{state.current_df_name}' to run AI analysis..."
+                    )
+                else:
+                    tf.hint_text = "Describe an analysis or tap mic..."
             else:
-                tf.hint_text = "Describe an analysis or tap mic..."
+                input_section.content.controls[0].disabled = is_loading
 
     def _rebuild():
         try:

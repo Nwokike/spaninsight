@@ -1,4 +1,4 @@
-from .ai import on_suggestion_selected, on_custom_prompt, on_voice_toggle
+from .ai import on_suggestion_selected, on_custom_prompt, on_voice_toggle, on_run_code
 from .pins import on_pin_block
 from .sandbox import on_rerun_code
 from .exports import on_clear_data, on_export_data
@@ -9,6 +9,7 @@ __all__ = [
     "on_suggestion_selected",
     "on_custom_prompt",
     "on_voice_toggle",
+    "on_run_code",
     "on_pin_block",
     "on_rerun_code",
     "on_clear_data",

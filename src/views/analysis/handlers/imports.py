@@ -10,6 +10,7 @@ from services import ai as ai_service, file_service, sandbox
 from services.file_service import FileValidationError
 from .base import show_error, show_success
 from .autopilot import run_autopilot
+from components.credit_badge import show_credits_dialog
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,8 @@ async def process_file(view_state, file):
                         "Dataset loaded. AI description unavailable (no credits)."
                     )
                     block0["suggestions"] = ai_service.fallback_suggestions()
+                    state.suggestions = block0["suggestions"]
+                    show_credits_dialog(view_state.page, view_state.credit_service)
                 else:
                     # Execute describe and suggest concurrently to save up to 4+ seconds of startup latency
                     description, suggestions = await asyncio.gather(
@@ -266,6 +269,8 @@ async def process_db_table(view_state, connection_url: str, table_name: str):
                         "Dataset loaded. AI description unavailable (no credits)."
                     )
                     block0["suggestions"] = ai_service.fallback_suggestions()
+                    state.suggestions = block0["suggestions"]
+                    show_credits_dialog(view_state.page, view_state.credit_service)
                 else:
                     # Execute describe and suggest concurrently to save up to 4+ seconds of startup latency
                     description, suggestions = await asyncio.gather(

@@ -2,6 +2,7 @@
 
 Renders as tiny, tappable pills in a wrapping row. NOT large cards.
 The AI generates these dynamically after analyzing the dataset schema.
+When credits are depleted, chips link directly to the credits dialog.
 """
 
 from __future__ import annotations
@@ -9,12 +10,16 @@ from __future__ import annotations
 import flet as ft
 
 from core import theme, tokens
+from core.state import state
+from components.credit_badge import show_credits_dialog
 
 
 def build_suggestion_chips(
     suggestions: list[dict],
     on_select: callable,
     is_loading: bool = False,
+    page: ft.Page | None = None,
+    credit_service=None,
 ) -> ft.Column:
     """Build a wrap of tiny suggestion pills.
 
@@ -22,15 +27,24 @@ def build_suggestion_chips(
         suggestions: List of dicts with "label", "icon", "prompt" keys.
         on_select: Callback(prompt: str) when a chip is tapped.
         is_loading: Show disabled state during AI call.
+        page: Flet page instance (required for credits dialog fallback).
+        credit_service: CreditService instance (required for credits dialog fallback).
     """
     if not suggestions:
         return ft.Column()
+
+    no_credits = state.credits_remaining <= 0
 
     pills = []
     for s in suggestions:
         label = s.get("label", "Analyze")
         icon_text = s.get("icon", "📊")
         prompt = s.get("prompt", "")
+
+        def _make_handler(p, nc=no_credits):
+            if nc and page and credit_service:
+                return lambda e: show_credits_dialog(page, credit_service)
+            return lambda e, p=p: on_select(p) if not is_loading else None
 
         pill = ft.Container(
             content=ft.Row(
@@ -51,9 +65,9 @@ def build_suggestion_chips(
             border_radius=20,
             bgcolor=ft.Colors.with_opacity(0.06, theme.PRIMARY),
             border=ft.Border.all(1, ft.Colors.with_opacity(0.15, theme.PRIMARY)),
-            on_click=lambda e, p=prompt: on_select(p) if not is_loading else None,
+            on_click=_make_handler(prompt),
             ink=True,
-            disabled=is_loading,
+            disabled=is_loading and not no_credits,
         )
         pills.append(pill)
 

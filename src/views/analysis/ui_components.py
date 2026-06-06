@@ -303,14 +303,26 @@ def build_text_output_container(result_val, stdout_val) -> ft.Container | None:
 
 
 def build_terminal(
-    view_state: AnalysisState, code: str, block_index: int = -1
+    view_state: AnalysisState,
+    code: str,
+    block_index: int = -1,
+    *,
+    field_ref=None,
+    on_run=None,
+    filename="analysis.py",
 ) -> ft.Container:
-    code_field = ft.Ref[ft.TextField]()
+    internal_field = ft.Ref[ft.TextField]()
+    active_field = field_ref or internal_field
 
     def _on_run(e):
-        if code_field.current and block_index >= 0:
-            new_code = code_field.current.value
+        if on_run:
+            if active_field.current:
+                on_run(active_field.current.value.strip())
+        elif internal_field.current and block_index >= 0:
+            new_code = internal_field.current.value
             view_state.page.run_task(on_rerun_code, view_state, block_index, new_code)
+
+    show_run = on_run is not None or block_index >= 0
 
     return ft.Container(
         content=ft.Column(
@@ -341,7 +353,7 @@ def build_terminal(
                                 ],
                                 spacing=4,
                             ),
-                            ft.Text("analysis.py", size=10, color="#888888"),
+                            ft.Text(filename, size=10, color="#888888"),
                             ft.TextButton(
                                 "▶ Run",
                                 icon=ft.Icons.PLAY_ARROW_ROUNDED,
@@ -349,7 +361,7 @@ def build_terminal(
                                 disabled=state.is_analyzing,
                                 on_click=_on_run,
                             )
-                            if block_index >= 0
+                            if show_run
                             else ft.Container(),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -362,8 +374,8 @@ def build_terminal(
                 ),
                 ft.Container(
                     content=ft.TextField(
-                        ref=code_field,
-                        value=code,
+                        ref=active_field,
+                        value=code if field_ref is None else code,
                         multiline=True,
                         min_lines=3,
                         max_lines=20,
@@ -744,6 +756,8 @@ def build_block_card(
                     on_suggestion_selected, view_state, p
                 ),
                 state.is_analyzing,
+                page=view_state.page,
+                credit_service=view_state.credit_service,
             )
         )
 
