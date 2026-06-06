@@ -37,6 +37,7 @@
 | **Collaborative Workspace** | Multi-collaborator workspaces grouped under secure 6-digit PIN keys. Sync analyses, reports, and survey forms in real-time. |
 | **Recipe Re-execution** | Data residency is guaranteed. Raw datasets remain local to each collaborator. Shared analysis steps are processed as recipes that re-execute inside local sandboxes. |
 | **Smart Surveys** | Natural language survey generation (Text/Voice) with real-time preview — great for student research and customer feedback. |
+| **Expert Code Terminal** | Full VS Code-style terminal with expandable code editor. Write, edit, and execute Python directly — no AI required. All data intelligence stays under your control. |
 | **Autopilot Engine** | Multi-pass analysis orchestration for comprehensive automated report generation. |
 | **Professional Export** | Export reports as PDF and PowerPoint with secure cloud sharing via ephemeral links. |
 | **Local Security** | Sandbox-restricted Python execution environment ensuring 100% data residency. |
@@ -112,7 +113,8 @@
 - **Privacy-First AI** — Analysis runs locally; only AI prompts touch the secure gateway, never your raw dataset files.
 - **Dynamic Workspaces** — Create, join, and switch between separate project workspaces instantly via a top-right switcher drop-down.
 - **Voice-to-Insight** — Use natural language voice commands to query your data or build survey forms.
-- **Editable Code Blocks** — View, edit, and re-run the Python code behind every analysis result.
+- **Expert Code Mode** — Expandable VS Code-style terminal for direct Python execution. Write your own code, bypass AI entirely, and keep full control of your analysis.
+- **Editable Code Blocks** — View, edit, and re-run the Python code behind every analysis result — both AI-suggested and hand-written.
 - **Local Sandbox** — Built-in Python runtime (`pandas`, `matplotlib`) runs in a restricted environment.
 - **Credit-Based System** — AI tasks use a transparent credit system with generous daily free allowances.
 - **Responsive Widescreen & Mobile** — High-performance, optimized deployments across widescreen and Android layouts.
@@ -162,6 +164,7 @@ graph TB
 | Custom Prompt / Voice   | 3           |
 | Autopilot (Full Report) | 15          |
 | **Daily Allowance**     | **50 FREE** |
+| Manual Code Execution   | **FREE** (no credits needed) |
 
 ---
 
